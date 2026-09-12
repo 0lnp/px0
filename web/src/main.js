@@ -1,0 +1,72 @@
+// web/src/main.js
+import { $, S, api, isMac } from './state.js';
+import { measure, layout, render, initRenderer } from './renderer.js';
+import { initTabs } from './tabs.js';
+import { initCursor } from './cursor.js';
+import { initHover } from './hover.js';
+import { initRefMenu } from './refmenu.js';
+import { drawTree, treeEl, initTree } from './tree.js';
+import { initSearch } from './search.js';
+import { initOutline } from './outline.js';
+import { initPanels } from './panels.js';
+import { initInspector } from './inspector.js';
+import { initFind } from './find.js';
+import { initPalette } from './palette.js';
+import { initShortcuts } from './shortcuts.js';
+import { updateStatus } from './status.js';
+
+// Initialize all subsystems
+initRenderer();
+initTabs();
+initCursor();
+initHover();
+initRefMenu();
+initTree();
+initSearch();
+initOutline();
+initPanels();
+initInspector();
+initFind();
+initPalette();
+initShortcuts();
+
+// Bootstrap application lifecycle
+(async function boot() {
+  try {
+    const t = localStorage.getItem('lide.theme');
+    if (t) document.documentElement.dataset.theme = t;
+  } catch {}
+
+  if (isMac) {
+    document.querySelectorAll('.mod-key').forEach(el => el.textContent = '⌘');
+  }
+
+  measure();
+  S.meta = await api('/api/meta');
+  document.title = S.meta.name + ' — lide';
+  $('#root-name').textContent = S.meta.name;
+  $('#root-name').title = S.meta.root;
+  updateStatus();
+  await drawTree('', treeEl, 0);
+
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => { measure(); layout(); render(); });
+  }
+
+  // If the background indexer was still running when the UI loaded, poll briefly
+  // until complete to update the total file count and index time in the status bar.
+  if (S.meta && !S.meta.ready) {
+    const timer = setInterval(async () => {
+      try {
+        const m = await api('/api/meta');
+        if (m.ready) {
+          clearInterval(timer);
+          S.meta = m;
+          updateStatus();
+        }
+      } catch {
+        clearInterval(timer);
+      }
+    }, 150);
+  }
+})();

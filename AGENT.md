@@ -71,27 +71,34 @@ To quickly locate and modify UI features, refer to this structured section index
 | `<div id="overlay">` | Modal overlay hosting Quick Open and Command Palette (`#palette`) |
 | `<div id="helpsheet">` | Keyboard shortcuts cheat-sheet modal overlay |
 
-### JavaScript Sections (`web/app.js`)
+### Frontend Modules (`web/src/`) & Build Workflow
 
-All logic in `web/app.js` is structured into labeled sections:
+The frontend is modularized into clean ES modules under `web/src/` and bundled into `web/app.js` using `scripts/build-web.js`:
 
-| Section # | Section Header | Primary Functions & Responsibilities |
-| :---: | :--- | :--- |
-| **1** | `VIRTUAL RENDERER & DOM RECYCLER` | `measure()`, `layout()`, `render()`, `renderRow()`, `fetchChunk()`: 60 FPS scrolling and on-demand chunk fetching |
-| **2** | `TABS & FILE OPENING LIFECYCLE` | `openFile()`, `createTab()`, `closeTab()`, `activateTab()`: tab state and URL hash syncing |
-| **3** | `NAVIGATION HISTORY` | `pushJump()`, `jumpBack()`, `jumpForward()`: cursor position history with Alt+Left / Alt+Right |
-| **4** | `STATUS BAR & NOTIFICATIONS` | `updateStatus()`, `setStatusNote()`, `setLspState()`: bottom bar indicators |
-| **5** | `CODE VIEWPORT & CURSOR` | Viewport click handlers, cursor positioning, word under cursor, occurrence highlighting |
-| **6** | `HOVERCARD & LSP TOOLTIPS` | `onMove()`, `hoverAt()`, `showHover()`, `hideHover()`: debounced hovercard with action buttons |
-| **7** | `SELECTION REFERENCE MENU (#refmenu)` | `updateSelectionMenu()`, `hideRefMenu()`, `getSelectedRangeInfo()`: Copy Ref & Claude prompt formatting |
-| **8** | `DEFINITIONS & REFERENCES` | `gotoDefinition()`, `findReferences()`, `showHits()`: LSP definition & references with regex fallback |
-| **9** | `FILE TREE` | `drawTree()`, `toggleNode()`: recursive directory explorer with lazy node loading |
-| **10** | `WORKSPACE SEARCH PANEL` | `runSearch()`: full-text regex and case-sensitive workspace search with match groups |
-| **11** | `SYMBOL OUTLINE` | `loadOutline()`: document symbol outline extraction via LSP |
-| **12** | `PANELS & RESIZER` | `showPanel()`, splitter dragging logic |
-| **13** | `FIND IN CURRENT FILE` | `openFind()`, `stepFind()`: Ctrl+F find bar in current file |
-| **14** | `COMMAND PALETTE` | `openPalette()`, `filterPalette()`: fuzzy file, symbol, and command search |
-| **15** | `THEME & HELP` | `toggleTheme()`, `showHelp()`: light/dark theme toggle and help overlay |
-| **16** | `GLOBAL KEYBOARD SHORTCUTS` | `addEventListener('keydown')`: central keyboard shortcut dispatching |
-| **17** | `BOOTSTRAP / INITIALIZATION` | `boot()`: initialization sequence, font measurement, and background index polling |
+* **Build Script:** Run `./scripts/build-web.js` (or `bun scripts/build-web.js` / `node scripts/build-web.js`). It automatically builds and validates `web/app.js`.
+* **Release Integration:** `build.sh` automatically runs `./scripts/build-web.js` before cross-compiling Go release binaries.
+* **Module Layout:**
+
+| Module | Primary Responsibilities & Key Exports |
+| :--- | :--- |
+| `web/src/state.js` | Core state object `S`, `doc_()`, `api()`, `esc()`, `$`, `$$`, constants (`LH`, `CHUNK`, `OVERSCAN`, `MOD`) |
+| `web/src/ui.js` | DOM references (`vp`, `sizer`, `rowsEl`, `editor`, `refmenu`, `toastEl`), `showToast()`, `copyToClipboard()` |
+| `web/src/renderer.js` | `measure()`, `layout()`, `render()`, `paint()`, `decorate()`, `markNodes()`, `wrapRange()`, on-demand chunk fetching |
+| `web/src/tabs.js` | `openFile()`, `closeTab()`, `switchTab()`, `drawTabs()`, `drawCrumbs()`, `showImage()` |
+| `web/src/history.js` | `pushHistory()`, `go()`: jump history back/forward (Alt+Left, Alt+Right) |
+| `web/src/status.js` | `updateStatus()`, `setStatusNote()`, `fmtBytes()`, `setLspState()`, `drawLspStatus()` |
+| `web/src/cursor.js` | `wordAtPoint()`, `moveCursor()`, click / double-click selection, occurrence highlight |
+| `web/src/hover.js` | `onMove()`, `hoverAt()`, `showHover()`, `hideHover()`, token link modifier handling |
+| `web/src/refmenu.js` | Context menu pill for selections (`Copy Ref`, `Copy for Claude`, `Find Usages`) |
+| `web/src/lsp.js` | `gotoDefinition()`, `findReferences()`, `warmLSP()`, `lspCall()`, hit formatting |
+| `web/src/tree.js` | `drawTree()`, `fileKind()`, `revealDir()`, `revealFile()`, explorer tree click handlers |
+| `web/src/search.js` | `runSearch()`, `renderResults()`, `displayPath()`, workspace search panel |
+| `web/src/outline.js` | `loadOutline()`, `upgradeOutline()`, `drawOutline()`, symbol kind badges |
+| `web/src/panels.js` | `showPanel()`, sidebar switching, reindex trigger, draggable sidebar resizer |
+| `web/src/inspector.js` | `showRightInspector()`, `setRightInspectorTab()`, `inspectReferences()`, right resizer |
+| `web/src/find.js` | `openFind()`, `clearFind()`, `runFind()`, `jumpToHit()`, minimap hit dots (Ctrl+F) |
+| `web/src/palette.js` | `openPalette()`, `refreshPalette()`, `COMMANDS`, fuzzy file/symbol/command finder |
+| `web/src/shortcuts.js` | `toggleTheme()`, `showHelp()`, central keyboard shortcut listener |
+| `web/src/main.js` | Module initializations and application `boot()` sequence |
+
 

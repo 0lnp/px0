@@ -4,6 +4,10 @@ set -eu
 
 VERSION=$(grep -o 'version = "[^"]*"' main.go | cut -d'"' -f2)
 OUT=${OUT:-dist}
+
+# Bundle frontend web assets
+./scripts/build-web.js
+
 TARGETS="
 linux/amd64 linux/arm64 linux/arm linux/386 linux/riscv64
 darwin/amd64 darwin/arm64
