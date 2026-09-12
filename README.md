@@ -55,6 +55,7 @@ Run `./benchmark.sh --vscode .` to measure both on your active machine:
 
 - Blazing Fast Code Navigation: Fuzzy search files (`Cmd/Ctrl+P`), symbols (`Cmd/Ctrl+Shift+O`), and full project scan (`Cmd/Ctrl+Shift+F`) in milliseconds.
 - Rich Syntax Highlighting: Built-in lexer support for ~280 languages via Chroma.
+- Custom Themes: Ships 14 themes, including Tokyo Night (default), Paper, Catppuccin, Dracula, GitHub Dark, Gruvbox, Monokai, Nord, One Dark, Rose Pine and Solarized. A theme is a single CSS file in `web/themes/`, picked up with no code change. Switch with the status bar button or `Select Theme` in the command palette. See [STYLING.md](STYLING.md) to write your own.
 - Language Server Protocol (LSP): Zero-config auto-detection of existing LSPs (`gopls`, `rust-analyzer`, `pyright`, `typescript-language-server`, `clangd`, etc.) for Go-to-Definition (`F12`), Hover info, and references.
 - Virtual DOM / Zero DOM Overhead: Opening a 400,000-line file costs the same as a 10-line file; only visible lines render in the browser.
 - Clean Terminal Experience: CLI adheres to the Ape design spec with subtle 256-color palette, Unix pipe detection, and quiet automation modes.
@@ -186,7 +187,7 @@ go test ./...
 3. Live frontend development (serves `web/` assets from disk without rebuilding the binary):
 
 ```bash
-go run . -dev ./web .
+go run . -dev . .
 ```
 
 4. Verify CLI formatting and builds:
@@ -204,6 +205,7 @@ go vet ./...
 - `search.go` / `fuzzy.go`: High-performance substring and fuzzy file/symbol matching algorithms.
 - `lsp.go` / `lsp_client.go`: Lightweight JSON-RPC client communicating with local language servers over stdio.
 - `web/`: Native zero-dependency ES module frontend (custom virtual scroll, syntax highlight rendering, tab manager).
+- `web/themes/`: One CSS file per colour theme, joined by the server into `/static/themes.css`. Token reference in [STYLING.md](STYLING.md).
 
 ## License
 

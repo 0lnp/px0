@@ -94,7 +94,7 @@ flowchart TD
 ### Typography, Reading Themes, and Universal Search
 
 - Optimized Monospace Typography Stack: Uses `"JetBrains Mono", "Fira Code", "Cascadia Code", "SF Mono"` with OpenType code features (`calt` ligatures, `zero` slashed/dotted zero, `cv02`, `cv08`, `ss01`). Explicit font smoothing and `text-rendering: optimizeLegibility` across all platforms.
-- Tokyo Night Reading Theme: Dark mode incorporates Tokyo Night-inspired palettes (`#1a1b26` background, `#c0caf5` foreground, `#7aa2f7` accents) calibrated to minimize optical fatigue and offer high syntax distinction for prolonged reading sessions.
+- Pluggable Themes: `web/style.css` contains no literal colours; every colour is read through a CSS custom property. Each theme is one file, `web/themes/<id>.css`, holding a single `:root[data-theme="<id>"]` rule. The server joins those files in name order and serves them at `/static/themes.css`, and `web/src/theme.js` discovers themes by scanning the loaded stylesheets, so a new theme needs no Go or JavaScript change. Optional tokens fall back to values derived from the required ones in `style.css`. px0 ships 14 themes, sorted by display name in the picker. The default dark theme is Tokyo Night inspired (`#1a1b26` background, `#c0caf5` foreground, `#7aa2f7` accents) and tuned for long reading sessions. Full token reference: `STYLING.md`.
 - Universal Fast Search (`Cmd+K` / `Ctrl+K`): Instant access palette unified with standard developer shortcuts (`Cmd/Ctrl+K` quick open, `Cmd/Ctrl+P` file find, `Cmd/Ctrl+Shift+P` command palette, `Cmd/Ctrl+Shift+F` full text search). Prefix dispatch (`>` command, `@` symbol, `:` line) allows fluid, keyboard-driven navigation across any project.
 
 ### Lazy LSP Architecture and Lifecycle

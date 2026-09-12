@@ -1,35 +1,24 @@
+/* Colours are never written in this file: every one is read through a token.
+   Themes live in web/themes/<id>.css and are served joined as /static/themes.css.
+   This block holds the structural tokens and fallbacks for the optional colour
+   tokens, derived from the required ones. Theme rules use :root[data-theme]
+   so they outrank these defaults regardless of load order. See STYLING.md. */
 :root {
   --lh: 21px;
   --mono: "JetBrains Mono", "Fira Code", "Cascadia Code", "SF Mono", Menlo, Consolas, ui-monospace, monospace;
   --ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --fs: 13.5px;
-}
 
-/* ---------- dark (Tokyo Night inspired for optimal code viewing) ---------- */
-[data-theme="dark"] {
-  --bg: #1a1b26; --bg2: #16161e; --bg3: #1f2335; --bg4: #292e42;
-  --fg: #c0caf5; --dim: #7aa2f7; --faint: #565f89;
-  --line: #24283b; --accent: #7aa2f7; --accent-fg: #7dcfff;
-  --sel: #283457; --mark: #e0af68; --mark-active: #ff9e64;
-  --cur: #1e2030; --shadow: 0 16px 48px rgba(15, 17, 26, 0.88);
-  --k: #bb9af7; --kt: #2ac3de; --nf: #7aa2f7; --nc: #e0af68; --nb: #7dcfff;
-  --nv: #c0caf5; --no: #ff9e64; --na: #b4f9f8; --nt: #73daca; --nd: #bb9af7;
-  --np: #7dcfff; --s: #9ece6a; --m: #ff9e64; --o: #89ddff; --p: #9aa5ce;
-  --c: #565f89; --cp: #bb9af7; --gi: #9ece6a; --gd: #f7768e; --err: #f7768e;
-  --gi-bg: rgba(158, 206, 106, 0.16); --gd-bg: rgba(247, 118, 142, 0.16);
-}
-/* ---------- light (Clean modern high-contrast paper) ---------- */
-[data-theme="light"] {
-  --bg: #ffffff; --bg2: #f7f8fa; --bg3: #edf0f5; --bg4: #e1e5ee;
-  --fg: #24292f; --dim: #57606a; --faint: #8c959f;
-  --line: #d0d7de; --accent: #0969da; --accent-fg: #0550ae;
-  --sel: #b6e3ff; --mark: #fff8c5; --mark-active: #fae17d;
-  --cur: #f3f6f9; --shadow: 0 16px 48px rgba(31,35,40,.18);
-  --k: #cf222e; --kt: #0550ae; --nf: #8250df; --nc: #953800; --nb: #0550ae;
-  --nv: #953800; --no: #0550ae; --na: #0550ae; --nt: #116329; --nd: #8250df;
-  --np: #0550ae; --s: #0a3069; --m: #0550ae; --o: #cf222e; --p: #57606a;
-  --c: #6e7781; --cp: #cf222e; --gi: #116329; --gd: #82071e; --err: #cf222e;
-  --gi-bg: rgba(17,99,41,.12); --gd-bg: rgba(130,7,30,.12);
+  --on-accent: #fff;
+  --on-badge: var(--bg);
+  --on-mark-active: var(--bg);
+  --scrim: rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 6px 20px rgba(0, 0, 0, 0.28);
+
+  --kt: var(--k); --nc: var(--nf); --nb: var(--nf); --nv: var(--fg); --no: var(--m);
+  --na: var(--nf); --nt: var(--k); --nd: var(--k); --np: var(--fg); --o: var(--fg);
+  --p: var(--dim); --cp: var(--k);
+  --gi: var(--s); --gd: var(--err); --gi-bg: transparent; --gd-bg: transparent;
 }
 
 * { box-sizing: border-box; }
@@ -125,7 +114,7 @@ body.side-hidden #side, body.side-hidden #resizer { display: none; }
 .rline:hover { background: var(--bg3); }
 .rline.sel { background: var(--sel); }
 .rline .rn { color: var(--faint); flex: none; min-width: 3.2em; text-align: right; }
-.rfile .ext { font: 9px/1 var(--ui); text-transform: uppercase; letter-spacing: .05em; color: var(--bg); background: var(--dim); border-radius: 3px; padding: 3px 4px; flex: none; }
+.rfile .ext { font: 9px/1 var(--ui); text-transform: uppercase; letter-spacing: .05em; color: var(--on-badge); background: var(--dim); border-radius: 3px; padding: 3px 4px; flex: none; }
 .hint .src { color: var(--accent-fg); }
 .hint .warn { color: var(--mark-active); }
 .rline .rt { overflow: hidden; text-overflow: ellipsis; color: var(--dim); flex: 1; }
@@ -138,7 +127,7 @@ body.side-hidden #side, body.side-hidden #resizer { display: none; }
 .sym.sel { background: var(--sel); }
 .sym .kd {
   font: 600 9px/1 var(--mono); text-transform: uppercase; letter-spacing: .03em;
-  color: var(--bg); background: var(--dim); border-radius: 3px; flex: none;
+  color: var(--on-badge); background: var(--dim); border-radius: 3px; flex: none;
   min-width: 26px; text-align: center; padding: 4px 3px;
 }
 .sym .kd[data-k="func"], .sym .kd[data-k="method"], .sym .kd[data-k="fn"],
@@ -210,7 +199,10 @@ body.right-hidden #right-side, body.right-hidden #right-resizer { display: none;
 .tab.active { background: var(--bg); color: var(--fg); }
 .tab.active::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1.5px; background: var(--accent); }
 .tab .tn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tab .x { width: 15px; height: 15px; border-radius: 3px; display: grid; place-items: center; font-size: 12px; color: var(--faint); flex: none; }
+/* The close cross is drawn, not typed: a glyph's ink sits wherever the font puts
+   it, which is below centre for x in most UI fonts. */
+.tab .x { width: 15px; height: 15px; border-radius: 3px; display: grid; place-items: center; color: var(--faint); flex: none; }
+.tab .x svg { width: 9px; height: 9px; display: block; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
 .tab .x:hover { background: var(--bg4); color: var(--fg); }
 
 #crumbs { display: none !important; }
@@ -250,7 +242,8 @@ body.hide-lines .g { display: none; }
 body.hide-lines .c { padding-left: 16px; }
 
 .row mark { background: var(--mark); color: inherit; border-radius: 2px; padding: 1px 0; }
-.row mark.on { background: var(--mark-active); }
+/* The current match is a solid fill, so syntax colours on it are unreadable. */
+.row mark.on, .row mark.on * { background: var(--mark-active); color: var(--on-mark-active); }
 .row .occ { background: var(--bg4); border-radius: 2px; outline: 1px solid var(--line); }
 
 /* Ctrl/Cmd-hover turns an identifier into a link, the way an editor does. */
@@ -295,12 +288,12 @@ body.hide-lines .c { padding-left: 16px; }
 }
 #hovercard .actions button, #refmenu button {
   background: var(--bg); border: 1px solid var(--line); color: var(--fg);
-  font: 11px/1 var(--font); padding: 4px 8px; border-radius: 4px;
+  font: 11px/1 var(--ui); padding: 4px 8px; border-radius: 4px;
   cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
   white-space: nowrap; transition: background .12s, border-color .12s, color .12s;
 }
 #hovercard .actions button:hover, #refmenu button:hover {
-  background: var(--accent); color: #fff; border-color: var(--accent);
+  background: var(--accent); color: var(--on-accent); border-color: var(--accent);
 }
 #hovercard .actions button .btn-icon, #refmenu button .btn-icon {
   font-size: 12px; opacity: 0.85;
@@ -315,7 +308,7 @@ body.hide-lines .c { padding-left: 16px; }
 #refmenu {
   position: absolute; z-index: 35;
   background: var(--bg3); border: 1px solid var(--line); border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.24); padding: 4px; display: flex; gap: 4px;
+  box-shadow: var(--shadow-sm); padding: 4px; display: flex; gap: 4px;
   align-items: center; animation: hcin .1s ease-out; user-select: none;
 }
 #refmenu .ref-label {
@@ -328,8 +321,8 @@ body.hide-lines .c { padding-left: 16px; }
 #toast {
   position: fixed; bottom: 32px; right: 24px; z-index: 100;
   background: var(--bg3); color: var(--fg); border: 1px solid var(--accent);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.32); padding: 8px 14px; border-radius: 6px;
-  font: 12px/1.4 var(--font); display: flex; align-items: center; gap: 8px;
+  box-shadow: var(--shadow-sm); padding: 8px 14px; border-radius: 6px;
+  font: 12px/1.4 var(--ui); display: flex; align-items: center; gap: 8px;
   pointer-events: none; animation: toastIn .18s ease-out;
 }
 #toast .toast-accent { color: var(--accent); font-weight: 600; }
@@ -429,7 +422,7 @@ kbd {
 
 /* ---------- palette ---------- */
 #overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,.45);
+  position: fixed; inset: 0; background: var(--scrim);
   backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
   display: flex; justify-content: center; padding-top: 9vh; z-index: 100;
 }
@@ -439,7 +432,7 @@ kbd {
   display: flex; flex-direction: column; overflow: hidden;
 }
 .pal-input { display: flex; align-items: center; gap: 8px; padding: 13px 18px; border-bottom: 1px solid var(--line); }
-#pal-mode { font: 600 10px/1 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--bg); background: var(--accent); border-radius: 4px; padding: 4px 7px; flex: none; }
+#pal-mode { font: 600 10px/1 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--on-badge); background: var(--accent); border-radius: 4px; padding: 4px 7px; flex: none; }
 #pal-mode:empty { display: none; }
 #pal { flex: 1; font-size: 14.5px; font-family: var(--mono); }
 #pal-list { overflow: auto; flex: 1; padding: 4px 0; }
@@ -455,7 +448,7 @@ kbd {
 
 /* ---------- help sheet ---------- */
 #helpsheet {
-  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  position: fixed; inset: 0; background: var(--scrim);
   backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
   z-index: 110; display: grid; place-items: center;
 }

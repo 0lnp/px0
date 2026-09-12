@@ -9,7 +9,8 @@ import { openFind } from './find.js';
 import { gotoDefinition, findReferences } from './lsp.js';
 import { revealFile } from './tree.js';
 import { showRightInspector, hideRightInspector } from './inspector.js';
-import { toggleTheme, showHelp } from './shortcuts.js';
+import { showHelp } from './shortcuts.js';
+import { listThemes, currentTheme, setTheme, cycleTheme } from './theme.js';
 
 export const overlay = $('#overlay');
 export const palInput = $('#pal');
@@ -33,7 +34,8 @@ export const COMMANDS = [
   { name: 'Toggle Word Wrap (Alt+Z)', run: () => toggleWordWrap() },
   { name: 'Toggle Line Numbers', run: () => toggleLineNumbers() },
   { name: 'Toggle Sidebar', run: () => document.body.classList.toggle('side-hidden') },
-  { name: 'Toggle Theme', run: toggleTheme },
+  { name: 'Select Theme…', run: () => openPalette('theme') },
+  { name: 'Next Theme', run: cycleTheme },
   { name: 'Re-index Workspace', run: () => $('#btn-reindex').click() },
   { name: 'Close Tab', run: () => { if (S.active >= 0) closeTab(S.active); } },
   { name: 'Close All Tabs', run: () => { while (S.tabs.length) closeTab(0); } },
@@ -45,10 +47,11 @@ export const PAL_MODES = {
   symbol: { tag: 'Symbol', hint: 'Symbols in the active file.' },
   line: { tag: 'Line', hint: 'Enter a line number.' },
   command: { tag: 'Command', hint: '' },
+  theme: { tag: 'Theme', hint: 'Arrows preview a theme. Enter keeps it, Esc restores the previous one.' },
 };
 
 export function openPalette(mode, seed) {
-  pal = { mode, items: [], sel: 0 };
+  pal = { mode, items: [], sel: 0, restoreTheme: mode === 'theme' ? currentTheme() : null };
   overlay.hidden = false;
   palInput.value = seed !== undefined ? seed : ({ symbol: '@', line: ':', command: '>' }[mode] || '');
   $('#pal-mode').textContent = PAL_MODES[mode].tag;
@@ -60,14 +63,16 @@ export function openPalette(mode, seed) {
 
 export function closePalette() {
   overlay.hidden = true;
+  if (pal && pal.restoreTheme) setTheme(pal.restoreTheme, false); // dismissed mid-preview
   pal = null;
 }
 
 export const refreshPalette = debounce(async () => {
   if (!pal) return;
   let raw = palInput.value;
-  let mode = 'file';
-  if (raw.startsWith('>')) { mode = 'command'; raw = raw.slice(1); }
+  let mode = pal.mode === 'theme' ? 'theme' : 'file';
+  if (mode === 'theme') { /* no prefixes: the query is a theme name */ }
+  else if (raw.startsWith('>')) { mode = 'command'; raw = raw.slice(1); }
   else if (raw.startsWith('@')) { mode = 'symbol'; raw = raw.slice(1); }
   else if (raw.startsWith(':')) { mode = 'line'; raw = raw.slice(1); }
   pal.mode = mode;
@@ -88,6 +93,10 @@ export const refreshPalette = debounce(async () => {
     const lq = q.toLowerCase();
     pal.items = ((d && d.outline) || []).filter(s => !lq || s.name.toLowerCase().includes(lq))
       .slice(0, 400).map(s => ({ kind: 'sym', n: s.line, label: s.name, sub: s.kind, right: String(s.line) }));
+  } else if (mode === 'theme') {
+    const lq = q.toLowerCase();
+    pal.items = listThemes().filter(t => (t.name + ' ' + t.id).toLowerCase().includes(lq))
+      .map(t => ({ kind: 'theme', id: t.id, label: t.name, sub: t.scheme, right: t.id === pal.restoreTheme ? 'current' : '' }));
   } else {
     let j;
     try { j = await api('/api/find', { q, limit: 120 }); } catch { return; }
@@ -101,7 +110,7 @@ export const refreshPalette = debounce(async () => {
       };
     });
   }
-  pal.sel = 0;
+  pal.sel = mode === 'theme' ? Math.max(0, pal.items.findIndex(it => it.id === currentTheme())) : 0;
   drawPalette();
 }, 40);
 
@@ -128,6 +137,7 @@ export function drawPalette() {
     (it.right ? '<span class="pr">' + esc(it.right) + '</span>' : '') + '</div>').join('');
   const s = palList.children[pal.sel];
   if (s) s.scrollIntoView({ block: 'nearest' });
+  if (pal.mode === 'theme') setTheme(pal.items[pal.sel].id, false); // live preview
 }
 
 export function movePalette(delta) {
@@ -139,12 +149,14 @@ export function movePalette(delta) {
 export function acceptPalette() {
   if (!pal || !pal.items.length) return;
   const it = pal.items[pal.sel];
+  if (it.kind === 'theme') pal.restoreTheme = null;
   closePalette();
   if (it.kind === 'file') openFile(it.path);
   else if (it.kind === 'sym' || it.kind === 'line') {
     const d = doc_(); if (!d) return;
     d.cur = it.n; centerLine(it.n); render(); updateStatus(); pushHistory(d.path, it.n);
   } else if (it.kind === 'cmd') it.cmd.run();
+  else if (it.kind === 'theme') setTheme(it.id);
 }
 
 export function initPalette() {

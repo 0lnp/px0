@@ -13,11 +13,7 @@ import { showRightInspector, hideRightInspector } from './inspector.js';
 import { overlay, openPalette, closePalette } from './palette.js';
 import { moveCursor } from './cursor.js';
 
-export function toggleTheme() {
-  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-  document.documentElement.dataset.theme = next;
-  try { localStorage.setItem('px0.theme', next); } catch {}
-}
+import { cycleTheme } from './theme.js';
 
 export const SHORTCUTS = [
   ['Ctrl K', 'Quick search / palette'], ['Ctrl P', 'Go to file'],
@@ -46,7 +42,7 @@ export function showHelp() {
 export const inField = el => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
 
 export function initShortcuts() {
-  $('#btn-theme')?.addEventListener('click', toggleTheme);
+  $('#btn-theme')?.addEventListener('click', cycleTheme);
   $('#btn-help')?.addEventListener('click', showHelp);
   $('#st-ver')?.addEventListener('click', showHelp);
   $('#helpsheet').addEventListener('click', () => { $('#helpsheet').hidden = true; });

@@ -23,6 +23,7 @@ Whenever modifying, adding, or refactoring code in this repository, you must aud
 | Syntax Highlighting & Lexing | `highlight.go` | `ARCHITECTURE.md`, `README.md` |
 | Language Servers (LSP) | `lsp.go`, `lspnav.go`, `lspservers.go` | `README.md`, `BENCHMARKS.md` |
 | Frontend UI / Virtualization | `web/app.js`, `web/index.html`, `web/style.css` | `ARCHITECTURE.md`, `README.md` |
+| Themes / Colour Tokens | `web/themes/*.css`, `web/style.css`, `web/src/theme.js` | `STYLING.md` |
 | CLI Flags / Configuration | `main.go` | `README.md` |
 | Performance Metrics / Scripts | `benchmark.sh` | `BENCHMARKS.md` |
 
@@ -83,5 +84,6 @@ The frontend is modularized into clean ES modules under `web/src/` and bundled i
 | `web/src/inspector.js` | `showRightInspector()`, `setRightInspectorTab()`, `inspectReferences()`, right resizer |
 | `web/src/find.js` | `openFind()`, `clearFind()`, `runFind()`, `jumpToHit()`, minimap hit dots (Ctrl+F) |
 | `web/src/palette.js` | `openPalette()`, `refreshPalette()`, `COMMANDS`, fuzzy file/symbol/command finder |
-| `web/src/shortcuts.js` | `toggleTheme()`, `showHelp()`, Alt+Z word wrap toggle, keyboard shortcuts listener |
+| `web/src/shortcuts.js` | `showHelp()`, Alt+Z word wrap toggle, keyboard shortcuts listener |
+| `web/src/theme.js` | `listThemes()`, `setTheme()`, `cycleTheme()`, `initTheme()`: theme discovery from loaded CSS and persistence |
 | `web/src/main.js` | Module initializations and application `boot()` sequence |

@@ -13,6 +13,7 @@ import { initInspector } from './inspector.js';
 import { initFind } from './find.js';
 import { initPalette } from './palette.js';
 import { initShortcuts } from './shortcuts.js';
+import { initTheme } from './theme.js';
 import { updateStatus, initMetrics, updateMetricsDisplay } from './status.js';
 
 // Initialize all subsystems
@@ -34,8 +35,7 @@ initMetrics();
 // Bootstrap application lifecycle
 (async function boot() {
   try {
-    const t = localStorage.getItem('px0.theme');
-    if (t) document.documentElement.dataset.theme = t;
+    initTheme();
 
     // Restore word wrap (default ON)
     const wrapPref = localStorage.getItem('px0.wrap');
