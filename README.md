@@ -1,8 +1,8 @@
-# px0: The Fastest Code Viewer for the Age of AI-Driven Development
+# px0: Lightweight Code Viewer & Navigator
 
-> The modern IDE has reduced to just being a code viewer. In the era of autonomous AI agents, coding assistants, and automated code generation, humans spend far less time typing syntax into bloated editors and far more time reviewing, inspecting, understanding, and navigating code written by AI.
->
-> px0 is built for this reality: a lightning-fast, zero-bloat, read-only code viewer. One single 9 MB binary. Zero runtime dependencies. Starts in < 1 ms and uses under 20 MB of RAM.
+px0 is a lightning-fast, zero-bloat, read-only code viewer packaged as a single static ~11 MB binary with zero runtime dependencies. It starts in < 1 ms, uses ~16 MB of RAM, and delivers instantaneous file search, syntax highlighting, and deep code navigation across codebases with tens of thousands of files.
+
+---
 
 ## Installation
 
@@ -28,7 +28,7 @@ sudo install dist/px0-0.1.0-linux-amd64 /usr/local/bin/px0
 
 ### Option 3: Build from Source
 
-Requires Go 1.24 or newer. No npm, no node, no CGO, and no external libraries required:
+Requires Go 1.24 or newer. No npm, no node, no CGO, and no system libraries required:
 
 ```bash
 git clone https://github.com/px0-ai/px0.git
@@ -48,19 +48,42 @@ make dist
 
 ## Features
 
-- **Blazing Fast Code Navigation**: Fuzzy search files (`Cmd/Ctrl+P`), symbols (`Cmd/Ctrl+Shift+O`), and full project regex scan (`Cmd/Ctrl+Shift+F`) in milliseconds.
-- **Rich Syntax Highlighting**: Built-in lexer support for ~280 languages via Chroma.
-- **Custom Themes**: Ships 14 themes, including Tokyo Night (default), Paper, Catppuccin, Dracula, GitHub Dark, Gruvbox, Monokai, Nord, One Dark, Rose Pine, and Solarized. A theme is a single CSS file in `web/themes/`, picked up with no code changes. Switch with the status bar button or `Select Theme` in the command palette. See [STYLING.md](STYLING.md) to write your own.
-- **Language Server Protocol (LSP)**: Zero-config auto-detection of existing LSPs (`gopls`, `rust-analyzer`, `pyright`, `typescript-language-server`, `clangd`, etc.) for Go-to-Definition (`F12`), Hover info, and references.
+- **Blazing Fast Code Navigation**: Fuzzy search files (`Cmd/Ctrl+P`), document symbols (`Cmd/Ctrl+Shift+O`), and full project regex scan (`Cmd/Ctrl+Shift+F`) in milliseconds.
+- **Rich Syntax Highlighting**: Built-in native tokenization for ~280 languages via Chroma.
+- **Custom Themes**: Ships 14 built-in themes, including Tokyo Night (default), Paper, Catppuccin, Dracula, GitHub Dark, Gruvbox, Monokai, Nord, One Dark, Rose Pine, and Solarized. Switch via the status bar button or `Select Theme` in the command palette. See [STYLING.md](STYLING.md) to write your own.
+- **Optional Language Server Protocol (LSP)**: Zero-config auto-detection of local LSPs (`gopls`, `rust-analyzer`, `pyright`, `typescript-language-server`, `clangd`, etc.) for precise Go-to-Definition (`F12`), Hover info, and cross-references. Falls back automatically to instant regex outlines when no LSP is installed.
 - **Virtual DOM / Zero Overhead**: Opening a 400,000-line file costs the same as a 10-line file; only visible lines render in the browser.
 - **Clean Terminal Experience**: CLI adheres to the Ape design spec with a subtle 256-color palette, Unix pipe detection, and quiet automation modes.
-- **Completely Self-Contained**: The single executable embeds HTML, CSS, and JS. No external assets or CDN dependencies.
+- **Completely Self-Contained**: Single static binary embedding HTML, CSS, and JS. Zero runtime dependencies, no electron, and no cloud phone-homes.
+
+---
+
+## Language Server (LSP) Setup (Optional)
+
+`px0` works entirely out of the box without any language servers—fuzzy file search, project grep, and outline parsing are completely built-in.
+
+However, having language servers installed gives `px0` superpowers: semantic Go-to-Definition (`F12`), type hover docs, and jump-to-definition into standard library files. `px0` automatically detects any of the following servers if they exist in your `$PATH`:
+
+| Language | Server | Quick Install Command |
+| -------- | ------ | --------------------- |
+| **Go** | `gopls` | `go install golang.org/x/tools/gopls@latest` |
+| **Rust** | `rust-analyzer` | `rustup component add rust-analyzer` |
+| **TypeScript / JavaScript** | `typescript-language-server` | `npm install -g typescript-language-server typescript` |
+| **Python** | `pyright` or `ruff` | `npm install -g pyright` or `pip install ruff` |
+| **C / C++** | `clangd` | `sudo apt install clangd` or `brew install llvm` |
+| **Zig** | `zls` | `brew install zls` or download from [zigtools/zls](https://github.com/zigtools/zls) |
+| **Lua** | `lua-language-server` | `brew install lua-language-server` or `sudo apt install lua-language-server` |
+| **Ruby** | `solargraph` | `gem install solargraph` |
+
+Servers are spawned **lazily on first request** for that file type and shut down cleanly upon exit. You can also disable LSP detection entirely at any time using `px0 -no-lsp`.
 
 ---
 
 ## Why a Dedicated Code Viewer?
 
-Traditional IDEs (like VS Code and JetBrains) were architected when developers spent 8 hours a day manually typing code. They carry tens of thousands of features, bloated Electron/Node runtimes, complex file watchers, heavy background extensions, and gigabytes of memory overhead.
+Traditional IDEs (like VS Code and JetBrains) were architected when developers spent almost all their time manually typing code. They carry tens of thousands of editing features, bloated Electron/Node runtimes, complex file watchers, heavy background extensions, and gigabytes of memory overhead.
+
+In the modern development workflow—with AI coding agents, fast branch reviews, pull requests, and automated generation—developers spend significantly more time **inspecting, reviewing, navigating, and understanding codebases** than typing boilerplate.
 
 | Parameter | Traditional IDE (such as VS Code) | px0 (Code Viewer) |
 | --------- | --------------------------------- | ----------------- |
@@ -71,8 +94,6 @@ Traditional IDEs (like VS Code and JetBrains) were architected when developers s
 | Process Tree | 15+ Node.js/Electron processes | 1 single static Go binary |
 | Workspace Indexing | Multi-second background churn | 0 - 45 ms for entire repositories |
 | Setup and Config | Config files, plugins, node, npm | Zero config, zero runtime |
-
-When AI writes the code, your primary requirement is instant, distraction-free code understanding with deep LSP intelligence and zero machine lag.
 
 ---
 
@@ -168,6 +189,15 @@ px0 --update
 
 ---
 
+## Philosophy and Design Principles
+
+- **Read-Only by Design**: px0 does not attempt to be a code editor. Code authoring belongs to AI agents, CLI tools, or dedicated editors. px0 focuses exclusively on the reader experience.
+- **Snapshot Indexing**: By omitting heavy filesystem watcher daemons (`inotify` leaks, perpetual background CPU spikes), indexing completes in milliseconds. Re-index whenever needed via `Cmd+Shift+P` -> `Re-index Workspace`.
+- **Local and Private**: Runs locally on `127.0.0.1` with zero telemetry, zero accounts, and zero cloud phone-homes.
+- **Ape Terminal & Web Aesthetics**: Minimal, quiet, high information density, designed for pair-programming and flow state.
+
+---
+
 ## Reproducing Benchmarks
 
 All benchmark figures can be measured directly on your own system:
@@ -190,14 +220,6 @@ All benchmark figures can be measured directly on your own system:
 ```
 
 See [BENCHMARKS.md](BENCHMARKS.md) for full methodology and detailed charts.
-
----
-
-## Philosophy and Limits
-
-- **Read-Only by Design**: px0 will never have a text editor. Code modifications belong to AI agents, CLI commands, or specific diff tools.
-- **Snapshot Indexing**: By omitting file-system watcher daemons (`inotify` leaks, high CPU), indexing is near-instantaneous. Re-index at any time with `Cmd+Shift+P` -> `Re-index Workspace`.
-- **Local and Secure**: Binds to `127.0.0.1` by default without any cloud or analytics phone-homes.
 
 ---
 
@@ -241,7 +263,7 @@ make dist
 - `server.go`: HTTP routes, JSON API, gzip compression, and embedded asset serving.
 - `index.go`: Concurrently walks workspace, honors `.gitignore`, builds in-memory path and trie structures in milliseconds.
 - `search.go` / `fuzzy.go`: High-performance substring and fuzzy file/symbol matching algorithms.
-- `lsp.go` / `lsp_client.go`: Lightweight JSON-RPC client communicating with local language servers over stdio.
+- `lsp.go` / `lsp_client.go` / `lspservers.go`: Lightweight JSON-RPC client communicating with local language servers over stdio.
 - `web/`: Native zero-dependency ES module frontend (custom virtual scroll, syntax highlight rendering, tab manager).
 - `web/themes/`: One CSS file per colour theme, joined by the server into `/static/themes.css`. Token reference in [STYLING.md](STYLING.md).
 
