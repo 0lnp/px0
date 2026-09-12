@@ -57,7 +57,7 @@ initMetrics();
   measure();
   S.meta = await api('/api/meta');
   if (S.meta.metrics) updateMetricsDisplay(S.meta.metrics);
-  document.title = S.meta.name + ' — px0';
+  document.title = S.meta.name + ' - px0';
   $('#root-name').textContent = S.meta.name;
   $('#root-name').title = S.meta.root;
   if (S.meta.version) {

@@ -2234,7 +2234,7 @@
     S2.meta = await api("/api/meta");
     if (S2.meta.metrics)
       updateMetricsDisplay(S2.meta.metrics);
-    document.title = S2.meta.name + " — px0";
+    document.title = S2.meta.name + " - px0";
     $("#root-name").textContent = S2.meta.name;
     $("#root-name").title = S2.meta.root;
     if (S2.meta.version) {
