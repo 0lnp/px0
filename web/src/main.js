@@ -34,16 +34,16 @@ initMetrics();
 // Bootstrap application lifecycle
 (async function boot() {
   try {
-    const t = localStorage.getItem('lide.theme');
+    const t = localStorage.getItem('px0.theme');
     if (t) document.documentElement.dataset.theme = t;
 
     // Restore word wrap (default ON)
-    const wrapPref = localStorage.getItem('lide.wrap');
+    const wrapPref = localStorage.getItem('px0.wrap');
     S.wrap = wrapPref !== null ? wrapPref === 'true' : true;
     document.body.classList.toggle('word-wrap', S.wrap);
 
     // Restore line numbers (default ON)
-    const linesPref = localStorage.getItem('lide.lineNumbers');
+    const linesPref = localStorage.getItem('px0.lineNumbers');
     S.lineNumbers = linesPref !== null ? linesPref === 'true' : true;
     document.body.classList.toggle('hide-lines', !S.lineNumbers);
 

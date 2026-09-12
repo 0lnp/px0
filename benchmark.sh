@@ -525,7 +525,7 @@ px0_files = '$px0_files'
 px0_idx = '$px0_idx'
 
 results = []
-results.append(('px0 / lide', 'Single native Go server', f'{px0_mem} MB', f'{px0_idx} ms', '1 process (native)'))
+results.append(('px0', 'Single native Go server', f'{px0_mem} MB', f'{px0_idx} ms', '1 process (native)'))
 
 # 1. Check running VS Code (configured with user extensions)
 try:

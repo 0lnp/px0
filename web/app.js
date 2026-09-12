@@ -108,7 +108,7 @@
     S2.wrap = typeof forced === "boolean" ? forced : !S2.wrap;
     document.body.classList.toggle("word-wrap", S2.wrap);
     try {
-      localStorage.setItem("lide.wrap", S2.wrap ? "true" : "false");
+      localStorage.setItem("px0.wrap", S2.wrap ? "true" : "false");
     } catch {}
     updateEditorOptionControls();
     layout();
@@ -118,7 +118,7 @@
     S2.lineNumbers = typeof forced === "boolean" ? forced : !S2.lineNumbers;
     document.body.classList.toggle("hide-lines", !S2.lineNumbers);
     try {
-      localStorage.setItem("lide.lineNumbers", S2.lineNumbers ? "true" : "false");
+      localStorage.setItem("px0.lineNumbers", S2.lineNumbers ? "true" : "false");
     } catch {}
     updateEditorOptionControls();
     layout();
@@ -1747,7 +1747,7 @@
     const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
     document.documentElement.dataset.theme = next;
     try {
-      localStorage.setItem("lide.theme", next);
+      localStorage.setItem("px0.theme", next);
     } catch {}
   }
   var SHORTCUTS = [
@@ -2216,13 +2216,13 @@
   initMetrics();
   (async function boot() {
     try {
-      const t = localStorage.getItem("lide.theme");
+      const t = localStorage.getItem("px0.theme");
       if (t)
         document.documentElement.dataset.theme = t;
-      const wrapPref = localStorage.getItem("lide.wrap");
+      const wrapPref = localStorage.getItem("px0.wrap");
       S2.wrap = wrapPref !== null ? wrapPref === "true" : true;
       document.body.classList.toggle("word-wrap", S2.wrap);
-      const linesPref = localStorage.getItem("lide.lineNumbers");
+      const linesPref = localStorage.getItem("px0.lineNumbers");
       S2.lineNumbers = linesPref !== null ? linesPref === "true" : true;
       document.body.classList.toggle("hide-lines", !S2.lineNumbers);
       updateEditorOptionControls();

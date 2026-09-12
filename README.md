@@ -79,8 +79,8 @@ sudo install dist/px0-0.1.0-linux-amd64 /usr/local/bin/px0
 Requires Go 1.24 or newer. No npm, no node, no CGO, and no system libraries required:
 
 ```bash
-git clone https://github.com/arpitbbhayani/lide.git
-cd lide
+git clone https://github.com/arpitbbhayani/px0.git
+cd px0
 go build -o px0 .
 sudo install px0 /usr/local/bin/
 ```
@@ -173,8 +173,8 @@ Contributions that keep px0 fast, minimal, and dependable are welcome. Please re
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/arpitbbhayani/lide.git
-cd lide
+git clone https://github.com/arpitbbhayani/px0.git
+cd px0
 ```
 
 2. Run tests:

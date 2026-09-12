@@ -16,7 +16,7 @@ import { moveCursor } from './cursor.js';
 export function toggleTheme() {
   const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
   document.documentElement.dataset.theme = next;
-  try { localStorage.setItem('lide.theme', next); } catch {}
+  try { localStorage.setItem('px0.theme', next); } catch {}
 }
 
 export const SHORTCUTS = [

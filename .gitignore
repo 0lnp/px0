@@ -1,6 +1,6 @@
 dist/
 bench-repos/
-lide
+px0
 *.test
 *.prof
 
