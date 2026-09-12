@@ -57,9 +57,13 @@ initMetrics();
   measure();
   S.meta = await api('/api/meta');
   if (S.meta.metrics) updateMetricsDisplay(S.meta.metrics);
-  document.title = S.meta.name + ' — lide';
+  document.title = S.meta.name + ' — px0';
   $('#root-name').textContent = S.meta.name;
   $('#root-name').title = S.meta.root;
+  if (S.meta.version) {
+    const emptyVerEl = $('#empty-ver');
+    if (emptyVerEl) emptyVerEl.textContent = 'v' + S.meta.version;
+  }
   updateStatus();
   await drawTree('', treeEl, 0);
 

@@ -2,7 +2,7 @@
 # Build px0 for every supported platform into dist/.
 set -eu
 
-VERSION=$(grep -o 'version = "[^"]*"' main.go | cut -d'"' -f2)
+VERSION=$(cat VERSION | tr -d ' \r\n')
 OUT=${OUT:-dist}
 
 # Bundle frontend web assets

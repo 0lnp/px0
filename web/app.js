@@ -333,6 +333,11 @@
       idxEl.textContent = S2.meta.indexMs + "ms";
       idxEl.title = `Workspace Indexing: took ${S2.meta.indexMs}ms to index ${S2.meta.files.toLocaleString()} files (${S2.meta.ready ? "ready" : "in progress"})`;
     }
+    const verEl = $("#st-ver");
+    if (verEl && S2.meta?.version) {
+      verEl.textContent = "v" + S2.meta.version;
+      verEl.title = `px0 v${S2.meta.version} (Click for shortcuts & help)`;
+    }
     drawLspStatus();
   }
   function setStatusNote(msg) {
@@ -1756,13 +1761,15 @@
   ];
   function showHelp() {
     const h = $("#helpsheet");
-    h.innerHTML = '<div class="help-card"><h2>Keyboard Shortcuts</h2><dl class="help-grid">' + SHORTCUTS.map(([k, v]) => "<dt>" + k.split(" ").map((x) => "<kbd>" + esc(x.replace("Ctrl", isMac ? "⌘" : "Ctrl")) + "</kbd>").join("") + "</dt>" + "<dd>" + esc(v) + "</dd>").join("") + "</dl></div>";
+    const ver = S2.meta?.version ? ` <span class="help-version">v${esc(S2.meta.version)}</span>` : "";
+    h.innerHTML = '<div class="help-card"><div class="help-header"><h2>Keyboard Shortcuts</h2>' + ver + '</div><dl class="help-grid">' + SHORTCUTS.map(([k, v]) => "<dt>" + k.split(" ").map((x) => "<kbd>" + esc(x.replace("Ctrl", isMac ? "⌘" : "Ctrl")) + "</kbd>").join("") + "</dt>" + "<dd>" + esc(v) + "</dd>").join("") + "</dl></div>";
     h.hidden = false;
   }
   var inField = (el) => el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
   function initShortcuts() {
     $("#btn-theme")?.addEventListener("click", toggleTheme);
     $("#btn-help")?.addEventListener("click", showHelp);
+    $("#st-ver")?.addEventListener("click", showHelp);
     $("#helpsheet").addEventListener("click", () => {
       $("#helpsheet").hidden = true;
     });
@@ -2214,9 +2221,14 @@
     S2.meta = await api("/api/meta");
     if (S2.meta.metrics)
       updateMetricsDisplay(S2.meta.metrics);
-    document.title = S2.meta.name + " — lide";
+    document.title = S2.meta.name + " — px0";
     $("#root-name").textContent = S2.meta.name;
     $("#root-name").title = S2.meta.root;
+    if (S2.meta.version) {
+      const emptyVerEl = $("#empty-ver");
+      if (emptyVerEl)
+        emptyVerEl.textContent = "v" + S2.meta.version;
+    }
     updateStatus();
     await drawTree("", treeEl, 0);
     if (document.fonts && document.fonts.ready) {

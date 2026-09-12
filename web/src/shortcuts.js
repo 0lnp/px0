@@ -35,7 +35,8 @@ export const SHORTCUTS = [
 
 export function showHelp() {
   const h = $('#helpsheet');
-  h.innerHTML = '<div class="help-card"><h2>Keyboard Shortcuts</h2><dl class="help-grid">' +
+  const ver = S.meta?.version ? ` <span class="help-version">v${esc(S.meta.version)}</span>` : '';
+  h.innerHTML = '<div class="help-card"><div class="help-header"><h2>Keyboard Shortcuts</h2>' + ver + '</div><dl class="help-grid">' +
     SHORTCUTS.map(([k, v]) =>
       '<dt>' + k.split(' ').map(x => '<kbd>' + esc(x.replace('Ctrl', isMac ? '⌘' : 'Ctrl')) + '</kbd>').join('') + '</dt>' +
       '<dd>' + esc(v) + '</dd>').join('') + '</dl></div>';
@@ -47,6 +48,7 @@ export const inField = el => el && (el.tagName === 'INPUT' || el.tagName === 'TE
 export function initShortcuts() {
   $('#btn-theme')?.addEventListener('click', toggleTheme);
   $('#btn-help')?.addEventListener('click', showHelp);
+  $('#st-ver')?.addEventListener('click', showHelp);
   $('#helpsheet').addEventListener('click', () => { $('#helpsheet').hidden = true; });
 
   // Footer quick action buttons

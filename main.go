@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"flag"
 	"fmt"
 	"net"
@@ -16,7 +17,10 @@ import (
 	"time"
 )
 
-var version = "0.1.0"
+//go:embed VERSION
+var rawVersion string
+
+var version = strings.TrimSpace(rawVersion)
 
 func main() {
 	var (
@@ -26,12 +30,22 @@ func main() {
 		noLSP   = flag.Bool("no-lsp", false, "do not use language servers, even if installed")
 		dev     = flag.String("dev", "", "serve the UI from this source directory instead of the embedded copy")
 		showVer = flag.Bool("version", false, "print version and exit")
+		noColor = flag.Bool("no-color", false, "disable colour output")
+		quiet   = flag.Bool("quiet", false, "suppress narration")
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "px0 %s - a code navigator\n\nusage: px0 [flags] [directory]\n\nflags:\n", version)
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+
+	if *noColor {
+		f := false
+		uiForcedColor = &f
+	}
+	if *quiet {
+		uiQuiet = true
+	}
 
 	if *showVer {
 		fmt.Printf("px0 %s (%s/%s)\n", version, runtime.GOOS, runtime.GOARCH)
@@ -71,8 +85,10 @@ func main() {
 	srv := &http.Server{Handler: NewServer(ix, lsp)}
 
 	url := "http://" + addr
-	fmt.Printf("px0 %s  %s\n", version, root)
-	fmt.Printf("  -> %s   (ctrl-c to stop)\n", url)
+	uiHeading("px0 "+version, nil, os.Stdout)
+	uiKV("workspace", root, 11, os.Stdout)
+	uiKV("url", uiAccent(url, os.Stdout), 11, os.Stdout)
+	uiHint("ctrl-c to stop", os.Stdout)
 
 	// Launch browser immediately without blocking startup.
 	if !*noOpen {
@@ -83,9 +99,9 @@ func main() {
 	go func() {
 		ix.Build()
 		n, _, ms := ix.Stats()
-		fmt.Printf("  indexed %d files in %dms\n", n, ms)
+		uiStatus("ok", fmt.Sprintf("indexed %d files", n), fmt.Sprintf("%dms", ms), 0, os.Stdout)
 		if names := lsp.Available(); len(names) > 0 {
-			fmt.Printf("  language servers: %s (started on first use)\n", strings.Join(names, ", "))
+			uiBullet(fmt.Sprintf("language servers: %s (started on first use)", strings.Join(names, ", ")), os.Stdout)
 		}
 	}()
 
@@ -96,11 +112,12 @@ func main() {
 	go func() {
 		<-stop
 		fmt.Print("\r")
+		uiStatus("warn", "interrupted", "", 0, os.Stderr)
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		srv.Shutdown(ctx)
 		lsp.Close()
-		os.Exit(0)
+		os.Exit(130)
 	}()
 
 	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
@@ -111,7 +128,8 @@ func main() {
 }
 
 // listen binds the requested port, walking forward if it is already taken so a
-// second instance does not simply fail.
+// second instance does not simply fail. If a block of ports is busy, it falls
+// back to an OS-assigned free port.
 func listen(host string, port int) (net.Listener, string, error) {
 	if port == 0 {
 		ln, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
@@ -120,26 +138,50 @@ func listen(host string, port int) (net.Listener, string, error) {
 		}
 		return ln, ln.Addr().String(), nil
 	}
-	for p := port; p < port+20; p++ {
+	for p := port; p < port+100; p++ {
 		addr := net.JoinHostPort(host, fmt.Sprint(p))
 		if ln, err := net.Listen("tcp", addr); err == nil {
 			return ln, addr, nil
 		}
 	}
-	return nil, "", fmt.Errorf("no free port in range %d-%d", port, port+20)
+	// Fallback to any free port assigned by the OS if port range is busy
+	if ln, err := net.Listen("tcp", net.JoinHostPort(host, "0")); err == nil {
+		return ln, ln.Addr().String(), nil
+	}
+	return nil, "", fmt.Errorf("no free port available starting from %d", port)
 }
 
 func openBrowser(url string) {
-	var cmd *exec.Cmd
+	// If BROWSER environment variable is set, try that first
+	if b := os.Getenv("BROWSER"); b != "" {
+		if cmd := exec.Command(b, url); cmd.Start() == nil {
+			return
+		}
+	}
+
+	var cmds []*exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = exec.Command("open", url)
+		cmds = []*exec.Cmd{exec.Command("open", url)}
 	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+		cmds = []*exec.Cmd{exec.Command("rundll32", "url.dll,FileProtocolHandler", url)}
 	default:
-		cmd = exec.Command("xdg-open", url)
+		// On Linux/Unix, try xdg-open, sensible-browser, gio, or common browsers
+		cmds = []*exec.Cmd{
+			exec.Command("xdg-open", url),
+			exec.Command("sensible-browser", url),
+			exec.Command("gio", "open", url),
+			exec.Command("google-chrome", url),
+			exec.Command("firefox", url),
+			exec.Command("chromium", url),
+		}
 	}
-	_ = cmd.Start()
+
+	for _, cmd := range cmds {
+		if err := cmd.Start(); err == nil {
+			return
+		}
+	}
 }
 
 func fatal(err error) {

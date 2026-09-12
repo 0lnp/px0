@@ -196,6 +196,7 @@ func (s *Server) handleMeta(w http.ResponseWriter, r *http.Request) {
 		"ready":      s.ix.Ready(),
 		"lspServers": s.lsp.Available(),
 		"metrics":    getProcessMetrics(),
+		"version":    version,
 	})
 }
 

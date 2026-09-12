@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -475,5 +477,55 @@ func TestCloseEndpoint(t *testing.T) {
 	code, _ = get(t, s, "/api/close?path=../../nonexistent")
 	if code != http.StatusBadRequest {
 		t.Errorf("expected 400 for bad path, got %d", code)
+	}
+}
+
+func TestListenPortFallback(t *testing.T) {
+	// Bind a port first
+	ln1, addr1, err := listen("127.0.0.1", 0)
+	if err != nil {
+		t.Fatalf("first listen failed: %v", err)
+	}
+	defer ln1.Close()
+
+	// Extract port number
+	_, portStr, err := net.SplitHostPort(addr1)
+	if err != nil {
+		t.Fatalf("split host port failed: %v", err)
+	}
+	p, _ := strconv.Atoi(portStr)
+
+	// Trying to listen on the same port should find the next available port
+	ln2, addr2, err := listen("127.0.0.1", p)
+	if err != nil {
+		t.Fatalf("second listen failed: %v", err)
+	}
+	defer ln2.Close()
+
+	if addr2 == addr1 {
+		t.Fatalf("second listener got the same address %s", addr2)
+	}
+}
+
+func TestVersionDrivenFromVERSIONFile(t *testing.T) {
+	data, err := os.ReadFile("VERSION")
+	if err != nil {
+		t.Fatalf("failed to read VERSION file: %v", err)
+	}
+	expected := strings.TrimSpace(string(data))
+	if version != expected {
+		t.Fatalf("version variable %q does not match VERSION file %q", version, expected)
+	}
+}
+
+func TestMetaIncludesVersion(t *testing.T) {
+	s, _ := newTestServer(t)
+	code, body := get(t, s, "/api/meta")
+	if code != http.StatusOK {
+		t.Fatalf("/api/meta returned %d: %v", code, body)
+	}
+	v, ok := body["version"].(string)
+	if !ok || v != version {
+		t.Fatalf("expected version %q in /api/meta, got %v", version, body["version"])
 	}
 }
