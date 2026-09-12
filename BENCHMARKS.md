@@ -160,10 +160,17 @@ Time the language server path. This one leaves language servers enabled, picks a
   gopls memory               122 MB
 ```
 
-Compare px0 directly against VS Code on the current workspace or any directory:
+Compare px0 directly against running VS Code, vanilla VS Code, and other editors:
 
 ```bash
+# Compare against running VS Code process tree (extensions enabled)
 ./benchmark.sh --vscode .
+
+# Benchmark an isolated, clean vanilla VS Code instance (no extensions, clean user-data-dir)
+./benchmark.sh --vscode-vanilla .
+
+# Compare multi-editor overview (px0 vs. VS Code, Neovim, Vim, etc.)
+./benchmark.sh --editors .
 ```
 
 ```

@@ -341,7 +341,9 @@
     drawLspStatus();
   }
   function setStatusNote(msg) {
-    $("#st-pos").textContent = msg;
+    const el = $("#st-pos");
+    if (el)
+      el.textContent = msg;
   }
   function fmtBytes(n) {
     if (n < 1024)
@@ -421,7 +423,8 @@
     const d = doc_();
     const el = $("#outline");
     if (!d) {
-      el.innerHTML = '<div class="hint">No file open.</div>';
+      if (el)
+        el.innerHTML = '<div class="hint">No file open.</div>';
       return;
     }
     if (!d.outline) {
@@ -452,7 +455,7 @@
     }
     d.outline = j.symbols;
     d.outlineSource = j.server;
-    if (doc_() === d && $("#panel-outline").classList.contains("active"))
+    if (doc_() === d && $("#panel-outline")?.classList.contains("active"))
       drawOutline();
   }
   function drawOutline() {
@@ -518,7 +521,7 @@
     return KIND_LABEL[k] || k.slice(0, 3);
   }
   function initOutline() {
-    $("#outline").addEventListener("click", (e) => {
+    $("#outline")?.addEventListener("click", (e) => {
       const s = e.target.closest(".sym");
       if (!s)
         return;
@@ -533,7 +536,7 @@
       updateStatus();
       pushHistory(d.path, d.cur);
     });
-    $("#outline-filter").addEventListener("input", drawOutline);
+    $("#outline-filter")?.addEventListener("input", drawOutline);
   }
 
   // web/src/tree.js
@@ -717,7 +720,10 @@
   var resultsEl = $("#results");
   var lastResults = null;
   var runSearch = debounce(async () => {
-    const q = $("#q").value;
+    const qEl = $("#q");
+    if (!qEl || !resultsEl)
+      return;
+    const q = qEl.value;
     if (!q.trim()) {
       resultsEl.innerHTML = "";
       return;
@@ -725,10 +731,10 @@
     resultsEl.innerHTML = '<div class="hint">searching…</div>';
     const params = {
       q,
-      glob: $("#glob").value,
-      case: $("#o-case").classList.contains("on") ? 1 : "",
-      word: $("#o-word").classList.contains("on") ? 1 : "",
-      re: $("#o-re").classList.contains("on") ? 1 : ""
+      glob: $("#glob")?.value || "",
+      case: $("#o-case")?.classList.contains("on") ? 1 : "",
+      word: $("#o-word")?.classList.contains("on") ? 1 : "",
+      re: $("#o-re")?.classList.contains("on") ? 1 : ""
     };
     try {
       const j = await api("/api/search", params);
@@ -739,6 +745,8 @@
   }, 160);
   function renderResults(j) {
     lastResults = j;
+    if (!resultsEl)
+      return;
     if (!j.results || !j.results.length) {
       resultsEl.innerHTML = '<div class="hint">No results.</div>';
       return;
@@ -761,6 +769,8 @@
     return "…/" + parts.slice(-3).join("/");
   }
   function initSearch() {
+    if (!resultsEl)
+      return;
     resultsEl.addEventListener("click", (e) => {
       const t = e.target.closest("[data-toggle]");
       if (t) {
@@ -1036,9 +1046,12 @@
       setLspState(rx.lsp);
     if (!rx.defs || !rx.defs.length) {
       showPanel("search");
-      $("#q").value = at.word;
-      $("#o-word").classList.add("on");
-      runSearch();
+      const q = $("#q");
+      if (q) {
+        q.value = at.word;
+        $("#o-word")?.classList.add("on");
+        runSearch();
+      }
       return;
     }
     acceptHits(at.word, rx.defs, null, "definition", rx.refCount);
@@ -1612,7 +1625,7 @@
       vp.scrollTop = d.scrollTop;
     render();
     updateStatus();
-    if ($("#panel-outline").classList.contains("active"))
+    if ($("#panel-outline")?.classList.contains("active"))
       loadOutline();
     if (push)
       pushHistory(path, line || d.cur, col);
@@ -1638,7 +1651,7 @@
       rowsEl.innerHTML = "";
       sizer.style.height = "0px";
       $("#empty").hidden = false;
-      $("#crumbs").innerHTML = "";
+      drawCrumbs();
       drawTabs();
       updateStatus();
       return;
@@ -1677,7 +1690,7 @@
     vp.scrollTop = S2.tabs[i].scrollTop;
     render();
     updateStatus();
-    if ($("#panel-outline").classList.contains("active"))
+    if ($("#panel-outline")?.classList.contains("active"))
       loadOutline();
     pushHistory(S2.tabs[i].path, S2.tabs[i].cur);
   }
@@ -1782,7 +1795,7 @@
         openPalette("file");
       else if (act === "search") {
         showPanel("search");
-        $("#q").select();
+        $("#q")?.select();
       } else if (act === "symbols")
         openPalette("symbol");
       else if (act === "find")
@@ -1856,7 +1869,7 @@
       if (mod && e.shiftKey && (e.key === "F" || e.key === "f")) {
         e.preventDefault();
         showPanel("search");
-        $("#q").select();
+        $("#q")?.select();
         return;
       }
       if (mod && !e.shiftKey && (e.key === "p" || e.key === "P")) {

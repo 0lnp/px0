@@ -81,7 +81,8 @@ export async function gotoDefinition(arg) {
 
   if (!rx.defs || !rx.defs.length) {
     showPanel('search');
-    $('#q').value = at.word; $('#o-word').classList.add('on'); runSearch();
+    const q = $('#q');
+    if (q) { q.value = at.word; $('#o-word')?.classList.add('on'); runSearch(); }
     return;
   }
   acceptHits(at.word, rx.defs, null, 'definition', rx.refCount);

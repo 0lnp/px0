@@ -8,7 +8,7 @@ import { pushHistory } from './history.js';
 export async function loadOutline() {
   const d = doc_();
   const el = $('#outline');
-  if (!d) { el.innerHTML = '<div class="hint">No file open.</div>'; return; }
+  if (!d) { if (el) el.innerHTML = '<div class="hint">No file open.</div>'; return; }
   if (!d.outline) {
     try { d.outline = (await api('/api/outline', { path: d.path })).symbols || []; }
     catch { d.outline = []; }
@@ -29,7 +29,7 @@ export async function upgradeOutline(d) {
   if (!j.symbols || !j.symbols.length) { d.outlineLSP = false; return; }
   d.outline = j.symbols;
   d.outlineSource = j.server;
-  if (doc_() === d && $('#panel-outline').classList.contains('active')) drawOutline();
+  if (doc_() === d && $('#panel-outline')?.classList.contains('active')) drawOutline();
 }
 
 export function drawOutline() {
@@ -74,7 +74,7 @@ export const KIND_LABEL = {
 export function kindLabel(k) { return KIND_LABEL[k] || k.slice(0, 3); }
 
 export function initOutline() {
-  $('#outline').addEventListener('click', e => {
+  $('#outline')?.addEventListener('click', e => {
     const s = e.target.closest('.sym');
     if (!s) return;
     $$('.sym.sel').forEach(x => x.classList.remove('sel'));
@@ -83,5 +83,5 @@ export function initOutline() {
     d.cur = +s.dataset.n; centerLine(d.cur); render(); updateStatus();
     pushHistory(d.path, d.cur);
   });
-  $('#outline-filter').addEventListener('input', drawOutline);
+  $('#outline-filter')?.addEventListener('input', drawOutline);
 }

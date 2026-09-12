@@ -56,7 +56,7 @@ export async function openFile(path, opts = {}) {
   else vp.scrollTop = d.scrollTop;
   render();
   updateStatus();
-  if ($('#panel-outline').classList.contains('active')) loadOutline();
+  if ($('#panel-outline')?.classList.contains('active')) loadOutline();
   if (push) pushHistory(path, line || d.cur, col);
 }
 
@@ -83,7 +83,7 @@ export function closeTab(i) {
   if (S.tabs.length === 0) {
     S.active = -1;
     rowsEl.innerHTML = ''; sizer.style.height = '0px';
-    $('#empty').hidden = false; $('#crumbs').innerHTML = '';
+    $('#empty').hidden = false; drawCrumbs();
     drawTabs(); updateStatus();
     return;
   }
@@ -115,7 +115,7 @@ export function switchTab(i) {
   drawTabs(); drawCrumbs(); layout();
   vp.scrollTop = S.tabs[i].scrollTop;
   render(); updateStatus();
-  if ($('#panel-outline').classList.contains('active')) loadOutline();
+  if ($('#panel-outline')?.classList.contains('active')) loadOutline();
   pushHistory(S.tabs[i].path, S.tabs[i].cur);
 }
 

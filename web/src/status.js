@@ -20,7 +20,8 @@ export function updateStatus() {
 }
 
 export function setStatusNote(msg) {
-  $('#st-pos').textContent = msg;
+  const el = $('#st-pos');
+  if (el) el.textContent = msg;
 }
 
 export function fmtBytes(n) {

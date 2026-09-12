@@ -6,15 +6,18 @@ import { flashFind } from './lsp.js';
 export const resultsEl = $('#results');
 export let lastResults = null;
 
+// The search panel is optional markup; without it every entry point is a no-op.
 export const runSearch = debounce(async () => {
-  const q = $('#q').value;
+  const qEl = $('#q');
+  if (!qEl || !resultsEl) return;
+  const q = qEl.value;
   if (!q.trim()) { resultsEl.innerHTML = ''; return; }
   resultsEl.innerHTML = '<div class="hint">searching…</div>';
   const params = {
-    q, glob: $('#glob').value,
-    case: $('#o-case').classList.contains('on') ? 1 : '',
-    word: $('#o-word').classList.contains('on') ? 1 : '',
-    re: $('#o-re').classList.contains('on') ? 1 : '',
+    q, glob: $('#glob')?.value || '',
+    case: $('#o-case')?.classList.contains('on') ? 1 : '',
+    word: $('#o-word')?.classList.contains('on') ? 1 : '',
+    re: $('#o-re')?.classList.contains('on') ? 1 : '',
   };
   try {
     const j = await api('/api/search', params);
@@ -26,6 +29,7 @@ export const runSearch = debounce(async () => {
 
 export function renderResults(j) {
   lastResults = j;
+  if (!resultsEl) return;
   if (!j.results || !j.results.length) {
     resultsEl.innerHTML = '<div class="hint">No results.</div>';
     return;
@@ -59,6 +63,7 @@ export function displayPath(p) {
 }
 
 export function initSearch() {
+  if (!resultsEl) return;
   resultsEl.addEventListener('click', e => {
     const t = e.target.closest('[data-toggle]');
     if (t) {
