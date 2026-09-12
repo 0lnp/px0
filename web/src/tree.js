@@ -11,11 +11,11 @@ export async function drawTree(dir, container, depth) {
   container.innerHTML = j.children.map(c => {
     const pad = 8 + depth * 12;
     if (c.dir) {
-      return '<div class="tw"><div class="tr dir" data-dir="' + esc(c.path) + '" style="padding-left:' + pad + 'px">' +
+      return '<div class="tw"><div class="tr dir" data-dir="' + esc(c.path) + '" style="padding-left:' + pad + 'px" title="Folder: ' + esc(c.path) + '">' +
         '<span class="ar"></span><span class="nm">' + esc(c.name) + '</span></div>' +
         '<div class="kids" data-kids="' + esc(c.path) + '"></div></div>';
     }
-    return '<div class="tr file" data-file="' + esc(c.path) + '" style="padding-left:' + (pad + 12) + 'px">' +
+    return '<div class="tr file" data-file="' + esc(c.path) + '" style="padding-left:' + (pad + 12) + 'px" title="Open ' + esc(c.path) + '">' +
       '<span class="ic" data-t="' + fileKind(c.name) + '"></span><span class="nm">' + esc(c.name) + '</span></div>';
   }).join('');
 }

@@ -1,7 +1,7 @@
 // web/src/shortcuts.js
 import { $, $$, esc, S, doc_, isMac, MOD, LH } from './state.js';
 import { vp, sizer } from './ui.js';
-import { layout, render, paint } from './renderer.js';
+import { layout, render, paint, toggleWordWrap, toggleLineNumbers } from './renderer.js';
 import { updateStatus } from './status.js';
 import { closeTab, switchTab } from './tabs.js';
 import { go } from './history.js';
@@ -23,11 +23,12 @@ export const SHORTCUTS = [
   ['Ctrl K', 'Quick search / palette'], ['Ctrl P', 'Go to file'],
   ['Ctrl Shift P', 'Command palette'], ['Ctrl Shift O', 'Go to symbol'],
   ['Ctrl Shift F', 'Search in files'], ['Ctrl F', 'Find in file'],
-  ['Ctrl G', 'Go to line'], ['Enter / Shift Enter', 'Next / previous match'],
+  ['Ctrl G', 'Go to line'], ['Alt Z', 'Toggle word wrap'],
+  ['Enter / Shift Enter', 'Next / previous match'],
   ['F12 or Ctrl Click', 'Go to definition'], ['Shift F12', 'Find all references'],
   ['Ctrl J', 'Toggle right inspector (Symbols/Refs)'],
   ['Alt ←  /  Alt →', 'Navigate back / forward'], ['Ctrl B', 'Toggle sidebar'],
-  ['Ctrl W', 'Close tab'], ['Ctrl Tab', 'Next tab'],
+  ['Ctrl W / Alt W', 'Close tab'], ['Ctrl Tab', 'Next tab'],
   ['Alt 1 … 9', 'Select tab'], ['Double click', 'Highlight all occurrences'],
   ['Ctrl Home / End', 'Top / bottom of file'], ['Esc', 'Dismiss'],
 ];
@@ -44,8 +45,8 @@ export function showHelp() {
 export const inField = el => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
 
 export function initShortcuts() {
-  $('#btn-theme').addEventListener('click', toggleTheme);
-  $('#btn-help').addEventListener('click', showHelp);
+  $('#btn-theme')?.addEventListener('click', toggleTheme);
+  $('#btn-help')?.addEventListener('click', showHelp);
   $('#helpsheet').addEventListener('click', () => { $('#helpsheet').hidden = true; });
 
   // Footer quick action buttons
@@ -58,6 +59,8 @@ export function initShortcuts() {
     else if (act === 'symbols') openPalette('symbol');
     else if (act === 'find') openFind(S.lastWord);
     else if (act === 'goto') openPalette('line');
+    else if (act === 'wrap') toggleWordWrap();
+    else if (act === 'line-numbers') toggleLineNumbers();
     else if (act === 'palette') openPalette('command');
     else if (act === 'help') showHelp();
   });
@@ -97,7 +100,12 @@ export function initShortcuts() {
     if (mod && (e.key === 'g' || e.key === 'G')) { e.preventDefault(); openPalette('line'); return; }
     if (mod && (e.key === 'f' || e.key === 'F')) { e.preventDefault(); openFind(S.lastWord); return; }
     if (mod && (e.key === 'b' || e.key === 'B')) { e.preventDefault(); document.body.classList.toggle('side-hidden'); layout(); render(); return; }
-    if (mod && (e.key === 'w' || e.key === 'W')) { e.preventDefault(); if (S.active >= 0) closeTab(S.active); return; }
+    if ((mod || e.altKey) && (e.key === 'w' || e.key === 'W')) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (S.active >= 0) closeTab(S.active);
+      return;
+    }
     if (e.key === 'F12') {
       e.preventDefault();
       if (e.shiftKey) findReferences(); else gotoDefinition();
@@ -110,7 +118,17 @@ export function initShortcuts() {
       if (S.tabs.length > 1) switchTab((S.active + (e.shiftKey ? -1 : 1) + S.tabs.length) % S.tabs.length);
       return;
     }
-    if (e.altKey && /^[1-9]$/.test(e.key)) { e.preventDefault(); switchTab(+e.key - 1); return; }
+    if (e.altKey && (e.key === 'z' || e.key === 'Z')) {
+      e.preventDefault();
+      toggleWordWrap();
+      return;
+    }
+
+    if (e.altKey && (e.key === 'l' || e.key === 'L')) {
+      e.preventDefault();
+      toggleLineNumbers();
+      return;
+    }
 
     if (inField(document.activeElement)) return;
 
@@ -123,5 +141,14 @@ export function initShortcuts() {
     if (e.key === 'ArrowUp' || e.key === 'k') { e.preventDefault(); moveCursor(-1); return; }
     if (e.key === 'PageDown') { e.preventDefault(); moveCursor(Math.floor(vp.clientHeight / LH) - 2); return; }
     if (e.key === 'PageUp') { e.preventDefault(); moveCursor(-(Math.floor(vp.clientHeight / LH) - 2)); return; }
+  }, { capture: true });
+
+  // When files are open, prompt before accidentally closing the browser window/tab
+  // (e.g. if the browser intercepts Ctrl+W before JavaScript).
+  window.addEventListener('beforeunload', e => {
+    if (S.tabs.length > 0) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
   });
 }

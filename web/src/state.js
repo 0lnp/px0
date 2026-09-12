@@ -33,6 +33,8 @@ export const S = {
   lsp: { servers: [], state: 'off', server: '' },
   gen: 0,
   chW: 7.8,
+  wrap: true,        // word wrap (default ON)
+  lineNumbers: true, // line numbers gutter (default ON)
 };
 
 export const doc_ = () => (S.active >= 0 ? S.tabs[S.active] : null);

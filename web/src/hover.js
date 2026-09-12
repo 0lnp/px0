@@ -73,9 +73,9 @@ export async function showHover(at, x, y) {
     (j.signature ? '<div class="sig">' + j.signature + '</div>' : '') +
     (j.doc ? '<div class="doc">' + esc(j.doc) + '</div>' : '') +
     '<div class="actions">' +
-      '<button id="hc-copy-ref" title="Copy file and line reference"><span class="btn-icon">📋</span> Copy Ref</button>' +
-      '<button id="hc-copy-ai" title="Copy snippet with file path for Claude Code / LLMs"><span class="btn-icon">🤖</span> Copy for AI</button>' +
-      '<button id="hc-find-refs" title="Find all usages across codebase"><span class="btn-icon">🔍</span> Usages</button>' +
+      '<button id="hc-copy-ref" title="Copy file and line reference">Copy Ref</button>' +
+      '<button id="hc-copy-ai" title="Copy snippet with file path for AI Agent / LLMs">Copy for Agent</button>' +
+      '<button id="hc-find-refs" title="Find all usages across codebase">Usages</button>' +
     '</div>' +
     '<div class="foot"><b>' + esc(j.server || 'lsp') + '</b>' +
     '<span>' + (isMac ? '⌘' : 'Ctrl') + '+click usages</span>' +
@@ -94,7 +94,7 @@ export async function showHover(at, x, y) {
     const lineText = d.lines[at.line - 1] || at.word || '';
     const ext = d.path.split('.').pop() || '';
     const text = '### Reference: ' + refPath + '\n```' + ext + '\n' + lineText + '\n```';
-    copyToClipboard(text, 'Copied snippet for AI (' + refPath + ')');
+    copyToClipboard(text, 'Copied snippet for Agent (' + refPath + ')');
   };
   if (btnRefs) btnRefs.onclick = (e) => {
     e.stopPropagation();

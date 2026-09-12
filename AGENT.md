@@ -83,10 +83,10 @@ The frontend is modularized into clean ES modules under `web/src/` and bundled i
 | :--- | :--- |
 | `web/src/state.js` | Core state object `S`, `doc_()`, `api()`, `esc()`, `$`, `$$`, constants (`LH`, `CHUNK`, `OVERSCAN`, `MOD`) |
 | `web/src/ui.js` | DOM references (`vp`, `sizer`, `rowsEl`, `editor`, `refmenu`, `toastEl`), `showToast()`, `copyToClipboard()` |
-| `web/src/renderer.js` | `measure()`, `layout()`, `render()`, `paint()`, `decorate()`, `markNodes()`, `wrapRange()`, on-demand chunk fetching |
+| `web/src/renderer.js` | `measure()`, `layout()`, `render()`, `paint()`, `toggleWordWrap()`, `toggleLineNumbers()`, on-demand chunk fetching |
 | `web/src/tabs.js` | `openFile()`, `closeTab()`, `switchTab()`, `drawTabs()`, `drawCrumbs()`, `showImage()` |
 | `web/src/history.js` | `pushHistory()`, `go()`: jump history back/forward (Alt+Left, Alt+Right) |
-| `web/src/status.js` | `updateStatus()`, `setStatusNote()`, `fmtBytes()`, `setLspState()`, `drawLspStatus()` |
+| `web/src/status.js` | `updateStatus()`, `initMetrics()`, `updateMetricsDisplay()`, `setStatusNote()`, `fmtBytes()`, `setLspState()`, `drawLspStatus()` |
 | `web/src/cursor.js` | `wordAtPoint()`, `moveCursor()`, click / double-click selection, occurrence highlight |
 | `web/src/hover.js` | `onMove()`, `hoverAt()`, `showHover()`, `hideHover()`, token link modifier handling |
 | `web/src/refmenu.js` | Context menu pill for selections (`Copy Ref`, `Copy for Claude`, `Find Usages`) |
@@ -98,7 +98,7 @@ The frontend is modularized into clean ES modules under `web/src/` and bundled i
 | `web/src/inspector.js` | `showRightInspector()`, `setRightInspectorTab()`, `inspectReferences()`, right resizer |
 | `web/src/find.js` | `openFind()`, `clearFind()`, `runFind()`, `jumpToHit()`, minimap hit dots (Ctrl+F) |
 | `web/src/palette.js` | `openPalette()`, `refreshPalette()`, `COMMANDS`, fuzzy file/symbol/command finder |
-| `web/src/shortcuts.js` | `toggleTheme()`, `showHelp()`, central keyboard shortcut listener |
+| `web/src/shortcuts.js` | `toggleTheme()`, `showHelp()`, Alt+Z word wrap toggle, keyboard shortcuts listener |
 | `web/src/main.js` | Module initializations and application `boot()` sequence |
 
 

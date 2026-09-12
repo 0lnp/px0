@@ -154,3 +154,20 @@ flowchart TD
 * **Universal Fast Search (`Cmd+K` / `Ctrl+K`):**
   * Instant access palette unified with standard developer shortcuts (`Cmd/Ctrl+K` quick open, `Cmd/Ctrl+P` file find, `Cmd/Ctrl+Shift+P` command palette, `Cmd/Ctrl+Shift+F` full text search).
   * Prefix dispatch (`>` command, `@` symbol, `:` line) allows fluid, keyboard-driven navigation across any project.
+
+---
+
+### H. Lazy LSP Architecture & Lifecycle (`lspservers.go`, `lsp.go`, `lspnav.go`)
+
+* **Zero-Cost Background Discovery:**
+  * At startup, the LSP manager does not spawn language server processes. It scans `$PATH` concurrently via `exec.LookPath` to determine which registered language server binaries exist on the host. This ensures instantaneous startup times and zero idle memory overhead.
+* **Ordered Precedence by Extension:**
+  * Supported language servers are defined in an ordered registry (`lspRegistry`). For any given file extension, the first matching binary found on `$PATH` takes ownership (e.g. for Python, `pyright` takes precedence over `pylsp`, which takes precedence over `ruff`).
+* **On-Demand Lazy Spawning:**
+  * Server processes are spawned strictly on the first LSP request (hover, definition, references, document symbol) targeting a file handled by that server. If a developer only browses Go files, Rust or Python servers are never invoked.
+  * Subsequent requests reuse the running client, serialized through thread-safe channels with initialization timeouts (30s) to absorb heavy server startup handshakes.
+* **External Path Boundary Control:**
+  * When a language server points to files outside the indexed workspace (such as standard library or module cache dependencies), the LSP manager selectively admits these paths into an external allowlist (`Allowed()`). This enables jumping to third-party definitions while strictly preventing arbitrary filesystem traversals.
+* **Graceful Degradation & Regex Fallback:**
+  * If no LSP server binary is found on `$PATH`, or if an LSP server process crashes or times out during initialization, the UI seamlessly falls back to fast heuristic regex indexing and symbol lookup without blocking the user.
+

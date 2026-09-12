@@ -57,7 +57,7 @@ export function renderRightResults(word, hits, server, isExact) {
       '<span class="cnt">' + f.matches.length + '</span></div>' +
       '<div data-group="r-' + esc(f.path) + '">';
     for (const m of f.matches) {
-      html += '<div class="rline" data-p="' + esc(f.path) + '" data-n="' + m.line + '">' +
+      html += '<div class="rline" data-p="' + esc(f.path) + '" data-n="' + m.line + '" title="Jump to ' + esc(f.path) + ':' + m.line + '">' +
         '<span class="rn">' + m.line + '</span><span class="rt">' +
         esc(m.pre) + '<mark>' + esc(m.mid || word) + '</mark>' + esc(m.post) + '</span></div>';
     }

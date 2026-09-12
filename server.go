@@ -53,6 +53,7 @@ func NewServer(ix *Index, lsp *lspManager) *Server {
 	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(sub))))
 	s.mux.HandleFunc("/", s.handleIndex)
 	s.mux.HandleFunc("/api/meta", s.handleMeta)
+	s.mux.HandleFunc("/api/metrics", s.handleMetrics)
 	s.mux.HandleFunc("/api/tree", s.handleTree)
 	s.mux.HandleFunc("/api/find", s.handleFind)
 	s.mux.HandleFunc("/api/file", s.handleFile)
@@ -193,7 +194,12 @@ func (s *Server) handleMeta(w http.ResponseWriter, r *http.Request) {
 		"builtAt":    at,
 		"ready":      s.ix.Ready(),
 		"lspServers": s.lsp.Available(),
+		"metrics":    getProcessMetrics(),
 	})
+}
+
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, getProcessMetrics())
 }
 
 // lspCtx bounds how long a caller is willing to wait. Language servers can take

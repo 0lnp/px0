@@ -1,13 +1,15 @@
-// web/src/status.js
-import { $, S, doc_ } from './state.js';
+import { $, S, doc_, api } from './state.js';
 
 export function updateStatus() {
   const d = doc_();
-  $('#st-lang').textContent = d ? d.lang : '';
-  $('#st-lines').textContent = d ? d.total.toLocaleString() + ' lines' : '';
-  $('#st-size').textContent = d ? fmtBytes(d.size) : '';
-  $('#st-pos').textContent = d ? 'Ln ' + d.cur : '';
-  if (S.meta) $('#st-index').textContent = S.meta.files.toLocaleString() + ' files · ' + S.meta.indexMs + 'ms';
+  const sizeEl = $('#st-size');
+  if (sizeEl) sizeEl.textContent = d ? fmtBytes(d.size) : '';
+
+  const idxEl = $('#st-index');
+  if (idxEl && S.meta) {
+    idxEl.textContent = S.meta.indexMs + 'ms';
+    idxEl.title = `Workspace Indexing: took ${S.meta.indexMs}ms to index ${S.meta.files.toLocaleString()} files (${S.meta.ready ? 'ready' : 'in progress'})`;
+  }
   drawLspStatus();
 }
 
@@ -34,4 +36,27 @@ export function drawLspStatus() {
   if (!server || state === 'off') { el.textContent = ''; el.removeAttribute('data-state'); return; }
   el.dataset.state = state;
   el.textContent = state === 'ready' ? server : server + ' ' + state;
+}
+
+export function updateMetricsDisplay(m) {
+  if (!m) return;
+  const cpuEl = $('#st-cpu');
+  const ramEl = $('#st-ram');
+  const contEl = $('#st-metrics');
+  if (cpuEl) cpuEl.textContent = `CPU ${m.cpuUsage.toFixed(1)}%`;
+  if (ramEl) ramEl.textContent = `RAM ${fmtBytes(m.rssBytes)}`;
+  if (contEl) {
+    contEl.title = `Editor OS Process Usage:\n• Resident RAM (RSS): ${fmtBytes(m.rssBytes)}\n• CPU Usage: ${m.cpuUsage.toFixed(1)}%\n• Active Goroutines: ${m.goroutines || 0}`;
+  }
+}
+
+export function initMetrics() {
+  async function poll() {
+    try {
+      const m = await api('/api/metrics');
+      updateMetricsDisplay(m);
+    } catch {}
+  }
+  poll();
+  setInterval(poll, 2500);
 }

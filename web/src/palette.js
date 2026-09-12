@@ -1,6 +1,6 @@
 // web/src/palette.js
 import { $, esc, S, doc_, api, debounce } from './state.js';
-import { render } from './renderer.js';
+import { render, toggleWordWrap, toggleLineNumbers } from './renderer.js';
 import { openFile, centerLine, closeTab } from './tabs.js';
 import { updateStatus } from './status.js';
 import { pushHistory } from './history.js';
@@ -30,6 +30,8 @@ export const COMMANDS = [
   } },
   { name: 'Show File Symbols (Right Panel)', run: () => showRightInspector('symbols') },
   { name: 'Reveal Active File in Explorer', run: () => { const d = doc_(); if (d) { showPanel('files'); revealFile(d.path); } } },
+  { name: 'Toggle Word Wrap (Alt+Z)', run: () => toggleWordWrap() },
+  { name: 'Toggle Line Numbers', run: () => toggleLineNumbers() },
   { name: 'Toggle Sidebar', run: () => document.body.classList.toggle('side-hidden') },
   { name: 'Toggle Theme', run: toggleTheme },
   { name: 'Re-index Workspace', run: () => $('#btn-reindex').click() },

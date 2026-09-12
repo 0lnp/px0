@@ -55,9 +55,9 @@ export function updateSelectionMenu() {
   const refPath = path + ':' + (l1 === l2 ? l1 : l1 + '-' + l2);
 
   refmenu.innerHTML =
-    '<button id="rm-copy-ref" title="Copy file and line number"><span class="btn-icon">📋</span> Copy Ref</button>' +
-    '<button id="rm-copy-claude" title="Copy formatted code snippet for Claude Code / LLM harness"><span class="btn-icon">🤖</span> Copy for Claude</button>' +
-    '<button id="rm-find-refs" title="Find all occurrences across workspace"><span class="btn-icon">🔍</span> Find Usages</button>';
+    '<button id="rm-copy-ref" title="Copy file and line number">Copy Ref</button>' +
+    '<button id="rm-copy-claude" title="Copy formatted code snippet for AI Agent / LLM harness">Copy for Agent</button>' +
+    '<button id="rm-find-refs" title="Find all occurrences across workspace">Find Usages</button>';
 
   const btnRef = refmenu.querySelector('#rm-copy-ref');
   const btnClaude = refmenu.querySelector('#rm-copy-claude');
@@ -73,7 +73,7 @@ export function updateSelectionMenu() {
     e.stopPropagation();
     const ext = path.split('.').pop() || '';
     const formatted = '### Reference: ' + refPath + '\n```' + ext + '\n' + text + '\n```';
-    copyToClipboard(formatted, 'Copied snippet for Claude (' + refPath + ')');
+    copyToClipboard(formatted, 'Copied snippet for Agent (' + refPath + ')');
     hideRefMenu();
   };
 

@@ -1,6 +1,6 @@
 // web/src/main.js
 import { $, S, api, isMac } from './state.js';
-import { measure, layout, render, initRenderer } from './renderer.js';
+import { measure, layout, render, initRenderer, updateEditorOptionControls } from './renderer.js';
 import { initTabs } from './tabs.js';
 import { initCursor } from './cursor.js';
 import { initHover } from './hover.js';
@@ -13,7 +13,7 @@ import { initInspector } from './inspector.js';
 import { initFind } from './find.js';
 import { initPalette } from './palette.js';
 import { initShortcuts } from './shortcuts.js';
-import { updateStatus } from './status.js';
+import { updateStatus, initMetrics, updateMetricsDisplay } from './status.js';
 
 // Initialize all subsystems
 initRenderer();
@@ -29,12 +29,25 @@ initInspector();
 initFind();
 initPalette();
 initShortcuts();
+initMetrics();
 
 // Bootstrap application lifecycle
 (async function boot() {
   try {
     const t = localStorage.getItem('lide.theme');
     if (t) document.documentElement.dataset.theme = t;
+
+    // Restore word wrap (default ON)
+    const wrapPref = localStorage.getItem('lide.wrap');
+    S.wrap = wrapPref !== null ? wrapPref === 'true' : true;
+    document.body.classList.toggle('word-wrap', S.wrap);
+
+    // Restore line numbers (default ON)
+    const linesPref = localStorage.getItem('lide.lineNumbers');
+    S.lineNumbers = linesPref !== null ? linesPref === 'true' : true;
+    document.body.classList.toggle('hide-lines', !S.lineNumbers);
+
+    updateEditorOptionControls();
   } catch {}
 
   if (isMac) {
@@ -43,6 +56,7 @@ initShortcuts();
 
   measure();
   S.meta = await api('/api/meta');
+  if (S.meta.metrics) updateMetricsDisplay(S.meta.metrics);
   document.title = S.meta.name + ' — lide';
   $('#root-name').textContent = S.meta.name;
   $('#root-name').title = S.meta.root;

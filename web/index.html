@@ -12,55 +12,10 @@
 </head>
 <body class="right-hidden">
 <div id="app">
-  <!-- SECTION: Activity Rail (Leftmost icon navigation bar) -->
-  <nav id="rail">
-    <button class="rail-btn active" data-panel="files" title="Explorer  (Ctrl+B)">
-      <svg viewBox="0 0 24 24"><path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h4l2 2.5h7A1.5 1.5 0 0 1 19 8v10.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 3 18.5z"/></svg>
-    </button>
-    <button class="rail-btn" data-panel="search" title="Search  (Ctrl+Shift+F)">
-      <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>
-    </button>
-    <button class="rail-btn" data-panel="outline" title="Outline  (Ctrl+Shift+O)">
-      <svg viewBox="0 0 24 24"><path d="M4 6h4M4 12h4M4 18h4M11 6h9M11 12h9M11 18h9"/></svg>
-    </button>
-    <div class="rail-spacer"></div>
-    <button class="rail-btn" id="btn-theme" title="Toggle theme">
-      <svg viewBox="0 0 24 24"><path d="M20 13a8 8 0 1 1-9-9 6.5 6.5 0 0 0 9 9z"/></svg>
-    </button>
-    <button class="rail-btn" id="btn-help" title="Keyboard shortcuts  (?)">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.3a2.5 2.5 0 1 1 2.9 2.8v1.4"/><circle cx="12.4" cy="16.8" r=".9" fill="currentColor" stroke="none"/></svg>
-    </button>
-  </nav>
-
-  <!-- SECTION: Sidebar Panels (File explorer tree, global search, and symbol outline) -->
+  <!-- SECTION: Sidebar (File explorer tree) -->
   <aside id="side">
-    <!-- Panel 1: File Explorer -->
-    <section class="panel active" id="panel-files">
-      <header class="panel-head"><span id="root-name">—</span><button id="btn-reindex" class="mini" title="Re-index">&#8635;</button></header>
-      <div class="panel-body" id="tree"></div>
-    </section>
-
-    <!-- Panel 2: Workspace Search -->
-    <section class="panel" id="panel-search">
-      <header class="panel-head">Search</header>
-      <div class="search-form">
-        <input id="q" type="text" spellcheck="false" placeholder="Search in files" autocomplete="off">
-        <div class="opts">
-          <button class="opt" id="o-case" title="Match case">Aa</button>
-          <button class="opt" id="o-word" title="Whole word">|ab|</button>
-          <button class="opt" id="o-re" title="Regular expression">.*</button>
-        </div>
-        <input id="glob" type="text" spellcheck="false" placeholder="files to include e.g. *.go" autocomplete="off">
-      </div>
-      <div class="panel-body" id="results"></div>
-    </section>
-
-    <!-- Panel 3: Symbol Outline -->
-    <section class="panel" id="panel-outline">
-      <header class="panel-head">Outline</header>
-      <input id="outline-filter" type="text" spellcheck="false" placeholder="Filter symbols" autocomplete="off">
-      <div class="panel-body" id="outline"></div>
-    </section>
+    <header class="panel-head"><span id="root-name">—</span><button id="btn-reindex" class="mini" title="Re-index">&#8635;</button></header>
+    <div class="panel-body" id="tree"></div>
   </aside>
 
   <!-- Sidebar Resizer Divider -->
@@ -68,9 +23,8 @@
 
   <!-- SECTION: Main Editor Area -->
   <main id="main">
-    <!-- File Tabs & Breadcrumbs -->
+    <!-- File Tabs -->
     <div id="tabs"></div>
-    <div id="crumbs"></div>
 
     <!-- Virtualized Code Editor Viewport -->
     <div id="editor">
@@ -127,17 +81,25 @@
         <button class="footer-btn" data-action="symbols" title="Go to Symbol (Ctrl+Shift+O)"><span class="footer-btn-label">Symbols</span><kbd class="footer-kbd"><span class="mod-key">Ctrl</span>⇧O</kbd></button>
         <button class="footer-btn" data-action="find" title="Find in File (Ctrl+F)"><span class="footer-btn-label">Find</span><kbd class="footer-kbd"><span class="mod-key">Ctrl</span>F</kbd></button>
         <button class="footer-btn" data-action="goto" title="Go to Line (Ctrl+G)"><span class="footer-btn-label">Line</span><kbd class="footer-kbd"><span class="mod-key">Ctrl</span>G</kbd></button>
-        <button class="footer-btn" data-action="palette" title="Command Palette (Ctrl+Shift+P)"><span class="footer-btn-label">Commands</span><kbd class="footer-kbd"><span class="mod-key">Ctrl</span>⇧P</kbd></button>
+        <button class="footer-btn" data-action="wrap" title="Toggle Word Wrap (Alt+Z)"><span class="footer-btn-label">Wrap</span><kbd class="footer-kbd">Alt Z</kbd></button>
+        <button class="footer-btn" data-action="line-numbers" title="Toggle Line Numbers"><span class="footer-btn-label">Lines</span></button>
         <button class="footer-btn" data-action="help" title="Keyboard Shortcuts (?)"><span class="footer-btn-label">Help</span><kbd class="footer-kbd">?</kbd></button>
       </div>
       <span class="status-sep"></span>
-      <span id="st-lang"></span>
-      <span id="st-lines"></span>
       <span id="st-size"></span>
       <span class="grow"></span>
-      <span id="st-pos"></span>
       <span id="st-lsp"></span>
-      <span id="st-index"></span>
+      <span id="st-index" title="Indexing latency: time taken to index all workspace files"></span>
+      <span class="status-sep"></span>
+      <span id="st-metrics" class="status-metrics" title="Process metrics as seen by the OS">
+        <span id="st-cpu">CPU --%</span>
+        <span class="metric-divider">·</span>
+        <span id="st-ram">RAM -- MB</span>
+      </span>
+      <span class="status-sep"></span>
+      <button class="footer-btn footer-btn-icon" id="btn-theme" title="Toggle theme">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13a8 8 0 1 1-9-9 6.5 6.5 0 0 0 9 9z"/></svg>
+      </button>
     </footer>
   </main>
 
@@ -148,8 +110,8 @@
   <aside id="right-side">
     <header class="inspector-head">
       <div class="inspector-tabs">
-        <button class="inspector-tab active" data-itab="refs">References</button>
-        <button class="inspector-tab" data-itab="symbols">Symbols</button>
+        <button class="inspector-tab active" data-itab="refs" title="View references across workspace">References</button>
+        <button class="inspector-tab" data-itab="symbols" title="View file symbols outline">Symbols</button>
       </div>
       <div class="inspector-head-actions">
         <button id="btn-close-right" class="mini" title="Close inspector (Esc)">&#10005;</button>

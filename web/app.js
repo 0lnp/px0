@@ -41,7 +41,9 @@
     hoverAnchor: null,
     lsp: { servers: [], state: "off", server: "" },
     gen: 0,
-    chW: 7.8
+    chW: 7.8,
+    wrap: true,
+    lineNumbers: true
   };
   var doc_ = () => S2.active >= 0 ? S2.tabs[S2.active] : null;
 
@@ -96,11 +98,39 @@
       return;
     const digits = String(d.total).length;
     editor.style.setProperty("--gw", digits);
-    const gutter = digits * S2.chW + 30;
-    const w = Math.max(vp.clientWidth, gutter + (d.maxCols + 4) * S2.chW);
+    const gutter = S2.lineNumbers ? digits * S2.chW + 30 : 16;
+    const w = S2.wrap ? vp.clientWidth : Math.max(vp.clientWidth, gutter + (d.maxCols + 4) * S2.chW);
     sizer.style.height = d.total * LH + Math.max(120, vp.clientHeight * 0.5) + "px";
     sizer.style.width = w + "px";
     rowsEl.style.width = w + "px";
+  }
+  function toggleWordWrap(forced) {
+    S2.wrap = typeof forced === "boolean" ? forced : !S2.wrap;
+    document.body.classList.toggle("word-wrap", S2.wrap);
+    try {
+      localStorage.setItem("lide.wrap", S2.wrap ? "true" : "false");
+    } catch {}
+    updateEditorOptionControls();
+    layout();
+    render();
+  }
+  function toggleLineNumbers(forced) {
+    S2.lineNumbers = typeof forced === "boolean" ? forced : !S2.lineNumbers;
+    document.body.classList.toggle("hide-lines", !S2.lineNumbers);
+    try {
+      localStorage.setItem("lide.lineNumbers", S2.lineNumbers ? "true" : "false");
+    } catch {}
+    updateEditorOptionControls();
+    layout();
+    render();
+  }
+  function updateEditorOptionControls() {
+    const wrapBtn = $('[data-action="wrap"]');
+    if (wrapBtn)
+      wrapBtn.classList.toggle("active", !!S2.wrap);
+    const linesBtn = $('[data-action="line-numbers"]');
+    if (linesBtn)
+      linesBtn.classList.toggle("active", !!S2.lineNumbers);
   }
   var raf = 0;
   function render() {
@@ -295,12 +325,14 @@
   // web/src/status.js
   function updateStatus() {
     const d = doc_();
-    $("#st-lang").textContent = d ? d.lang : "";
-    $("#st-lines").textContent = d ? d.total.toLocaleString() + " lines" : "";
-    $("#st-size").textContent = d ? fmtBytes(d.size) : "";
-    $("#st-pos").textContent = d ? "Ln " + d.cur : "";
-    if (S2.meta)
-      $("#st-index").textContent = S2.meta.files.toLocaleString() + " files · " + S2.meta.indexMs + "ms";
+    const sizeEl = $("#st-size");
+    if (sizeEl)
+      sizeEl.textContent = d ? fmtBytes(d.size) : "";
+    const idxEl = $("#st-index");
+    if (idxEl && S2.meta) {
+      idxEl.textContent = S2.meta.indexMs + "ms";
+      idxEl.title = `Workspace Indexing: took ${S2.meta.indexMs}ms to index ${S2.meta.files.toLocaleString()} files (${S2.meta.ready ? "ready" : "in progress"})`;
+    }
     drawLspStatus();
   }
   function setStatusNote(msg) {
@@ -330,6 +362,33 @@
     }
     el.dataset.state = state;
     el.textContent = state === "ready" ? server : server + " " + state;
+  }
+  function updateMetricsDisplay(m) {
+    if (!m)
+      return;
+    const cpuEl = $("#st-cpu");
+    const ramEl = $("#st-ram");
+    const contEl = $("#st-metrics");
+    if (cpuEl)
+      cpuEl.textContent = `CPU ${m.cpuUsage.toFixed(1)}%`;
+    if (ramEl)
+      ramEl.textContent = `RAM ${fmtBytes(m.rssBytes)}`;
+    if (contEl) {
+      contEl.title = `Editor OS Process Usage:
+• Resident RAM (RSS): ${fmtBytes(m.rssBytes)}
+• CPU Usage: ${m.cpuUsage.toFixed(1)}%
+• Active Goroutines: ${m.goroutines || 0}`;
+    }
+  }
+  function initMetrics() {
+    async function poll() {
+      try {
+        const m = await api("/api/metrics");
+        updateMetricsDisplay(m);
+      } catch {}
+    }
+    poll();
+    setInterval(poll, 2500);
   }
 
   // web/src/history.js
@@ -410,7 +469,7 @@
       if (!items.length)
         return '<div class="hint">No symbols found.</div>';
       const base = Math.min(...items.map((s) => s.indent));
-      return (d.outlineSource ? '<div class="hint"><span class="src">' + esc(d.outlineSource) + "</span> · " + items.length + " symbols</div>" : "") + items.map((s) => '<div class="sym" data-n="' + s.line + '" style="padding-left:' + (10 + Math.min(s.indent - base, 16) * 5) + 'px">' + '<span class="kd" data-k="' + esc(s.kind) + '">' + esc(kindLabel(s.kind)) + "</span>" + '<span class="sn">' + esc(s.name) + '</span><span class="sl">' + s.line + "</span></div>").join("");
+      return (d.outlineSource ? '<div class="hint"><span class="src">' + esc(d.outlineSource) + "</span> · " + items.length + " symbols</div>" : "") + items.map((s) => '<div class="sym" data-n="' + s.line + '" style="padding-left:' + (10 + Math.min(s.indent - base, 16) * 5) + 'px" title="Jump to ' + esc(s.name) + " at line " + s.line + '">' + '<span class="kd" data-k="' + esc(s.kind) + '">' + esc(kindLabel(s.kind)) + "</span>" + '<span class="sn">' + esc(s.name) + '</span><span class="sl">' + s.line + "</span></div>").join("");
     };
     if (el)
       el.innerHTML = renderSymHtml(syms);
@@ -485,9 +544,9 @@
     container.innerHTML = j.children.map((c) => {
       const pad = 8 + depth * 12;
       if (c.dir) {
-        return '<div class="tw"><div class="tr dir" data-dir="' + esc(c.path) + '" style="padding-left:' + pad + 'px">' + '<span class="ar"></span><span class="nm">' + esc(c.name) + "</span></div>" + '<div class="kids" data-kids="' + esc(c.path) + '"></div></div>';
+        return '<div class="tw"><div class="tr dir" data-dir="' + esc(c.path) + '" style="padding-left:' + pad + 'px" title="Folder: ' + esc(c.path) + '">' + '<span class="ar"></span><span class="nm">' + esc(c.name) + "</span></div>" + '<div class="kids" data-kids="' + esc(c.path) + '"></div></div>';
       }
-      return '<div class="tr file" data-file="' + esc(c.path) + '" style="padding-left:' + (pad + 12) + 'px">' + '<span class="ic" data-t="' + fileKind(c.name) + '"></span><span class="nm">' + esc(c.name) + "</span></div>";
+      return '<div class="tr file" data-file="' + esc(c.path) + '" style="padding-left:' + (pad + 12) + 'px" title="Open ' + esc(c.path) + '">' + '<span class="ic" data-t="' + fileKind(c.name) + '"></span><span class="nm">' + esc(c.name) + "</span></div>";
     }).join("");
   }
   var FILE_KIND = {
@@ -611,23 +670,10 @@
   // web/src/panels.js
   function showPanel(name) {
     document.body.classList.remove("side-hidden");
-    $$(".panel").forEach((p) => p.classList.toggle("active", p.id === "panel-" + name));
-    $$(".rail-btn[data-panel]").forEach((b) => b.classList.toggle("active", b.dataset.panel === name));
-    if (name === "search")
-      $("#q").focus();
-    if (name === "outline") {
-      loadOutline();
-      $("#outline-filter").focus();
-    }
+    layout();
+    render();
   }
   function initPanels() {
-    $$(".rail-btn[data-panel]").forEach((b) => b.addEventListener("click", () => {
-      const on = b.classList.contains("active") && !document.body.classList.contains("side-hidden");
-      if (on)
-        document.body.classList.add("side-hidden");
-      else
-        showPanel(b.dataset.panel);
-    }));
     $("#btn-reindex").addEventListener("click", async () => {
       $("#st-index").textContent = "reindexing…";
       const j = await api("/api/reindex");
@@ -649,7 +695,7 @@
       addEventListener("mousemove", (e) => {
         if (!dragging)
           return;
-        $("#side").style.width = Math.max(170, Math.min(620, e.clientX - 46)) + "px";
+        $("#side").style.width = Math.max(170, Math.min(620, e.clientX)) + "px";
       });
       addEventListener("mouseup", () => {
         if (dragging) {
@@ -697,7 +743,7 @@
     for (const f of j.results) {
       html += '<div class="rfile" data-toggle="' + esc(f.path) + '" title="' + esc(f.path) + '">' + '<span class="ar">&#9660;</span>' + (f.ext ? '<span class="ext">ext</span>' : "") + '<span class="fp">' + esc(displayPath(f.path)) + "</span>" + '<span class="cnt">' + f.matches.length + "</span></div>" + '<div data-group="' + esc(f.path) + '">';
       for (const m of f.matches) {
-        html += '<div class="rline" data-p="' + esc(f.path) + '" data-n="' + m.line + '">' + '<span class="rn">' + m.line + '</span><span class="rt">' + esc(m.pre) + "<mark>" + esc(m.mid) + "</mark>" + esc(m.post) + "</span></div>";
+        html += '<div class="rline" data-p="' + esc(f.path) + '" data-n="' + m.line + '" title="Jump to ' + esc(f.path) + ":" + m.line + '">' + '<span class="rn">' + m.line + '</span><span class="rt">' + esc(m.pre) + "<mark>" + esc(m.mid) + "</mark>" + esc(m.post) + "</span></div>";
       }
       html += "</div>";
     }
@@ -784,7 +830,7 @@
     for (const f of grouped) {
       html += '<div class="rfile" data-toggle="r-' + esc(f.path) + '" title="' + esc(f.path) + '">' + '<span class="ar">&#9660;</span>' + '<span class="fp">' + esc(displayPath(f.path)) + "</span>" + '<span class="cnt">' + f.matches.length + "</span></div>" + '<div data-group="r-' + esc(f.path) + '">';
       for (const m of f.matches) {
-        html += '<div class="rline" data-p="' + esc(f.path) + '" data-n="' + m.line + '">' + '<span class="rn">' + m.line + '</span><span class="rt">' + esc(m.pre) + "<mark>" + esc(m.mid || word) + "</mark>" + esc(m.post) + "</span></div>";
+        html += '<div class="rline" data-p="' + esc(f.path) + '" data-n="' + m.line + '" title="Jump to ' + esc(f.path) + ":" + m.line + '">' + '<span class="rn">' + m.line + '</span><span class="rt">' + esc(m.pre) + "<mark>" + esc(m.mid || word) + "</mark>" + esc(m.post) + "</span></div>";
       }
       html += "</div>";
     }
@@ -1172,7 +1218,7 @@
     }
     const { text, l1, l2, rect, path } = info;
     const refPath = path + ":" + (l1 === l2 ? l1 : l1 + "-" + l2);
-    refmenu.innerHTML = '<button id="rm-copy-ref" title="Copy file and line number"><span class="btn-icon">\uD83D\uDCCB</span> Copy Ref</button>' + '<button id="rm-copy-claude" title="Copy formatted code snippet for Claude Code / LLM harness"><span class="btn-icon">\uD83E\uDD16</span> Copy for Claude</button>' + '<button id="rm-find-refs" title="Find all occurrences across workspace"><span class="btn-icon">\uD83D\uDD0D</span> Find Usages</button>';
+    refmenu.innerHTML = '<button id="rm-copy-ref" title="Copy file and line number">Copy Ref</button>' + '<button id="rm-copy-claude" title="Copy formatted code snippet for AI Agent / LLM harness">Copy for Agent</button>' + '<button id="rm-find-refs" title="Find all occurrences across workspace">Find Usages</button>';
     const btnRef = refmenu.querySelector("#rm-copy-ref");
     const btnClaude = refmenu.querySelector("#rm-copy-claude");
     const btnFind = refmenu.querySelector("#rm-find-refs");
@@ -1188,7 +1234,7 @@
         const ext = path.split(".").pop() || "";
         const formatted = "### Reference: " + refPath + "\n```" + ext + `
 ` + text + "\n```";
-        copyToClipboard(formatted, "Copied snippet for Claude (" + refPath + ")");
+        copyToClipboard(formatted, "Copied snippet for Agent (" + refPath + ")");
         hideRefMenu();
       };
     if (btnFind)
@@ -1294,7 +1340,7 @@
     S2.hover = at;
     S2.hoverAnchor = { x, y };
     const refPath = d.path + ":" + at.line;
-    hovercard.innerHTML = (j.signature ? '<div class="sig">' + j.signature + "</div>" : "") + (j.doc ? '<div class="doc">' + esc(j.doc) + "</div>" : "") + '<div class="actions">' + '<button id="hc-copy-ref" title="Copy file and line reference"><span class="btn-icon">\uD83D\uDCCB</span> Copy Ref</button>' + '<button id="hc-copy-ai" title="Copy snippet with file path for Claude Code / LLMs"><span class="btn-icon">\uD83E\uDD16</span> Copy for AI</button>' + '<button id="hc-find-refs" title="Find all usages across codebase"><span class="btn-icon">\uD83D\uDD0D</span> Usages</button>' + "</div>" + '<div class="foot"><b>' + esc(j.server || "lsp") + "</b>" + "<span>" + (isMac ? "⌘" : "Ctrl") + "+click usages</span>" + "<span>Shift+F12 references</span></div>";
+    hovercard.innerHTML = (j.signature ? '<div class="sig">' + j.signature + "</div>" : "") + (j.doc ? '<div class="doc">' + esc(j.doc) + "</div>" : "") + '<div class="actions">' + '<button id="hc-copy-ref" title="Copy file and line reference">Copy Ref</button>' + '<button id="hc-copy-ai" title="Copy snippet with file path for AI Agent / LLMs">Copy for Agent</button>' + '<button id="hc-find-refs" title="Find all usages across codebase">Usages</button>' + "</div>" + '<div class="foot"><b>' + esc(j.server || "lsp") + "</b>" + "<span>" + (isMac ? "⌘" : "Ctrl") + "+click usages</span>" + "<span>Shift+F12 references</span></div>";
     const btnRef = hovercard.querySelector("#hc-copy-ref");
     const btnAi = hovercard.querySelector("#hc-copy-ai");
     const btnRefs = hovercard.querySelector("#hc-find-refs");
@@ -1310,7 +1356,7 @@
         const ext = d.path.split(".").pop() || "";
         const text = "### Reference: " + refPath + "\n```" + ext + `
 ` + lineText + "\n```";
-        copyToClipboard(text, "Copied snippet for AI (" + refPath + ")");
+        copyToClipboard(text, "Copied snippet for Agent (" + refPath + ")");
       };
     if (btnRefs)
       btnRefs.onclick = (e) => {
@@ -1592,7 +1638,7 @@
     updateStatus();
   }
   function drawTabs() {
-    $("#tabs").innerHTML = S2.tabs.map((t, i) => '<div class="tab' + (i === S2.active ? " active" : "") + '" data-i="' + i + '" title="' + esc(t.path) + '">' + '<span class="tn">' + esc(t.name) + '</span><span class="x" data-close="' + i + '">&times;</span></div>').join("");
+    $("#tabs").innerHTML = S2.tabs.map((t, i) => '<div class="tab' + (i === S2.active ? " active" : "") + '" data-i="' + i + '" title="' + esc(t.path) + '">' + '<span class="tn">' + esc(t.name) + '</span><span class="x" data-close="' + i + '" title="Close tab (Ctrl+W / Alt+W)">&times;</span></div>').join("");
     const act = $("#tabs .tab.active");
     if (act)
       act.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -1621,13 +1667,9 @@
     pushHistory(S2.tabs[i].path, S2.tabs[i].cur);
   }
   function drawCrumbs() {
-    const d = doc_();
-    if (!d) {
-      $("#crumbs").innerHTML = "";
-      return;
-    }
-    const parts = d.path.split("/");
-    $("#crumbs").innerHTML = parts.map((p, i) => i === parts.length - 1 ? "<span>" + esc(p) + "</span>" : '<span class="cb" data-dir="' + esc(parts.slice(0, i + 1).join("/")) + '">' + esc(p) + "</span>").join('<span class="sep">/</span>');
+    const el = $("#crumbs");
+    if (el)
+      el.innerHTML = "";
   }
   function showImage(path) {
     hideImage();
@@ -1660,13 +1702,16 @@
         closeTab(+t.dataset.i);
       }
     });
-    $("#crumbs").addEventListener("click", (e) => {
-      const c = e.target.closest("[data-dir]");
-      if (c) {
-        showPanel("files");
-        revealDir(c.dataset.dir);
-      }
-    });
+    const crumbsEl = $("#crumbs");
+    if (crumbsEl) {
+      crumbsEl.addEventListener("click", (e) => {
+        const c = e.target.closest("[data-dir]");
+        if (c) {
+          showPanel("files");
+          revealDir(c.dataset.dir);
+        }
+      });
+    }
   }
 
   // web/src/shortcuts.js
@@ -1685,13 +1730,14 @@
     ["Ctrl Shift F", "Search in files"],
     ["Ctrl F", "Find in file"],
     ["Ctrl G", "Go to line"],
+    ["Alt Z", "Toggle word wrap"],
     ["Enter / Shift Enter", "Next / previous match"],
     ["F12 or Ctrl Click", "Go to definition"],
     ["Shift F12", "Find all references"],
     ["Ctrl J", "Toggle right inspector (Symbols/Refs)"],
     ["Alt ←  /  Alt →", "Navigate back / forward"],
     ["Ctrl B", "Toggle sidebar"],
-    ["Ctrl W", "Close tab"],
+    ["Ctrl W / Alt W", "Close tab"],
     ["Ctrl Tab", "Next tab"],
     ["Alt 1 … 9", "Select tab"],
     ["Double click", "Highlight all occurrences"],
@@ -1705,8 +1751,8 @@
   }
   var inField = (el) => el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
   function initShortcuts() {
-    $("#btn-theme").addEventListener("click", toggleTheme);
-    $("#btn-help").addEventListener("click", showHelp);
+    $("#btn-theme")?.addEventListener("click", toggleTheme);
+    $("#btn-help")?.addEventListener("click", showHelp);
     $("#helpsheet").addEventListener("click", () => {
       $("#helpsheet").hidden = true;
     });
@@ -1726,6 +1772,10 @@
         openFind(S2.lastWord);
       else if (act === "goto")
         openPalette("line");
+      else if (act === "wrap")
+        toggleWordWrap();
+      else if (act === "line-numbers")
+        toggleLineNumbers();
       else if (act === "palette")
         openPalette("command");
       else if (act === "help")
@@ -1814,8 +1864,9 @@
         render();
         return;
       }
-      if (mod && (e.key === "w" || e.key === "W")) {
+      if ((mod || e.altKey) && (e.key === "w" || e.key === "W")) {
         e.preventDefault();
+        e.stopPropagation();
         if (S2.active >= 0)
           closeTab(S2.active);
         return;
@@ -1844,9 +1895,14 @@
           switchTab((S2.active + (e.shiftKey ? -1 : 1) + S2.tabs.length) % S2.tabs.length);
         return;
       }
-      if (e.altKey && /^[1-9]$/.test(e.key)) {
+      if (e.altKey && (e.key === "z" || e.key === "Z")) {
         e.preventDefault();
-        switchTab(+e.key - 1);
+        toggleWordWrap();
+        return;
+      }
+      if (e.altKey && (e.key === "l" || e.key === "L")) {
+        e.preventDefault();
+        toggleLineNumbers();
         return;
       }
       if (inField(document.activeElement))
@@ -1895,6 +1951,12 @@
         moveCursor(-(Math.floor(vp.clientHeight / LH) - 2));
         return;
       }
+    }, { capture: true });
+    window.addEventListener("beforeunload", (e) => {
+      if (S2.tabs.length > 0) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
     });
   }
 
@@ -1925,6 +1987,8 @@
         revealFile(d.path);
       }
     } },
+    { name: "Toggle Word Wrap (Alt+Z)", run: () => toggleWordWrap() },
+    { name: "Toggle Line Numbers", run: () => toggleLineNumbers() },
     { name: "Toggle Sidebar", run: () => document.body.classList.toggle("side-hidden") },
     { name: "Toggle Theme", run: toggleTheme },
     { name: "Re-index Workspace", run: () => $("#btn-reindex").click() },
@@ -2119,17 +2183,27 @@
   initFind();
   initPalette();
   initShortcuts();
+  initMetrics();
   (async function boot() {
     try {
       const t = localStorage.getItem("lide.theme");
       if (t)
         document.documentElement.dataset.theme = t;
+      const wrapPref = localStorage.getItem("lide.wrap");
+      S2.wrap = wrapPref !== null ? wrapPref === "true" : true;
+      document.body.classList.toggle("word-wrap", S2.wrap);
+      const linesPref = localStorage.getItem("lide.lineNumbers");
+      S2.lineNumbers = linesPref !== null ? linesPref === "true" : true;
+      document.body.classList.toggle("hide-lines", !S2.lineNumbers);
+      updateEditorOptionControls();
     } catch {}
     if (isMac) {
       document.querySelectorAll(".mod-key").forEach((el) => el.textContent = "⌘");
     }
     measure();
     S2.meta = await api("/api/meta");
+    if (S2.meta.metrics)
+      updateMetricsDisplay(S2.meta.metrics);
     document.title = S2.meta.name + " — lide";
     $("#root-name").textContent = S2.meta.name;
     $("#root-name").title = S2.meta.root;

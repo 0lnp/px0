@@ -83,7 +83,7 @@ export function closeTab(i) {
 export function drawTabs() {
   $('#tabs').innerHTML = S.tabs.map((t, i) =>
     '<div class="tab' + (i === S.active ? ' active' : '') + '" data-i="' + i + '" title="' + esc(t.path) + '">' +
-    '<span class="tn">' + esc(t.name) + '</span><span class="x" data-close="' + i + '">&times;</span></div>').join('');
+    '<span class="tn">' + esc(t.name) + '</span><span class="x" data-close="' + i + '" title="Close tab (Ctrl+W / Alt+W)">&times;</span></div>').join('');
   const act = $('#tabs .tab.active');
   if (act) act.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
@@ -107,14 +107,8 @@ export function switchTab(i) {
 }
 
 export function drawCrumbs() {
-  const d = doc_();
-  if (!d) { $('#crumbs').innerHTML = ''; return; }
-  const parts = d.path.split('/');
-  $('#crumbs').innerHTML = parts.map((p, i) =>
-    i === parts.length - 1
-      ? '<span>' + esc(p) + '</span>'
-      : '<span class="cb" data-dir="' + esc(parts.slice(0, i + 1).join('/')) + '">' + esc(p) + '</span>'
-  ).join('<span class="sep">/</span>');
+  const el = $('#crumbs');
+  if (el) el.innerHTML = '';
 }
 
 export function showImage(path) {
@@ -142,8 +136,11 @@ export function initTabs() {
     const t = e.target.closest('.tab');
     if (t && e.button === 1) { e.preventDefault(); closeTab(+t.dataset.i); }
   });
-  $('#crumbs').addEventListener('click', e => {
-    const c = e.target.closest('[data-dir]');
-    if (c) { showPanel('files'); revealDir(c.dataset.dir); }
-  });
+  const crumbsEl = $('#crumbs');
+  if (crumbsEl) {
+    crumbsEl.addEventListener('click', e => {
+      const c = e.target.closest('[data-dir]');
+      if (c) { showPanel('files'); revealDir(c.dataset.dir); }
+    });
+  }
 }
