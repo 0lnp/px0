@@ -898,22 +898,7 @@ async function findReferences(arg) {
   const d = doc_();
   const at = (arg && arg.word) ? arg : positionNow(typeof arg === 'string' ? arg : S.lastWord);
   if (!d || !at) return;
-
-  if (canAskServer(at)) {
-    setStatusNote('references to ' + at.word + '…');
-    const j = await lspCall('refs', at, 30000);
-    updateStatus();
-    if (j && j.hits && j.hits.length) {
-      showHits(at.word, j.hits, j.server, 'reference');
-      return;
-    }
-  }
-  // No server, or it had nothing: a whole-word search is the honest fallback.
-  showPanel('search');
-  $('#q').value = at.word;
-  $('#o-word').classList.add('on');
-  $('#o-case').classList.add('on');
-  runSearch();
+  inspectReferences(at);
 }
 
 function acceptHits(word, hits, server, noun, refCount) {
@@ -1169,16 +1154,30 @@ async function upgradeOutline(d) {
 function drawOutline() {
   const d = doc_();
   const el = $('#outline');
-  if (!d || !d.outline) return;
-  const f = $('#outline-filter').value.toLowerCase();
+  const rel = $('#right-symbols-list');
+  if (!d || !d.outline) {
+    if (el) el.innerHTML = '<div class="hint">No symbols found.</div>';
+    if (rel) rel.innerHTML = '<div class="hint">No symbols found.</div>';
+    return;
+  }
+  const f = ($('#outline-filter')?.value || '').toLowerCase();
+  const rf = ($('#right-symbols-filter')?.value || '').toLowerCase();
+
   const syms = f ? d.outline.filter(s => s.name.toLowerCase().includes(f)) : d.outline;
-  if (!syms.length) { el.innerHTML = '<div class="hint">No symbols found.</div>'; return; }
-  const base = Math.min(...syms.map(s => s.indent));
-  el.innerHTML = (d.outlineSource ? '<div class="hint"><span class="src">' + esc(d.outlineSource) + '</span> · ' + syms.length + ' symbols</div>' : '') +
-    syms.map(s =>
-    '<div class="sym" data-n="' + s.line + '" style="padding-left:' + (10 + Math.min(s.indent - base, 16) * 5) + 'px">' +
-    '<span class="kd" data-k="' + esc(s.kind) + '">' + esc(kindLabel(s.kind)) + '</span>' +
-    '<span class="sn">' + esc(s.name) + '</span><span class="sl">' + s.line + '</span></div>').join('');
+  const rsyms = rf ? d.outline.filter(s => s.name.toLowerCase().includes(rf)) : d.outline;
+
+  const renderSymHtml = (items) => {
+    if (!items.length) return '<div class="hint">No symbols found.</div>';
+    const base = Math.min(...items.map(s => s.indent));
+    return (d.outlineSource ? '<div class="hint"><span class="src">' + esc(d.outlineSource) + '</span> · ' + items.length + ' symbols</div>' : '') +
+      items.map(s =>
+      '<div class="sym" data-n="' + s.line + '" style="padding-left:' + (10 + Math.min(s.indent - base, 16) * 5) + 'px">' +
+      '<span class="kd" data-k="' + esc(s.kind) + '">' + esc(kindLabel(s.kind)) + '</span>' +
+      '<span class="sn">' + esc(s.name) + '</span><span class="sl">' + s.line + '</span></div>').join('');
+  };
+
+  if (el) el.innerHTML = renderSymHtml(syms);
+  if (rel) rel.innerHTML = renderSymHtml(rsyms);
 }
 
 const KIND_LABEL = {
@@ -1239,8 +1238,176 @@ $('#btn-reindex').addEventListener('click', async () => {
     if (!dragging) return;
     $('#side').style.width = Math.max(170, Math.min(620, e.clientX - 46)) + 'px';
   });
-  addEventListener('mouseup', () => { dragging = false; rz.classList.remove('drag'); layout(); render(); });
+  addEventListener('mouseup', () => { if (dragging) { dragging = false; rz.classList.remove('drag'); layout(); render(); } });
 })();
+
+/* ==========================================================================
+   SECTION 12B: RIGHT-SIDE INSPECTOR (SYMBOLS & REFERENCES)
+   - Shows references and document symbols on the right side of the editor.
+   - Resizable with #right-resizer divider.
+   ========================================================================== */
+
+function showRightInspector(tab = 'refs') {
+  document.body.classList.remove('right-hidden');
+  setRightInspectorTab(tab);
+  layout();
+  render();
+}
+
+function hideRightInspector() {
+  document.body.classList.add('right-hidden');
+  layout();
+  render();
+}
+
+function setRightInspectorTab(tab) {
+  $$('.inspector-tab').forEach(b => b.classList.toggle('active', b.dataset.itab === tab));
+  $('#pane-right-refs')?.classList.toggle('active', tab === 'refs');
+  $('#pane-right-symbols')?.classList.toggle('active', tab === 'symbols');
+  if (tab === 'symbols') {
+    loadOutline();
+    $('#right-symbols-filter')?.focus();
+  }
+}
+
+$$('.inspector-tab').forEach(btn => btn.addEventListener('click', () => {
+  setRightInspectorTab(btn.dataset.itab);
+}));
+
+$('#btn-close-right')?.addEventListener('click', hideRightInspector);
+
+/* Right inspector resizer */
+(() => {
+  const rrz = $('#right-resizer');
+  if (!rrz) return;
+  let dragging = false;
+  rrz.addEventListener('mousedown', e => { dragging = true; rrz.classList.add('drag'); e.preventDefault(); });
+  addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const w = Math.max(200, Math.min(700, window.innerWidth - e.clientX));
+    $('#right-side').style.width = w + 'px';
+  });
+  addEventListener('mouseup', () => { if (dragging) { dragging = false; rrz.classList.remove('drag'); layout(); render(); } });
+})();
+
+/* Right-side symbols list navigation */
+$('#right-symbols-list')?.addEventListener('click', e => {
+  const s = e.target.closest('.sym');
+  if (!s) return;
+  $$('#right-symbols-list .sym.sel, #outline .sym.sel').forEach(x => x.classList.remove('sel'));
+  s.classList.add('sel');
+  const d = doc_(); if (!d) return;
+  d.cur = +s.dataset.n;
+  centerLine(d.cur);
+  render();
+  updateStatus();
+  pushHistory(d.path, d.cur);
+});
+$('#right-symbols-filter')?.addEventListener('input', drawOutline);
+
+/* Right-side references rendering and navigation */
+function renderRightResults(word, hits, server, isExact) {
+  const targetEl = $('#right-ref-target');
+  const badgeEl = $('#right-ref-badge');
+  const listEl = $('#right-refs-list');
+  if (!targetEl || !badgeEl || !listEl) return;
+
+  targetEl.textContent = word;
+  badgeEl.textContent = hits.length;
+
+  if (!hits.length) {
+    listEl.innerHTML = '<div class="hint">No references found for "<b>' + esc(word) + '</b>".</div>';
+    return;
+  }
+
+  const grouped = groupHits(hits);
+  const head = hits.length + ' reference' + (hits.length === 1 ? '' : 's') +
+    (server ? ' · ' + esc(server) : ' · text search');
+  let html = '<div class="hint">' + head + '</div>';
+
+  for (const f of grouped) {
+    html += '<div class="rfile" data-toggle="r-' + esc(f.path) + '" title="' + esc(f.path) + '">' +
+      '<span class="ar">&#9660;</span>' +
+      '<span class="fp">' + esc(displayPath(f.path)) + '</span>' +
+      '<span class="cnt">' + f.matches.length + '</span></div>' +
+      '<div data-group="r-' + esc(f.path) + '">';
+    for (const m of f.matches) {
+      html += '<div class="rline" data-p="' + esc(f.path) + '" data-n="' + m.line + '">' +
+        '<span class="rn">' + m.line + '</span><span class="rt">' +
+        esc(m.pre) + '<mark>' + esc(m.mid || word) + '</mark>' + esc(m.post) + '</span></div>';
+    }
+    html += '</div>';
+  }
+  listEl.innerHTML = html;
+}
+
+$('#right-refs-list')?.addEventListener('click', e => {
+  const t = e.target.closest('[data-toggle]');
+  if (t) {
+    const listEl = $('#right-refs-list');
+    const g = listEl.querySelector('[data-group="' + CSS.escape(t.dataset.toggle) + '"]');
+    if (!g) return;
+    const hidden = g.style.display === 'none';
+    g.style.display = hidden ? '' : 'none';
+    $('.ar', t).innerHTML = hidden ? '&#9660;' : '&#9654;';
+    return;
+  }
+  const r = e.target.closest('.rline');
+  if (r) {
+    $$('#right-refs-list .rline.sel').forEach(x => x.classList.remove('sel'));
+    r.classList.add('sel');
+    openFile(r.dataset.p, { line: +r.dataset.n });
+    const targetEl = $('#right-ref-target');
+    if (targetEl && targetEl.textContent) flashFind(targetEl.textContent);
+  }
+});
+
+async function inspectReferences(arg) {
+  const d = doc_();
+  const at = (arg && arg.word) ? arg : positionNow(typeof arg === 'string' ? arg : S.lastWord);
+  if (!d || !at || !at.word) return;
+
+  showRightInspector('refs');
+  const targetEl = $('#right-ref-target');
+  const badgeEl = $('#right-ref-badge');
+  const listEl = $('#right-refs-list');
+  if (targetEl) targetEl.textContent = at.word;
+  if (badgeEl) badgeEl.textContent = '…';
+  if (listEl) listEl.innerHTML = '<div class="hint">Finding references for "' + esc(at.word) + '"…</div>';
+
+  if (canAskServer(at)) {
+    setStatusNote('references to ' + at.word + '…');
+    try {
+      const j = await lspCall('refs', at, 30000);
+      updateStatus();
+      if (j && j.hits && j.hits.length) {
+        renderRightResults(at.word, j.hits, j.server, true);
+        return;
+      }
+    } catch {
+      updateStatus();
+    }
+  }
+
+  // Fallback: search workspace text for whole word
+  setStatusNote('searching references to ' + at.word + '…');
+  try {
+    const j = await api('/api/search', { q: at.word, word: true, case: true });
+    updateStatus();
+    const hits = [];
+    if (j.results) {
+      for (const f of j.results) {
+        for (const m of f.matches) {
+          hits.push({ path: f.path, line: m.line, pre: m.pre, mid: m.mid, post: m.post });
+        }
+      }
+    }
+    renderRightResults(at.word, hits, '', false);
+  } catch (err) {
+    updateStatus();
+    if (listEl) listEl.innerHTML = '<div class="hint">Search error: ' + esc(err.message) + '</div>';
+  }
+}
 
 /* ==========================================================================
    SECTION 13: FIND IN CURRENT FILE (Ctrl+F)
@@ -1342,7 +1509,12 @@ const COMMANDS = [
   { name: 'Search in Files', run: () => showPanel('search') },
   { name: 'Find in Current File', run: () => openFind(S.lastWord) },
   { name: 'Go to Definition', run: () => gotoDefinition() },
-  { name: 'Find All References', run: () => findReferences() },
+  { name: 'Find All References (Right Panel)', run: () => findReferences() },
+  { name: 'Toggle Right Inspector (Symbols & References)', run: () => {
+    if (document.body.classList.contains('right-hidden')) showRightInspector('refs');
+    else hideRightInspector();
+  } },
+  { name: 'Show File Symbols (Right Panel)', run: () => showRightInspector('symbols') },
   { name: 'Reveal Active File in Explorer', run: () => { const d = doc_(); if (d) { showPanel('files'); revealFile(d.path); } } },
   { name: 'Toggle Sidebar', run: () => document.body.classList.toggle('side-hidden') },
   { name: 'Toggle Theme', run: toggleTheme },
@@ -1488,6 +1660,7 @@ const SHORTCUTS = [
   ['Ctrl Shift F', 'Search in files'], ['Ctrl F', 'Find in file'],
   ['Ctrl G', 'Go to line'], ['Enter / Shift Enter', 'Next / previous match'],
   ['F12 or Ctrl Click', 'Go to definition'], ['Shift F12', 'Find all references'],
+  ['Ctrl J', 'Toggle right inspector (Symbols/Refs)'],
   ['Alt ←  /  Alt →', 'Navigate back / forward'], ['Ctrl B', 'Toggle sidebar'],
   ['Ctrl W', 'Close tab'], ['Ctrl Tab', 'Next tab'],
   ['Alt 1 … 9', 'Select tab'], ['Double click', 'Highlight all occurrences'],
@@ -1504,6 +1677,20 @@ function showHelp() {
 $('#btn-help').addEventListener('click', showHelp);
 $('#helpsheet').addEventListener('click', () => { $('#helpsheet').hidden = true; });
 
+// Footer quick action buttons
+$('#footer-actions')?.addEventListener('click', e => {
+  const btn = e.target.closest('.footer-btn');
+  if (!btn) return;
+  const act = btn.dataset.action;
+  if (act === 'quick-open') openPalette('file');
+  else if (act === 'search') { showPanel('search'); $('#q').select(); }
+  else if (act === 'symbols') openPalette('symbol');
+  else if (act === 'find') openFind(S.lastWord);
+  else if (act === 'goto') openPalette('line');
+  else if (act === 'palette') openPalette('command');
+  else if (act === 'help') showHelp();
+});
+
 /* ==========================================================================
    SECTION 16: GLOBAL KEYBOARD SHORTCUTS
    - Intercepts Cmd+K, Ctrl+P, Ctrl+F, Ctrl+B, F12, Shift+F12, Esc, etc.
@@ -1519,6 +1706,7 @@ addEventListener('keydown', e => {
     if (!$('#helpsheet').hidden) { $('#helpsheet').hidden = true; return; }
     if (!hovercard.hidden) { clearLink(); return; }
     if (!findbar.hidden) { clearFind(); return; }
+    if (!document.body.classList.contains('right-hidden')) { hideRightInspector(); return; }
     if (S.occ) { S.occ = null; paint(); return; }
     if (inField(document.activeElement)) document.activeElement.blur();
     return;
@@ -1531,8 +1719,15 @@ addEventListener('keydown', e => {
     return;
   }
 
+  if (mod && (e.key === 'j' || e.key === 'J')) {
+    e.preventDefault();
+    if (document.body.classList.contains('right-hidden')) showRightInspector('refs');
+    else hideRightInspector();
+    return;
+  }
+
   if (mod && e.shiftKey && (e.key === 'P' || e.key === 'p')) { e.preventDefault(); openPalette('command'); return; }
-  if (mod && e.shiftKey && (e.key === 'O' || e.key === 'o')) { e.preventDefault(); openPalette('symbol'); return; }
+  if (mod && e.shiftKey && (e.key === 'O' || e.key === 'o')) { e.preventDefault(); showRightInspector('symbols'); return; }
   if (mod && e.shiftKey && (e.key === 'F' || e.key === 'f')) { e.preventDefault(); showPanel('search'); $('#q').select(); return; }
   if (mod && !e.shiftKey && (e.key === 'p' || e.key === 'P')) { e.preventDefault(); openPalette('file'); return; }
   if (mod && (e.key === 'g' || e.key === 'G')) { e.preventDefault(); openPalette('line'); return; }

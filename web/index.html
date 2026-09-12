@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
+<body class="right-hidden">
 <div id="app">
   <!-- SECTION: Activity Rail (Leftmost icon navigation bar) -->
   <nav id="rail">
@@ -121,6 +121,16 @@
 
     <!-- Bottom Status Bar -->
     <footer id="status">
+      <div id="footer-actions">
+        <button class="footer-btn" data-action="quick-open" title="Go to File (Ctrl+P)"><span class="footer-btn-label">Files</span><kbd class="footer-kbd"><span class="mod-key">Ctrl</span>P</kbd></button>
+        <button class="footer-btn" data-action="search" title="Search in Files (Ctrl+Shift+F)"><span class="footer-btn-label">Search</span><kbd class="footer-kbd"><span class="mod-key">Ctrl</span>⇧F</kbd></button>
+        <button class="footer-btn" data-action="symbols" title="Go to Symbol (Ctrl+Shift+O)"><span class="footer-btn-label">Symbols</span><kbd class="footer-kbd"><span class="mod-key">Ctrl</span>⇧O</kbd></button>
+        <button class="footer-btn" data-action="find" title="Find in File (Ctrl+F)"><span class="footer-btn-label">Find</span><kbd class="footer-kbd"><span class="mod-key">Ctrl</span>F</kbd></button>
+        <button class="footer-btn" data-action="goto" title="Go to Line (Ctrl+G)"><span class="footer-btn-label">Line</span><kbd class="footer-kbd"><span class="mod-key">Ctrl</span>G</kbd></button>
+        <button class="footer-btn" data-action="palette" title="Command Palette (Ctrl+Shift+P)"><span class="footer-btn-label">Commands</span><kbd class="footer-kbd"><span class="mod-key">Ctrl</span>⇧P</kbd></button>
+        <button class="footer-btn" data-action="help" title="Keyboard Shortcuts (?)"><span class="footer-btn-label">Help</span><kbd class="footer-kbd">?</kbd></button>
+      </div>
+      <span class="status-sep"></span>
       <span id="st-lang"></span>
       <span id="st-lines"></span>
       <span id="st-size"></span>
@@ -130,6 +140,41 @@
       <span id="st-index"></span>
     </footer>
   </main>
+
+  <!-- Right Inspector Resizer Divider -->
+  <div id="right-resizer" title="Drag to resize inspector"></div>
+
+  <!-- SECTION: Right-side Inspector (Symbols & References) -->
+  <aside id="right-side">
+    <header class="inspector-head">
+      <div class="inspector-tabs">
+        <button class="inspector-tab active" data-itab="refs">References</button>
+        <button class="inspector-tab" data-itab="symbols">Symbols</button>
+      </div>
+      <div class="inspector-head-actions">
+        <button id="btn-close-right" class="mini" title="Close inspector (Esc)">&#10005;</button>
+      </div>
+    </header>
+
+    <!-- Right Pane 1: References for active symbol -->
+    <section class="inspector-pane active" id="pane-right-refs">
+      <div class="inspector-bar">
+        <span class="inspector-sym-title" id="right-ref-target">—</span>
+        <span class="inspector-badge" id="right-ref-badge">0</span>
+      </div>
+      <div class="panel-body" id="right-refs-list">
+        <div class="hint">Select or click a symbol to inspect references.</div>
+      </div>
+    </section>
+
+    <!-- Right Pane 2: Symbols outline for active file -->
+    <section class="inspector-pane" id="pane-right-symbols">
+      <div class="search-form">
+        <input id="right-symbols-filter" type="text" spellcheck="false" placeholder="Filter file symbols" autocomplete="off">
+      </div>
+      <div class="panel-body" id="right-symbols-list"></div>
+    </section>
+  </aside>
 </div>
 
 <!-- SECTION: Command / File / Symbol Palette Modal (Cmd+K / Ctrl+P) -->
