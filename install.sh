@@ -7,11 +7,11 @@
 # Environment variables:
 #   VERSION      - target version to install (e.g. "0.1.0" or "latest", default: "latest")
 #   INSTALL_DIR  - target directory for binary (default: /usr/local/bin or ~/.local/bin)
-#   PX0_REPO     - GitHub repository (default: arpitbbhayani/px0)
+#   PX0_REPO     - GitHub repository (default: px0-ai/px0)
 
 set -eu
 
-REPO="${PX0_REPO:-arpitbbhayani/px0}"
+REPO="${PX0_REPO:-px0-ai/px0}"
 VERSION="${VERSION:-latest}"
 
 # Color codes

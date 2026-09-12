@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	defaultRepo       = "arpitbbhayani/px0"
+	defaultRepo       = "px0-ai/px0"
 	updateCheckPeriod = 24 * time.Hour
 )
 

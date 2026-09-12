@@ -4,6 +4,60 @@
 >
 > px0 is built for this reality: a lightning-fast, zero-bloat, read-only code viewer. One single 9 MB binary. Zero runtime dependencies. Starts in < 1 ms and uses under 20 MB of RAM.
 
+## Installation
+
+### Option 1: Quick Install (macOS, Linux, BSD)
+
+Install or upgrade to the latest release with a single command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/px0-ai/px0/master/install.sh | bash
+```
+
+### Option 2: Prebuilt Binaries
+
+Download the binary for your operating system and architecture directly from GitHub Releases or `dist/`, make it executable, and move it to your `PATH`:
+
+```bash
+# macOS (Apple Silicon)
+sudo install dist/px0-0.1.0-darwin-arm64 /usr/local/bin/px0
+
+# Linux (x86_64)
+sudo install dist/px0-0.1.0-linux-amd64 /usr/local/bin/px0
+```
+
+### Option 3: Build from Source
+
+Requires Go 1.24 or newer. No npm, no node, no CGO, and no external libraries required:
+
+```bash
+git clone https://github.com/px0-ai/px0.git
+cd px0
+make build
+sudo install px0 /usr/local/bin/
+```
+
+To cross-compile binaries for all 15 supported OS and architecture combinations:
+
+```bash
+make dist
+# or ./build.sh
+```
+
+---
+
+## Features
+
+- **Blazing Fast Code Navigation**: Fuzzy search files (`Cmd/Ctrl+P`), symbols (`Cmd/Ctrl+Shift+O`), and full project regex scan (`Cmd/Ctrl+Shift+F`) in milliseconds.
+- **Rich Syntax Highlighting**: Built-in lexer support for ~280 languages via Chroma.
+- **Custom Themes**: Ships 14 themes, including Tokyo Night (default), Paper, Catppuccin, Dracula, GitHub Dark, Gruvbox, Monokai, Nord, One Dark, Rose Pine, and Solarized. A theme is a single CSS file in `web/themes/`, picked up with no code changes. Switch with the status bar button or `Select Theme` in the command palette. See [STYLING.md](STYLING.md) to write your own.
+- **Language Server Protocol (LSP)**: Zero-config auto-detection of existing LSPs (`gopls`, `rust-analyzer`, `pyright`, `typescript-language-server`, `clangd`, etc.) for Go-to-Definition (`F12`), Hover info, and references.
+- **Virtual DOM / Zero Overhead**: Opening a 400,000-line file costs the same as a 10-line file; only visible lines render in the browser.
+- **Clean Terminal Experience**: CLI adheres to the Ape design spec with a subtle 256-color palette, Unix pipe detection, and quiet automation modes.
+- **Completely Self-Contained**: The single executable embeds HTML, CSS, and JS. No external assets or CDN dependencies.
+
+---
+
 ## Why a Dedicated Code Viewer?
 
 Traditional IDEs (like VS Code and JetBrains) were architected when developers spent 8 hours a day manually typing code. They carry tens of thousands of features, bloated Electron/Node runtimes, complex file watchers, heavy background extensions, and gigabytes of memory overhead.
@@ -19,6 +73,8 @@ Traditional IDEs (like VS Code and JetBrains) were architected when developers s
 | Setup and Config | Config files, plugins, node, npm | Zero config, zero runtime |
 
 When AI writes the code, your primary requirement is instant, distraction-free code understanding with deep LSP intelligence and zero machine lag.
+
+---
 
 ## Key Numbers and Benchmarks
 
@@ -51,55 +107,7 @@ Run `./benchmark.sh --vscode .` to measure both on your active machine:
 | **Process Count**  | **1 single Go binary** | **15+ processes** | Multi-process Node tree |
 ```
 
-## Features
-
-- Blazing Fast Code Navigation: Fuzzy search files (`Cmd/Ctrl+P`), symbols (`Cmd/Ctrl+Shift+O`), and full project scan (`Cmd/Ctrl+Shift+F`) in milliseconds.
-- Rich Syntax Highlighting: Built-in lexer support for ~280 languages via Chroma.
-- Custom Themes: Ships 14 themes, including Tokyo Night (default), Paper, Catppuccin, Dracula, GitHub Dark, Gruvbox, Monokai, Nord, One Dark, Rose Pine and Solarized. A theme is a single CSS file in `web/themes/`, picked up with no code change. Switch with the status bar button or `Select Theme` in the command palette. See [STYLING.md](STYLING.md) to write your own.
-- Language Server Protocol (LSP): Zero-config auto-detection of existing LSPs (`gopls`, `rust-analyzer`, `pyright`, `typescript-language-server`, `clangd`, etc.) for Go-to-Definition (`F12`), Hover info, and references.
-- Virtual DOM / Zero DOM Overhead: Opening a 400,000-line file costs the same as a 10-line file; only visible lines render in the browser.
-- Clean Terminal Experience: CLI adheres to the Ape design spec with subtle 256-color palette, Unix pipe detection, and quiet automation modes.
-- Completely Self-Contained: The single executable embeds HTML, CSS, and JS. No external assets or CDN dependencies.
-
-## Installation
-
-### Option 1: Quick Install (macOS, Linux, BSD)
-
-Install the latest release with a single command:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/arpitbbhayani/px0/master/install.sh | bash
-```
-
-### Option 2: Prebuilt Binaries
-
-Download the binary for your OS and architecture from GitHub Releases or `dist/`, make it executable, and place it on your `PATH`:
-
-```bash
-# macOS (Apple Silicon)
-sudo install dist/px0-0.1.0-darwin-arm64 /usr/local/bin/px0
-
-# Linux (x86_64)
-sudo install dist/px0-0.1.0-linux-amd64 /usr/local/bin/px0
-```
-
-### Option 3: Build from Source
-
-Requires Go 1.24 or newer. No npm, no node, no CGO, and no system libraries required:
-
-```bash
-git clone https://github.com/arpitbbhayani/px0.git
-cd px0
-make build
-sudo install px0 /usr/local/bin/
-```
-
-To cross-compile binaries for all 15 supported OS and architecture combinations:
-
-```bash
-make dist
-# or ./build.sh
-```
+---
 
 ## Usage
 
@@ -120,7 +128,7 @@ To check for updates and automatically upgrade `px0` to the latest release:
 px0 --update
 ```
 
-`px0` also checks asynchronously in the background once every 24 hours without delaying startup (<1 ms) and notifies you when an update is available.
+`px0` also checks asynchronously in the background once every 24 hours without delaying startup (<1 ms) and notifies you on stderr when an update is available.
 
 ### CLI Flags
 
@@ -134,6 +142,8 @@ px0 --update
 | `-quiet` | `false` | Suppress CLI narration (errors still print to stderr) |
 | `-update` | `false` | Check for updates and install the latest version |
 | `-version` | `false` | Print version and architecture and exit |
+
+---
 
 ## Keyboard Shortcuts
 
@@ -155,6 +165,8 @@ px0 --update
 | `Cmd/Ctrl+W` | Close active tab |
 | `Ctrl+Tab` | Switch to next tab |
 | `?` | Show all keyboard shortcuts |
+
+---
 
 ## Reproducing Benchmarks
 
@@ -179,11 +191,15 @@ All benchmark figures can be measured directly on your own system:
 
 See [BENCHMARKS.md](BENCHMARKS.md) for full methodology and detailed charts.
 
+---
+
 ## Philosophy and Limits
 
-- Read-Only by Design: px0 will never have a text editor. Code modifications belong to AI agents, CLI commands, or specific diff tools.
-- Snapshot Indexing: By omitting file-system watcher daemons (`inotify` leaks, high CPU), indexing is near-instantaneous. Re-index at any time with `Cmd+Shift+P` -> `Re-index Workspace`.
-- Local and Secure: Binds to `127.0.0.1` by default without any cloud or analytics phone-homes.
+- **Read-Only by Design**: px0 will never have a text editor. Code modifications belong to AI agents, CLI commands, or specific diff tools.
+- **Snapshot Indexing**: By omitting file-system watcher daemons (`inotify` leaks, high CPU), indexing is near-instantaneous. Re-index at any time with `Cmd+Shift+P` -> `Re-index Workspace`.
+- **Local and Secure**: Binds to `127.0.0.1` by default without any cloud or analytics phone-homes.
+
+---
 
 ## Contributing
 
@@ -194,14 +210,15 @@ Contributions that keep px0 fast, minimal, and dependable are welcome. Please re
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/arpitbbhayani/px0.git
+git clone https://github.com/px0-ai/px0.git
 cd px0
 ```
 
 2. Run tests:
 
 ```bash
-go test ./...
+make test
+# or go test ./...
 ```
 
 3. Live frontend development (serves `web/` assets from disk without rebuilding the binary):
@@ -214,18 +231,21 @@ go run . -dev . .
 
 ```bash
 go vet ./...
-./build.sh
+make dist
 ```
 
 ### Architecture Overview
 
 - `main.go` / `ui.go`: CLI entrypoint, flag parsing, signal management, Ape terminal experience.
+- `update.go`: Self-updater and asynchronous daily version check.
 - `server.go`: HTTP routes, JSON API, gzip compression, and embedded asset serving.
 - `index.go`: Concurrently walks workspace, honors `.gitignore`, builds in-memory path and trie structures in milliseconds.
 - `search.go` / `fuzzy.go`: High-performance substring and fuzzy file/symbol matching algorithms.
 - `lsp.go` / `lsp_client.go`: Lightweight JSON-RPC client communicating with local language servers over stdio.
 - `web/`: Native zero-dependency ES module frontend (custom virtual scroll, syntax highlight rendering, tab manager).
 - `web/themes/`: One CSS file per colour theme, joined by the server into `/static/themes.css`. Token reference in [STYLING.md](STYLING.md).
+
+---
 
 ## License
 
