@@ -344,7 +344,18 @@ body.hide-lines .c { padding-left: 16px; }
 
 #empty { position: absolute; inset: 0; display: grid; place-items: center; background: var(--bg); }
 .empty-inner { text-align: center; color: var(--faint); }
-.empty-logo { font-size: 40px; color: var(--line); line-height: 1; }
+.empty-logo { display: flex; justify-content: center; align-items: center; margin-bottom: 2px; }
+.empty-logo img { width: 130px; height: auto; display: none; }
+:root .empty-logo .logo-dark { display: block; }
+:root .empty-logo .logo-light { display: none; }
+:root[data-theme="light"] .empty-logo .logo-dark,
+:root[data-theme="catppuccin-latte"] .empty-logo .logo-dark,
+:root[data-theme="gruvbox-light"] .empty-logo .logo-dark,
+:root[data-theme="solarized-light"] .empty-logo .logo-dark { display: none; }
+:root[data-theme="light"] .empty-logo .logo-light,
+:root[data-theme="catppuccin-latte"] .empty-logo .logo-light,
+:root[data-theme="gruvbox-light"] .empty-logo .logo-light,
+:root[data-theme="solarized-light"] .empty-logo .logo-light { display: block; }
 .empty-inner h1 { margin: 6px 0 22px; font-size: 15px; font-weight: 500; letter-spacing: .28em; color: var(--dim); text-transform: uppercase; }
 .empty-inner dl { display: grid; grid-template-columns: auto auto; gap: 9px 16px; align-items: center; font-size: 12.5px; }
 .empty-inner dt { text-align: right; display: flex; gap: 3px; justify-content: flex-end; }
