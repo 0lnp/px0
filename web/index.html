@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>lide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>&#9671;</text></svg>">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <nav id="rail">
+    <button class="rail-btn active" data-panel="files" title="Explorer  (Ctrl+B)">
+      <svg viewBox="0 0 24 24"><path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h4l2 2.5h7A1.5 1.5 0 0 1 19 8v10.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 3 18.5z"/></svg>
+    </button>
+    <button class="rail-btn" data-panel="search" title="Search  (Ctrl+Shift+F)">
+      <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>
+    </button>
+    <button class="rail-btn" data-panel="outline" title="Outline  (Ctrl+Shift+O)">
+      <svg viewBox="0 0 24 24"><path d="M4 6h4M4 12h4M4 18h4M11 6h9M11 12h9M11 18h9"/></svg>
+    </button>
+    <div class="rail-spacer"></div>
+    <button class="rail-btn" id="btn-theme" title="Toggle theme">
+      <svg viewBox="0 0 24 24"><path d="M20 13a8 8 0 1 1-9-9 6.5 6.5 0 0 0 9 9z"/></svg>
+    </button>
+    <button class="rail-btn" id="btn-help" title="Keyboard shortcuts  (?)">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.3a2.5 2.5 0 1 1 2.9 2.8v1.4"/><circle cx="12.4" cy="16.8" r=".9" fill="currentColor" stroke="none"/></svg>
+    </button>
+  </nav>
+
+  <aside id="side">
+    <section class="panel active" id="panel-files">
+      <header class="panel-head"><span id="root-name">—</span><button id="btn-reindex" class="mini" title="Re-index">&#8635;</button></header>
+      <div class="panel-body" id="tree"></div>
+    </section>
+
+    <section class="panel" id="panel-search">
+      <header class="panel-head">Search</header>
+      <div class="search-form">
+        <input id="q" type="text" spellcheck="false" placeholder="Search in files" autocomplete="off">
+        <div class="opts">
+          <button class="opt" id="o-case" title="Match case">Aa</button>
+          <button class="opt" id="o-word" title="Whole word">|ab|</button>
+          <button class="opt" id="o-re" title="Regular expression">.*</button>
+        </div>
+        <input id="glob" type="text" spellcheck="false" placeholder="files to include e.g. *.go" autocomplete="off">
+      </div>
+      <div class="panel-body" id="results"></div>
+    </section>
+
+    <section class="panel" id="panel-outline">
+      <header class="panel-head">Outline</header>
+      <input id="outline-filter" type="text" spellcheck="false" placeholder="Filter symbols" autocomplete="off">
+      <div class="panel-body" id="outline"></div>
+    </section>
+  </aside>
+
+  <div id="resizer"></div>
+
+  <main id="main">
+    <div id="tabs"></div>
+    <div id="crumbs"></div>
+    <div id="editor">
+      <div id="viewport">
+        <div id="sizer"><div id="rows"></div></div>
+      </div>
+      <div id="minimap-hits"></div>
+      <div id="empty">
+        <div class="empty-inner">
+          <div class="empty-logo">&#9671;</div>
+          <h1>lide</h1>
+          <dl>
+            <dt><kbd>Ctrl</kbd><kbd>P</kbd></dt><dd>go to file</dd>
+            <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></dt><dd>search everywhere</dd>
+            <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>O</kbd></dt><dd>go to symbol</dd>
+            <dt><kbd>Ctrl</kbd><kbd>G</kbd></dt><dd>go to line</dd>
+            <dt><kbd>F12</kbd></dt><dd>go to definition</dd>
+            <dt><kbd>Shift</kbd><kbd>F12</kbd></dt><dd>find all references</dd>
+            <dt>hover</dt><dd>type and docs</dd>
+            <dt><kbd>?</kbd></dt><dd>all shortcuts</dd>
+          </dl>
+        </div>
+      </div>
+      <div id="hovercard" hidden></div>
+      <div id="findbar" hidden>
+        <input id="find-input" type="text" spellcheck="false" placeholder="Find" autocomplete="off">
+        <span id="find-count">0</span>
+        <button id="find-prev" title="Previous  (Shift+Enter)">&#8593;</button>
+        <button id="find-next" title="Next  (Enter)">&#8595;</button>
+        <button id="find-close" title="Close  (Esc)">&#10005;</button>
+      </div>
+    </div>
+    <footer id="status">
+      <span id="st-lang"></span>
+      <span id="st-lines"></span>
+      <span id="st-size"></span>
+      <span class="grow"></span>
+      <span id="st-pos"></span>
+      <span id="st-lsp"></span>
+      <span id="st-index"></span>
+    </footer>
+  </main>
+</div>
+
+<div id="overlay" hidden>
+  <div id="palette">
+    <div class="pal-input"><span id="pal-mode"></span><input id="pal" type="text" spellcheck="false" autocomplete="off"></div>
+    <div id="pal-list"></div>
+    <div id="pal-hint"></div>
+  </div>
+</div>
+
+<div id="helpsheet" hidden></div>
+<span id="measure">0</span>
+<script src="/static/app.js"></script>
+</body>
+</html>
