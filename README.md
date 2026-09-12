@@ -1,6 +1,6 @@
-# px0: Lightweight Code Viewer & Navigator
+# px0: Read-only IDE and Lightweight Code Navigator
 
-px0 is a lightning-fast, zero-bloat, read-only code viewer packaged as a single static ~11 MB binary with zero runtime dependencies. It starts in < 1 ms, uses ~16 MB of RAM, and delivers instantaneous file search, syntax highlighting, and deep code navigation across codebases with tens of thousands of files.
+px0 is a lightning-fast, zero-bloat, browser-based, read-only IDE. It starts in < 1 ms, uses ~16 MB of RAM, and delivers instantaneous file search, syntax highlighting, and deep code navigation across codebases with tens of thousands of files.
 
 ---
 
