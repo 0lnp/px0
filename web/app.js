@@ -380,15 +380,15 @@
 • Active Goroutines: ${m.goroutines || 0}`;
     }
   }
+  async function refreshMetrics() {
+    try {
+      const m = await api("/api/metrics");
+      updateMetricsDisplay(m);
+    } catch {}
+  }
   function initMetrics() {
-    async function poll() {
-      try {
-        const m = await api("/api/metrics");
-        updateMetricsDisplay(m);
-      } catch {}
-    }
-    poll();
-    setInterval(poll, 2500);
+    refreshMetrics();
+    setInterval(refreshMetrics, 2500);
   }
 
   // web/src/history.js
@@ -1617,7 +1617,17 @@
     vp.scrollTop = Math.max(0, y);
   }
   function closeTab(i) {
-    S2.tabs.splice(i, 1);
+    const [closed] = S2.tabs.splice(i, 1);
+    if (closed) {
+      if (closed.path) {
+        api("/api/close", { path: closed.path }).then(() => refreshMetrics()).catch(() => {});
+      }
+      closed.lines = null;
+      closed.chunks?.clear?.();
+      closed.pending?.clear?.();
+      closed.refining?.clear?.();
+      closed.outline = null;
+    }
     if (S2.tabs.length === 0) {
       S2.active = -1;
       rowsEl.innerHTML = "";

@@ -290,6 +290,19 @@ func (m *lspManager) spawn(def *lspServerDef, done chan struct{}) {
 	close(done)
 }
 
+func (m *lspManager) CloseDoc(abs, rel string) {
+	def := m.defFor(rel)
+	if def == nil {
+		return
+	}
+	m.mu.Lock()
+	c := m.clients[def.Name]
+	m.mu.Unlock()
+	if c != nil {
+		c.closeDoc(abs)
+	}
+}
+
 func (m *lspManager) Close() {
 	m.mu.Lock()
 	clients := make([]*lspClient, 0, len(m.clients))

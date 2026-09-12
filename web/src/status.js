@@ -50,13 +50,14 @@ export function updateMetricsDisplay(m) {
   }
 }
 
+export async function refreshMetrics() {
+  try {
+    const m = await api('/api/metrics');
+    updateMetricsDisplay(m);
+  } catch {}
+}
+
 export function initMetrics() {
-  async function poll() {
-    try {
-      const m = await api('/api/metrics');
-      updateMetricsDisplay(m);
-    } catch {}
-  }
-  poll();
-  setInterval(poll, 2500);
+  refreshMetrics();
+  setInterval(refreshMetrics, 2500);
 }

@@ -283,6 +283,9 @@ func (c *lspClient) write(body []byte) error {
 	if c.dead != nil {
 		return c.dead
 	}
+	if c.in == nil {
+		return fmt.Errorf("lsp client stdin closed")
+	}
 	if _, err := fmt.Fprintf(c.in, "Content-Length: %d\r\n\r\n", len(body)); err != nil {
 		return err
 	}
@@ -442,6 +445,25 @@ func (c *lspClient) ensureOpen(abs, rel string) error {
 	c.opened[uri] = 1
 	c.mu.Unlock()
 	return nil
+}
+
+// closeDoc notifies the server that the file was closed, allowing the server
+// to free ASTs and file memory.
+func (c *lspClient) closeDoc(abs string) {
+	uri := pathToURI(abs)
+	c.mu.Lock()
+	_, already := c.opened[uri]
+	if !already {
+		c.mu.Unlock()
+		return
+	}
+	delete(c.opened, uri)
+	c.mu.Unlock()
+	c.notify("textDocument/didClose", map[string]any{
+		"textDocument": map[string]any{
+			"uri": uri,
+		},
+	})
 }
 
 // ---------------------------------------------------------------- positions

@@ -147,3 +147,20 @@ func TestLanguageIDMapping(t *testing.T) {
 		}
 	}
 }
+
+func TestLSPCloseDoc(t *testing.T) {
+	cl := newLSPClient(lspServerDef{Name: "test", Cmd: []string{"echo"}}, t.TempDir())
+	cl.opened["file:///test.go"] = 1
+
+	// closeDoc removes from opened map
+	cl.closeDoc("/test.go")
+	cl.mu.Lock()
+	_, exists := cl.opened["file:///test.go"]
+	cl.mu.Unlock()
+	if exists {
+		t.Fatal("expected uri to be removed from opened map")
+	}
+
+	// Repeated closeDoc does not panic
+	cl.closeDoc("/test.go")
+}

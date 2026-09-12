@@ -483,6 +483,29 @@ func (c *hlCache) evict() {
 	}
 }
 
+// remove drops any document whose cache key starts with abs + "|".
+func (c *hlCache) remove(abs string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	prefix := abs + "|"
+	removed := false
+	for k, el := range c.items {
+		if strings.HasPrefix(k, prefix) || k == abs {
+			it := el.Value.(*hlItem)
+			c.ll.Remove(el)
+			delete(c.items, k)
+			c.used -= it.val.bytes
+			removed = true
+		}
+	}
+	return removed
+}
+
+// Evict drops a file from the syntax highlighting cache by absolute path.
+func Evict(abs string) bool {
+	return cache.remove(abs)
+}
+
 func isBinary(b []byte) bool {
 	n := len(b)
 	if n > 8000 {

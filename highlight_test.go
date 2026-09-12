@@ -210,3 +210,44 @@ func TestGiantLinesDoNotBlowUpTheWindow(t *testing.T) {
 		t.Errorf("rendered %d bytes for %d bytes of source", total, len(src))
 	}
 }
+
+func TestEvictRemovesDocument(t *testing.T) {
+	tmp := filepath.Join(t.TempDir(), "test.go")
+	if err := os.WriteFile(tmp, []byte("package main\n\nfunc main() {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d, err := Open(tmp, "test.go")
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	if d == nil {
+		t.Fatal("expected doc, got nil")
+	}
+	cache.mu.Lock()
+	usedBefore := cache.used
+	_, foundBefore := cache.items[d.key]
+	cache.mu.Unlock()
+	if !foundBefore || usedBefore == 0 {
+		t.Fatalf("expected doc in cache, found=%v used=%d", foundBefore, usedBefore)
+	}
+
+	if !Evict(tmp) {
+		t.Fatalf("expected Evict(%q) to return true", tmp)
+	}
+
+	cache.mu.Lock()
+	usedAfter := cache.used
+	_, foundAfter := cache.items[d.key]
+	cache.mu.Unlock()
+	if foundAfter {
+		t.Fatalf("expected doc to be removed from cache")
+	}
+	if usedAfter >= usedBefore {
+		t.Fatalf("expected used bytes to decrease, before=%d after=%d", usedBefore, usedAfter)
+	}
+
+	// Evict again on already evicted file returns false
+	if Evict(tmp) {
+		t.Fatalf("expected second Evict to return false")
+	}
+}

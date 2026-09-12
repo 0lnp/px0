@@ -57,6 +57,7 @@ func NewServer(ix *Index, lsp *lspManager) *Server {
 	s.mux.HandleFunc("/api/tree", s.handleTree)
 	s.mux.HandleFunc("/api/find", s.handleFind)
 	s.mux.HandleFunc("/api/file", s.handleFile)
+	s.mux.HandleFunc("/api/close", s.handleClose)
 	s.mux.HandleFunc("/api/raw", s.handleRaw)
 	s.mux.HandleFunc("/api/search", s.handleSearch)
 	s.mux.HandleFunc("/api/outline", s.handleOutline)
@@ -428,6 +429,19 @@ func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
 		"exact": exact, "refine": !exact && coming,
 		"lsp": map[string]any{"state": string(state), "server": srv},
 	})
+}
+
+func (s *Server) handleClose(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	abs, rel, ok := s.resolvePath(q.Get("path"))
+	if !ok {
+		fail(w, 400, "bad path")
+		return
+	}
+	Evict(abs)
+	s.lsp.CloseDoc(abs, rel)
+	debug.FreeOSMemory()
+	writeJSON(w, map[string]any{"ok": true, "path": rel})
 }
 
 func (s *Server) handleRaw(w http.ResponseWriter, r *http.Request) {

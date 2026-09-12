@@ -2,7 +2,7 @@
 import { $, esc, S, doc_, api, LH, CHUNK } from './state.js';
 import { vp, sizer, rowsEl, editor } from './ui.js';
 import { render, layout, refineChunk } from './renderer.js';
-import { updateStatus, setStatusNote } from './status.js';
+import { updateStatus, setStatusNote, refreshMetrics } from './status.js';
 import { pushHistory } from './history.js';
 import { warmLSP } from './lsp.js';
 import { loadOutline } from './outline.js';
@@ -66,7 +66,20 @@ export function centerLine(n) {
 }
 
 export function closeTab(i) {
-  S.tabs.splice(i, 1);
+  const [closed] = S.tabs.splice(i, 1);
+  if (closed) {
+    if (closed.path) {
+      api('/api/close', { path: closed.path })
+        .then(() => refreshMetrics())
+        .catch(() => {});
+    }
+    // Release large arrays to assist garbage collection
+    closed.lines = null;
+    closed.chunks?.clear?.();
+    closed.pending?.clear?.();
+    closed.refining?.clear?.();
+    closed.outline = null;
+  }
   if (S.tabs.length === 0) {
     S.active = -1;
     rowsEl.innerHTML = ''; sizer.style.height = '0px';

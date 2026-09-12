@@ -425,3 +425,55 @@ func TestSearchGlobFilter(t *testing.T) {
 		t.Errorf("exact-path glob returned %v, want just sub/deep.py", res)
 	}
 }
+
+func TestCloseEndpoint(t *testing.T) {
+	s, root := newTestServer(t)
+
+	// 1. Open file to ensure it is in highlight cache
+	code, body := get(t, s, "/api/file?path=greet.go")
+	if code != http.StatusOK {
+		t.Fatalf("file: %d %v", code, body)
+	}
+	abs := filepath.Join(root, "greet.go")
+	cache.mu.Lock()
+	found := false
+	for k := range cache.items {
+		if strings.HasPrefix(k, abs+"|") {
+			found = true
+			break
+		}
+	}
+	cache.mu.Unlock()
+	if !found {
+		t.Fatal("expected greet.go to be in highlight cache")
+	}
+
+	// 2. Call /api/close?path=greet.go
+	code, body = get(t, s, "/api/close?path=greet.go")
+	if code != http.StatusOK {
+		t.Fatalf("close: %d %v", code, body)
+	}
+	if body["ok"] != true {
+		t.Errorf("expected ok: true, got %v", body)
+	}
+
+	// 3. Verify evicted from cache
+	cache.mu.Lock()
+	foundAfter := false
+	for k := range cache.items {
+		if strings.HasPrefix(k, abs+"|") {
+			foundAfter = true
+			break
+		}
+	}
+	cache.mu.Unlock()
+	if foundAfter {
+		t.Fatal("expected greet.go to be evicted from highlight cache after /api/close")
+	}
+
+	// 4. Bad path returns 400
+	code, _ = get(t, s, "/api/close?path=../../nonexistent")
+	if code != http.StatusBadRequest {
+		t.Errorf("expected 400 for bad path, got %d", code)
+	}
+}
