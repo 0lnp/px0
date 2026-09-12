@@ -1,6 +1,18 @@
-# px0: Read-only IDE and Lightweight Code Navigator
+# px0: Read-Only IDE for the AI-Agent Era
 
-px0 is a lightning-fast, zero-bloat, browser-based, read-only IDE. It starts in < 1 ms, uses ~16 MB of RAM, and delivers instantaneous file search, syntax highlighting, and deep code navigation across codebases with tens of thousands of files.
+px0 is a lightning-fast, zero-bloat, browser-based read-only IDE built for the AI-agent era. Starting in < 1 ms and using ~16 MB of RAM, it turns your browser into an instant verification console with symbol-level navigation, deep search, and syntax highlighting across massive codebases.
+
+### Why a Read-Only IDE?
+
+Software development has fundamentally changed. Today, coding agents, harnesses, and orchestrators generate code directly from our terminals and consoles. We no longer spend most of our time typing out boilerplate character-by-character inside heavy, sluggish IDEs that consume gigabytes of memory and take seconds to boot.
+
+Instead, developers are shifting into **review, audit, and navigation mode**:
+
+- Terminals drive generation: Agents write the code, run tests, and manage workflows.
+- Developers drive verification: We need to quickly inspect diffs, verify symbol references, browse surrounding context, and review architecture.
+- Traditional IDEs are bloated and bulky: Spinning up bloated Electron apps or resource-intensive IDE suites just to inspect agent output is overkill.
+
+In this AI-native workflow, an IDE should do one thing exceptionally well: provide an instantaneous, zero-latency, distraction-free environment to read, explore, and verify code. **px0** is built from the ground up for this paradigm—giving you full LSP intelligence, instant search, and sleek navigation with zero overhead.
 
 ---
 
