@@ -5,10 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>lide</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>&#9671;</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <div id="app">
+  <!-- SECTION: Activity Rail (Leftmost icon navigation bar) -->
   <nav id="rail">
     <button class="rail-btn active" data-panel="files" title="Explorer  (Ctrl+B)">
       <svg viewBox="0 0 24 24"><path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h4l2 2.5h7A1.5 1.5 0 0 1 19 8v10.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 3 18.5z"/></svg>
@@ -28,12 +32,15 @@
     </button>
   </nav>
 
+  <!-- SECTION: Sidebar Panels (File explorer tree, global search, and symbol outline) -->
   <aside id="side">
+    <!-- Panel 1: File Explorer -->
     <section class="panel active" id="panel-files">
       <header class="panel-head"><span id="root-name">—</span><button id="btn-reindex" class="mini" title="Re-index">&#8635;</button></header>
       <div class="panel-body" id="tree"></div>
     </section>
 
+    <!-- Panel 2: Workspace Search -->
     <section class="panel" id="panel-search">
       <header class="panel-head">Search</header>
       <div class="search-form">
@@ -48,6 +55,7 @@
       <div class="panel-body" id="results"></div>
     </section>
 
+    <!-- Panel 3: Symbol Outline -->
     <section class="panel" id="panel-outline">
       <header class="panel-head">Outline</header>
       <input id="outline-filter" type="text" spellcheck="false" placeholder="Filter symbols" autocomplete="off">
@@ -55,25 +63,35 @@
     </section>
   </aside>
 
+  <!-- Sidebar Resizer Divider -->
   <div id="resizer"></div>
 
+  <!-- SECTION: Main Editor Area -->
   <main id="main">
+    <!-- File Tabs & Breadcrumbs -->
     <div id="tabs"></div>
     <div id="crumbs"></div>
+
+    <!-- Virtualized Code Editor Viewport -->
     <div id="editor">
+      <!-- #viewport handles scrolling; #sizer sets full document scroll height; #rows renders only visible DOM rows -->
       <div id="viewport">
         <div id="sizer"><div id="rows"></div></div>
       </div>
       <div id="minimap-hits"></div>
+
+      <!-- Welcome / Empty State Screen -->
       <div id="empty">
         <div class="empty-inner">
           <div class="empty-logo">&#9671;</div>
           <h1>lide</h1>
           <dl>
-            <dt><kbd>Ctrl</kbd><kbd>P</kbd></dt><dd>go to file</dd>
-            <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></dt><dd>search everywhere</dd>
-            <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>O</kbd></dt><dd>go to symbol</dd>
-            <dt><kbd>Ctrl</kbd><kbd>G</kbd></dt><dd>go to line</dd>
+            <dt><kbd class="mod-key">Ctrl</kbd><kbd>K</kbd></dt><dd>quick search / palette</dd>
+            <dt><kbd class="mod-key">Ctrl</kbd><kbd>P</kbd></dt><dd>go to file</dd>
+            <dt><kbd class="mod-key">Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></dt><dd>search everywhere</dd>
+            <dt><kbd class="mod-key">Ctrl</kbd><kbd>Shift</kbd><kbd>O</kbd></dt><dd>go to symbol</dd>
+            <dt><kbd class="mod-key">Ctrl</kbd><kbd>F</kbd></dt><dd>find in file</dd>
+            <dt><kbd class="mod-key">Ctrl</kbd><kbd>G</kbd></dt><dd>go to line</dd>
             <dt><kbd>F12</kbd></dt><dd>go to definition</dd>
             <dt><kbd>Shift</kbd><kbd>F12</kbd></dt><dd>find all references</dd>
             <dt>hover</dt><dd>type and docs</dd>
@@ -81,7 +99,14 @@
           </dl>
         </div>
       </div>
+
+      <!-- Hovercard: Type signature, documentation, and quick AI/Usages actions -->
       <div id="hovercard" hidden></div>
+
+      <!-- Selection Menu: Floating menu on text selection for AI prompt copying & usage finding -->
+      <div id="refmenu" hidden></div>
+
+      <!-- Find in File (Ctrl+F) Overlay Bar -->
       <div id="findbar" hidden>
         <input id="find-input" type="text" spellcheck="false" placeholder="Find" autocomplete="off">
         <span id="find-count">0</span>
@@ -90,6 +115,11 @@
         <button id="find-close" title="Close  (Esc)">&#10005;</button>
       </div>
     </div>
+
+    <!-- Floating Copy Toast Notification -->
+    <div id="toast" hidden></div>
+
+    <!-- Bottom Status Bar -->
     <footer id="status">
       <span id="st-lang"></span>
       <span id="st-lines"></span>
@@ -102,6 +132,7 @@
   </main>
 </div>
 
+<!-- SECTION: Command / File / Symbol Palette Modal (Cmd+K / Ctrl+P) -->
 <div id="overlay" hidden>
   <div id="palette">
     <div class="pal-input"><span id="pal-mode"></span><input id="pal" type="text" spellcheck="false" autocomplete="off"></div>
@@ -110,8 +141,12 @@
   </div>
 </div>
 
+<!-- SECTION: Keyboard Shortcuts Cheat Sheet Overlay (?) -->
 <div id="helpsheet" hidden></div>
+
+<!-- Invisible text node to measure font metrics in DOM -->
 <span id="measure">0</span>
+
 <script src="/static/app.js"></script>
 </body>
 </html>

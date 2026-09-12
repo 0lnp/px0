@@ -56,20 +56,21 @@ Flags:
 
 | Key | Action |
 | ---------------------- | ------------------------------- |
-| `Ctrl+P`               | Go to file |
-| `Ctrl+Shift+O`         | Go to symbol |
-| `Ctrl+G`               | Go to line |
-| `Ctrl+Shift+P`         | Command palette |
-| `Ctrl+Shift+F`         | Search in files |
-| `Ctrl+F`               | Find in file |
+| `Cmd/Ctrl+K`           | Quick search / universal palette |
+| `Cmd/Ctrl+P`           | Go to file |
+| `Cmd/Ctrl+Shift+P`     | Command palette |
+| `Cmd/Ctrl+Shift+O`     | Go to symbol |
+| `Cmd/Ctrl+Shift+F`     | Search in files |
+| `Cmd/Ctrl+F`           | Find in file |
+| `Cmd/Ctrl+G`           | Go to line |
 | `Enter`, `Shift+Enter` | Next and previous match |
-| `F12`, `Ctrl+Click`    | Go to definition |
+| `F12`, `Cmd/Ctrl+Click`| Go to definition |
 | `Shift+F12`            | Find all references |
 | Hover                  | Type and documentation |
-| `Ctrl` + hover         | Show the identifier as a link |
+| `Cmd/Ctrl` + hover     | Show the identifier as a link |
 | `Alt+Left`, `Alt+Right`| Navigate back and forward |
-| `Ctrl+B`               | Toggle the sidebar |
-| `Ctrl+W`               | Close tab |
+| `Cmd/Ctrl+B`           | Toggle the sidebar |
+| `Cmd/Ctrl+W`           | Close tab |
 | `Ctrl+Tab`             | Next tab |
 | `Alt+1` to `Alt+9`     | Select a tab |
 | Double click           | Highlight all occurrences |

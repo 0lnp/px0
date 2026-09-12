@@ -149,12 +149,19 @@ func newLSPManager(root string, enabled bool) *lspManager {
 	if !enabled {
 		return m
 	}
+	// Discover available language servers in background so server startup is instantaneous.
+	go m.discover()
+	return m
+}
+
+func (m *lspManager) discover() {
 	seen := map[string]bool{}
 	for i := range lspRegistry {
 		def := &lspRegistry[i]
 		if _, err := exec.LookPath(def.Cmd[0]); err != nil {
 			continue
 		}
+		m.mu.Lock()
 		claimed := false
 		for _, ext := range def.Exts {
 			if m.byExt[ext] == nil {
@@ -166,21 +173,27 @@ func newLSPManager(root string, enabled bool) *lspManager {
 			seen[def.Name] = true
 			m.available = append(m.available, def.Name)
 		}
+		m.mu.Unlock()
 	}
-	return m
 }
 
 func (m *lspManager) Available() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.available == nil {
 		return []string{}
 	}
-	return m.available
+	cp := make([]string, len(m.available))
+	copy(cp, m.available)
+	return cp
 }
 
 func (m *lspManager) defFor(rel string) *lspServerDef {
 	if !m.enabled {
 		return nil
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.byExt[strings.ToLower(filepath.Ext(rel))]
 }
 

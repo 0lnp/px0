@@ -35,9 +35,46 @@ const S = {
 };
 
 const vp = $('#viewport'), sizer = $('#sizer'), rowsEl = $('#rows'), editor = $('#editor');
+const refmenu = $('#refmenu'), toastEl = $('#toast');
 const doc_ = () => (S.active >= 0 ? S.tabs[S.active] : null);
 
-/* ===================== virtual renderer ===================== */
+let toastTimer = 0;
+function showToast(accentText, text) {
+  if (!toastEl) return;
+  toastEl.innerHTML = (accentText ? '<span class="toast-accent">' + esc(accentText) + '</span> ' : '') + esc(text);
+  toastEl.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toastEl.hidden = true; }, 2200);
+}
+
+async function copyToClipboard(text, notify = 'Copied to clipboard') {
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast('✓', notify);
+  } catch {
+    // Fallback for non-https/restricted contexts
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      showToast('✓', notify);
+    } catch (err) {
+      showToast('!', 'Failed to copy to clipboard');
+    }
+    document.body.removeChild(ta);
+  }
+}
+
+/* ==========================================================================
+   SECTION 1: VIRTUAL RENDERER & DOM RECYCLER
+   - Renders only visible lines in the viewport (#rows) based on scroll position.
+   - Reuses DOM row elements to maintain 60 FPS scrolling on large files.
+   - Fetches chunks of syntax-highlighted HTML on-demand from /api/chunk.
+   ========================================================================== */
 
 function measure() {
   const m = $('#measure');
@@ -218,7 +255,12 @@ function refineChunk(d, c, delay = 800, tries = 0) {
 vp.addEventListener('scroll', render, { passive: true });
 new ResizeObserver(() => { layout(); render(); }).observe(editor);
 
-/* ===================== tabs & opening ===================== */
+/* ==========================================================================
+   SECTION 2: TABS & FILE OPENING LIFECYCLE
+   - Manages open tab state (S.tabs, S.active), switching tabs, and closing tabs.
+   - openFile(): Loads metadata from /api/file, activates/creates tab, and sets up chunks.
+   - Handles URL hash synchronization (#path:line).
+   ========================================================================== */
 
 async function openFile(path, opts = {}) {
   const { line, push = true, col } = opts;
@@ -351,7 +393,11 @@ function showImage(path) {
 }
 function hideImage() { const b = $('#imgview'); if (b) b.remove(); }
 
-/* ===================== history ===================== */
+/* ==========================================================================
+   SECTION 3: NAVIGATION HISTORY (BACK / FORWARD)
+   - Tracks cursor jump history (S.backStack, S.fwdStack).
+   - Allows jumping back/forward across locations with Alt+Left / Alt+Right.
+   ========================================================================== */
 
 function pushHistory(path, line) {
   const top = S.hist[S.histIdx];
@@ -369,7 +415,11 @@ function go(delta) {
   openFile(h.path, { line: h.line, push: false });
 }
 
-/* ===================== status ===================== */
+/* ==========================================================================
+   SECTION 4: STATUS BAR & NOTIFICATIONS
+   - Updates bottom status indicators (#status): language, total lines, file size,
+     cursor line/col, active LSP server state, and background indexing status.
+   ========================================================================== */
 
 function updateStatus() {
   const d = doc_();
@@ -387,7 +437,12 @@ function fmtBytes(n) {
   return (n / 1048576).toFixed(1) + ' MB';
 }
 
-/* ===================== click / selection in code ===================== */
+/* ==========================================================================
+   SECTION 5: CODE VIEWPORT INTERACTION & CURSOR POSITIONING
+   - Mouse click / double click handling inside editor rows.
+   - Sets active line cursor, highlights occurrences of selected word.
+   - Modifier (Ctrl/Cmd) click intercepts: triggers Find References across workspace.
+   ========================================================================== */
 
 const WORD = /[A-Za-z0-9_$]/;
 
@@ -435,8 +490,7 @@ vp.addEventListener('mousedown', e => {
   d.cur = +row.dataset.l;
   updateStatus();
   const w = wordAtPoint(e.clientX, e.clientY);
-  if (w) { S.at = w; S.lastWord = w.word; }
-  if (e[MOD] && w) { e.preventDefault(); gotoDefinition(w); return; }
+  if (e[MOD] && w) { e.preventDefault(); findReferences(w); return; }
   for (const r of rowsEl.children) r.classList.toggle('cur', +r.dataset.l === d.cur);
 });
 
@@ -447,7 +501,13 @@ vp.addEventListener('dblclick', e => {
   paint();
 });
 
-/* ===================== hover: link affordance & info card ===================== */
+/* ==========================================================================
+   SECTION 6: HOVERCARD & LSP TYPE/DOC TOOLTIPS
+   - Debounced hover detection over tokens.
+   - Calls /api/lsp/hover for signatures & documentation.
+   - Renders quick-action buttons: Copy Ref, Copy for AI, and Find Usages.
+   - Keeps hovercard open when pointer moves inside the card.
+   ========================================================================== */
 
 const hovercard = $('#hovercard');
 const HOVER_DELAY = 380;   // rest time before the card opens
@@ -491,6 +551,10 @@ function onMove({ x, y, mod }) {
 
   // Dismiss an open card once the pointer has clearly left what it described.
   if (S.hoverAnchor) {
+    if (!hovercard.hidden) {
+      const rect = hovercard.getBoundingClientRect();
+      if (x >= rect.left - 4 && x <= rect.right + 4 && y >= rect.top - 4 && y <= rect.bottom + 4) return;
+    }
     const dx = x - S.hoverAnchor.x, dy = y - S.hoverAnchor.y;
     if (dx * dx + dy * dy > HOVER_KEEP * HOVER_KEEP) hideHover();
     else return; // still on the same word: nothing to do
@@ -519,12 +583,40 @@ async function showHover(at, x, y) {
 
   S.hover = at;
   S.hoverAnchor = { x, y };
+  const refPath = d.path + ':' + at.line;
   hovercard.innerHTML =
     (j.signature ? '<div class="sig">' + j.signature + '</div>' : '') +
     (j.doc ? '<div class="doc">' + esc(j.doc) + '</div>' : '') +
+    '<div class="actions">' +
+      '<button id="hc-copy-ref" title="Copy file and line reference"><span class="btn-icon">📋</span> Copy Ref</button>' +
+      '<button id="hc-copy-ai" title="Copy snippet with file path for Claude Code / LLMs"><span class="btn-icon">🤖</span> Copy for AI</button>' +
+      '<button id="hc-find-refs" title="Find all usages across codebase"><span class="btn-icon">🔍</span> Usages</button>' +
+    '</div>' +
     '<div class="foot"><b>' + esc(j.server || 'lsp') + '</b>' +
-    '<span>' + (isMac ? '⌘' : 'Ctrl') + '+click definition</span>' +
+    '<span>' + (isMac ? '⌘' : 'Ctrl') + '+click usages</span>' +
     '<span>Shift+F12 references</span></div>';
+
+  const btnRef = hovercard.querySelector('#hc-copy-ref');
+  const btnAi = hovercard.querySelector('#hc-copy-ai');
+  const btnRefs = hovercard.querySelector('#hc-find-refs');
+
+  if (btnRef) btnRef.onclick = (e) => {
+    e.stopPropagation();
+    copyToClipboard(refPath, 'Copied ' + refPath);
+  };
+  if (btnAi) btnAi.onclick = (e) => {
+    e.stopPropagation();
+    const lineText = d.lines[at.line - 1] || at.word || '';
+    const ext = d.path.split('.').pop() || '';
+    const text = '### Reference: ' + refPath + '\n```' + ext + '\n' + lineText + '\n```';
+    copyToClipboard(text, 'Copied snippet for AI (' + refPath + ')');
+  };
+  if (btnRefs) btnRefs.onclick = (e) => {
+    e.stopPropagation();
+    hideHover();
+    findReferences(at.word);
+  };
+
   hovercard.hidden = false;
   placeHover(x, y);
 }
@@ -559,8 +651,12 @@ function clearLink() {
 }
 
 vp.addEventListener('mouseleave', () => { pointerAt = null; clearLink(); });
-vp.addEventListener('scroll', () => { clearTimeout(hoverTimer); hideHover(); }, { passive: true });
-vp.addEventListener('mousedown', hideHover);
+vp.addEventListener('scroll', () => { clearTimeout(hoverTimer); hideHover(); hideRefMenu(); }, { passive: true });
+vp.addEventListener('mousedown', (e) => {
+  if (e.target.closest('#hovercard') || e.target.closest('#refmenu')) return;
+  hideHover();
+  hideRefMenu();
+});
 
 /* The modifier can be pressed or released without the pointer moving, and the
    underline has to follow. */
@@ -571,7 +667,137 @@ addEventListener('keyup', e => {
   if (e.key === 'Control' || e.key === 'Meta') clearLink();
 });
 
-/* ===================== go to definition & references ===================== */
+
+/* ==========================================================================
+   SECTION 7: SELECTION REFERENCE MENU (#refmenu) & AI HARNESS INTEGRATION
+   - Triggered when text or multiple lines are selected in the editor.
+   - Floating action pill positioned centered above selection.
+   - Actions:
+       1) Copy Ref: "path/to/file.ext:10-25" (concise line reference)
+       2) Copy for Claude: Formatted markdown code block with file path header
+       3) Find Usages: Searches all occurrences of selected symbol
+   ========================================================================== */
+
+function hideRefMenu() {
+  if (refmenu && !refmenu.hidden) {
+    refmenu.hidden = true;
+    refmenu.innerHTML = '';
+  }
+}
+
+function getSelectedRangeInfo() {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
+  const d = doc_();
+  if (!d) return null;
+
+  const range = sel.getRangeAt(0);
+  // Ensure selection intersects viewport/editor
+  if (!vp.contains(range.commonAncestorContainer) && range.commonAncestorContainer !== vp) {
+    return null;
+  }
+
+  const text = sel.toString().trim();
+  if (!text) return null;
+
+  // Find start and end line rows
+  let startEl = range.startContainer;
+  if (startEl.nodeType !== 1) startEl = startEl.parentElement;
+  let endEl = range.endContainer;
+  if (endEl.nodeType !== 1) endEl = endEl.parentElement;
+
+  const startRow = startEl ? startEl.closest('.row') : null;
+  const endRow = endEl ? endEl.closest('.row') : null;
+
+  let l1 = d.cur || 1, l2 = d.cur || 1;
+  if (startRow && startRow.dataset.l) l1 = +startRow.dataset.l;
+  if (endRow && endRow.dataset.l) l2 = +endRow.dataset.l;
+
+  if (l1 > l2) { const tmp = l1; l1 = l2; l2 = tmp; }
+
+  const rect = range.getBoundingClientRect();
+  return { text, l1, l2, rect, path: d.path };
+}
+
+function updateSelectionMenu() {
+  const info = getSelectedRangeInfo();
+  if (!info || !info.text) {
+    hideRefMenu();
+    return;
+  }
+
+  const { text, l1, l2, rect, path } = info;
+  const refPath = path + ':' + (l1 === l2 ? l1 : l1 + '-' + l2);
+
+  refmenu.innerHTML =
+    '<button id="rm-copy-ref" title="Copy file and line number"><span class="btn-icon">📋</span> Copy Ref</button>' +
+    '<button id="rm-copy-claude" title="Copy formatted code snippet for Claude Code / LLM harness"><span class="btn-icon">🤖</span> Copy for Claude</button>' +
+    '<button id="rm-find-refs" title="Find all occurrences across workspace"><span class="btn-icon">🔍</span> Find Usages</button>';
+
+  const btnRef = refmenu.querySelector('#rm-copy-ref');
+  const btnClaude = refmenu.querySelector('#rm-copy-claude');
+  const btnFind = refmenu.querySelector('#rm-find-refs');
+
+  if (btnRef) btnRef.onclick = (e) => {
+    e.stopPropagation();
+    copyToClipboard(refPath, 'Copied ' + refPath);
+    hideRefMenu();
+  };
+
+  if (btnClaude) btnClaude.onclick = (e) => {
+    e.stopPropagation();
+    const ext = path.split('.').pop() || '';
+    const formatted = '### Reference: ' + refPath + '\n```' + ext + '\n' + text + '\n```';
+    copyToClipboard(formatted, 'Copied snippet for Claude (' + refPath + ')');
+    hideRefMenu();
+  };
+
+  if (btnFind) btnFind.onclick = (e) => {
+    e.stopPropagation();
+    hideRefMenu();
+    const q = text.split(/\s+/)[0] || text;
+    findReferences(q);
+  };
+
+  // Position the floating refmenu centered directly above selection
+  const edRect = editor.getBoundingClientRect();
+  refmenu.hidden = false;
+  const mRect = refmenu.getBoundingClientRect();
+
+  let left = rect.left - edRect.left + (rect.width - mRect.width) / 2;
+  left = Math.max(10, Math.min(edRect.width - mRect.width - 10, left));
+
+  let top = rect.top - edRect.top - mRect.height - 8;
+  if (top < 10) {
+    // If overflowing above, flip below selection
+    top = rect.bottom - edRect.top + 8;
+  }
+
+  refmenu.style.left = left + 'px';
+  refmenu.style.top = top + 'px';
+}
+
+document.addEventListener('selectionchange', () => {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed) {
+    hideRefMenu();
+  }
+});
+
+vp.addEventListener('mouseup', () => {
+  setTimeout(updateSelectionMenu, 20);
+});
+
+vp.addEventListener('keyup', (e) => {
+  if (e.shiftKey) setTimeout(updateSelectionMenu, 20);
+});
+
+/* ==========================================================================
+   SECTION 8: SYMBOL DEFINITIONS & REFERENCES (LSP + REGEX FALLBACK)
+   - gotoDefinition(): Queries LSP definition with fallback to text search.
+   - findReferences(): Queries LSP references with fallback to whole-word search.
+   - Results presented in search panel or directly jumped if single match.
+   ========================================================================== */
 
 /* Language servers answer precisely but can take a long time to wake up, while
    the regex index answers in milliseconds and is always there. So: use the
@@ -726,7 +952,12 @@ function flashFind(q) {
   setTimeout(paint, 0);
 }
 
-/* ===================== file tree ===================== */
+/* ==========================================================================
+   SECTION 9: EXPLORER FILE TREE
+   - Renders recursive directory tree under #tree.
+   - Lazy folder expansion with arrow toggles; opens files on click.
+   - Re-index button triggers /api/reindex.
+   ========================================================================== */
 
 const treeEl = $('#tree');
 const openDirs = new Set();
@@ -814,7 +1045,12 @@ async function revealFile(path) {
   }
 }
 
-/* ===================== search panel ===================== */
+/* ==========================================================================
+   SECTION 10: WORKSPACE SEARCH PANEL
+   - Fast full-text regex & literal search across the entire project.
+   - Options for match case, whole word, regex mode, and file glob filters.
+   - Displays matches grouped by file with clickable jump targets.
+   ========================================================================== */
 
 const resultsEl = $('#results');
 let lastResults = null;
@@ -897,7 +1133,11 @@ $('#q').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); const f = $('.rline', resultsEl); if (f) f.click(); }
 });
 
-/* ===================== outline ===================== */
+/* ==========================================================================
+   SECTION 11: SYMBOL OUTLINE
+   - Queries LSP document symbols via /api/lsp/outline.
+   - Displays filterable list of functions, structs, interfaces, methods, etc.
+   ========================================================================== */
 
 async function loadOutline() {
   const d = doc_();
@@ -963,7 +1203,11 @@ $('#outline').addEventListener('click', e => {
 });
 $('#outline-filter').addEventListener('input', drawOutline);
 
-/* ===================== panels ===================== */
+/* ==========================================================================
+   SECTION 12: SIDEBAR PANEL SWITCHING & RESIZING
+   - Handles switching between Files, Search, and Outline panels.
+   - Implements draggable sidebar splitter divider (#resizer).
+   ========================================================================== */
 
 function showPanel(name) {
   document.body.classList.remove('side-hidden');
@@ -998,7 +1242,11 @@ $('#btn-reindex').addEventListener('click', async () => {
   addEventListener('mouseup', () => { dragging = false; rz.classList.remove('drag'); layout(); render(); });
 })();
 
-/* ===================== find in file ===================== */
+/* ==========================================================================
+   SECTION 13: FIND IN CURRENT FILE (Ctrl+F)
+   - In-buffer search bar overlay (#findbar).
+   - Real-time match counting, Next/Prev match navigation (Enter / Shift+Enter).
+   ========================================================================== */
 
 const findbar = $('#findbar'), findInput = $('#find-input');
 
@@ -1074,7 +1322,15 @@ $('#minimap-hits').addEventListener('click', e => {
   render();
 });
 
-/* ===================== command palette ===================== */
+/* ==========================================================================
+   SECTION 14: COMMAND & FUZZY PALETTES (Cmd+K / Ctrl+P)
+   - Universal quick-open overlay modal (#overlay).
+   - Modes:
+       - 'file' (Ctrl+P): Fuzzy file finder
+       - 'symbol' (Ctrl+Shift+O): Workspace symbol search
+       - 'command' (Ctrl+Shift+P): Actionable commands
+       - 'line' (Ctrl+G): Go to line number
+   ========================================================================== */
 
 const overlay = $('#overlay'), palInput = $('#pal'), palList = $('#pal-list');
 let pal = null;
@@ -1213,7 +1469,11 @@ palList.addEventListener('click', e => {
 });
 overlay.addEventListener('mousedown', e => { if (e.target === overlay) closePalette(); });
 
-/* ===================== theme & help ===================== */
+/* ==========================================================================
+   SECTION 15: THEME & HELP OVERLAY
+   - Dark / Light theme toggle with localStorage persistence.
+   - Help cheatsheet overlay (#helpsheet) showing keyboard shortcuts.
+   ========================================================================== */
 
 function toggleTheme() {
   const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
@@ -1223,10 +1483,11 @@ function toggleTheme() {
 $('#btn-theme').addEventListener('click', toggleTheme);
 
 const SHORTCUTS = [
-  ['Ctrl P', 'Go to file'], ['Ctrl Shift O', 'Go to symbol'],
-  ['Ctrl G', 'Go to line'], ['Ctrl Shift P', 'Command palette'],
+  ['Ctrl K', 'Quick search / palette'], ['Ctrl P', 'Go to file'],
+  ['Ctrl Shift P', 'Command palette'], ['Ctrl Shift O', 'Go to symbol'],
   ['Ctrl Shift F', 'Search in files'], ['Ctrl F', 'Find in file'],
-  ['Enter / Shift Enter', 'Next / previous match'], ['F12 or Ctrl Click', 'Go to definition'],
+  ['Ctrl G', 'Go to line'], ['Enter / Shift Enter', 'Next / previous match'],
+  ['F12 or Ctrl Click', 'Go to definition'], ['Shift F12', 'Find all references'],
   ['Alt ←  /  Alt →', 'Navigate back / forward'], ['Ctrl B', 'Toggle sidebar'],
   ['Ctrl W', 'Close tab'], ['Ctrl Tab', 'Next tab'],
   ['Alt 1 … 9', 'Select tab'], ['Double click', 'Highlight all occurrences'],
@@ -1234,7 +1495,7 @@ const SHORTCUTS = [
 ];
 function showHelp() {
   const h = $('#helpsheet');
-  h.innerHTML = '<div class="help-card"><h2>Keyboard</h2><dl class="help-grid">' +
+  h.innerHTML = '<div class="help-card"><h2>Keyboard Shortcuts</h2><dl class="help-grid">' +
     SHORTCUTS.map(([k, v]) =>
       '<dt>' + k.split(' ').map(x => '<kbd>' + esc(x.replace('Ctrl', isMac ? '⌘' : 'Ctrl')) + '</kbd>').join('') + '</dt>' +
       '<dd>' + esc(v) + '</dd>').join('') + '</dl></div>';
@@ -1243,7 +1504,10 @@ function showHelp() {
 $('#btn-help').addEventListener('click', showHelp);
 $('#helpsheet').addEventListener('click', () => { $('#helpsheet').hidden = true; });
 
-/* ===================== keybindings ===================== */
+/* ==========================================================================
+   SECTION 16: GLOBAL KEYBOARD SHORTCUTS
+   - Intercepts Cmd+K, Ctrl+P, Ctrl+F, Ctrl+B, F12, Shift+F12, Esc, etc.
+   ========================================================================== */
 
 const inField = el => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
 
@@ -1257,6 +1521,13 @@ addEventListener('keydown', e => {
     if (!findbar.hidden) { clearFind(); return; }
     if (S.occ) { S.occ = null; paint(); return; }
     if (inField(document.activeElement)) document.activeElement.blur();
+    return;
+  }
+
+  // Universal Quick Open / Command Palette: Cmd+K / Ctrl+K
+  if (mod && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault();
+    openPalette(e.shiftKey ? 'command' : 'file');
     return;
   }
 
@@ -1304,10 +1575,17 @@ function moveCursor(delta) {
   render(); updateStatus();
 }
 
-/* ===================== boot ===================== */
+/* ==========================================================================
+   SECTION 17: BOOTSTRAP / INITIALIZATION
+   - Measures font metrics, loads /api/meta, draws file tree, restores saved theme,
+     and monitors background indexer completion.
+   ========================================================================== */
 
 (async function boot() {
   try { const t = localStorage.getItem('lide.theme'); if (t) document.documentElement.dataset.theme = t; } catch {}
+  if (isMac) {
+    document.querySelectorAll('.mod-key').forEach(el => el.textContent = '⌘');
+  }
   measure();
   S.meta = await api('/api/meta');
   document.title = S.meta.name + ' — lide';
@@ -1316,4 +1594,19 @@ function moveCursor(delta) {
   updateStatus();
   await drawTree('', treeEl, 0);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { measure(); layout(); render(); });
+
+  // If the background indexer was still running when the UI loaded, poll briefly
+  // until complete to update the total file count and index time in the status bar.
+  if (S.meta && !S.meta.ready) {
+    const timer = setInterval(async () => {
+      try {
+        const m = await api('/api/meta');
+        if (m.ready) {
+          clearInterval(timer);
+          S.meta = m;
+          updateStatus();
+        }
+      } catch { clearInterval(timer); }
+    }, 150);
+  }
 })();

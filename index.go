@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -33,13 +34,32 @@ type Index struct {
 	children map[string][]Node
 	builtAt  time.Time
 	buildMS  int64
+	readyCh  chan struct{}
 }
 
 func NewIndex(root string) *Index {
-	return &Index{root: root, children: map[string][]Node{}}
+	return &Index{root: root, children: map[string][]Node{}, readyCh: make(chan struct{})}
 }
 
 func (ix *Index) Root() string { return ix.root }
+
+func (ix *Index) Ready() bool {
+	select {
+	case <-ix.readyCh:
+		return true
+	default:
+		return false
+	}
+}
+
+func (ix *Index) WaitReady(ctx context.Context) error {
+	select {
+	case <-ix.readyCh:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
 
 func (ix *Index) Stats() (files int, builtAt time.Time, ms int64) {
 	ix.mu.RLock()
@@ -62,7 +82,8 @@ func (ix *Index) Children(dir string) ([]Node, bool) {
 
 // Build walks the tree once, honouring .gitignore at every level, and
 // materialises both the flat file list (for fuzzy find and search) and the
-// directory map (for the tree view).
+// directory map (for the tree view). Root entries are published immediately so
+// the frontend can display the file tree without waiting for the full repo scan.
 func (ix *Index) Build() {
 	start := time.Now()
 	root := newIgnoreSet(nil)
@@ -133,6 +154,17 @@ func (ix *Index) Build() {
 		children[rel] = kids
 		mu.Unlock()
 
+		// If this is the root directory, make it available to ix.Children("")
+		// immediately so the browser UI can render the sidebar tree without delay.
+		if rel == "" {
+			ix.mu.Lock()
+			if ix.children == nil {
+				ix.children = map[string][]Node{}
+			}
+			ix.children[""] = kids
+			ix.mu.Unlock()
+		}
+
 		for _, sd := range subdirs {
 			wg.Add(1)
 			select {
@@ -156,5 +188,10 @@ func (ix *Index) Build() {
 	ix.mu.Lock()
 	ix.files, ix.children = files, children
 	ix.builtAt, ix.buildMS = time.Now(), time.Since(start).Milliseconds()
+	select {
+	case <-ix.readyCh:
+	default:
+		close(ix.readyCh)
+	}
 	ix.mu.Unlock()
 }

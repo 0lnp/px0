@@ -191,6 +191,7 @@ func (s *Server) handleMeta(w http.ResponseWriter, r *http.Request) {
 		"files":      n,
 		"indexMs":    ms,
 		"builtAt":    at,
+		"ready":      s.ix.Ready(),
 		"lspServers": s.lsp.Available(),
 	})
 }
@@ -341,6 +342,19 @@ func (s *Server) handleLSPSymbols(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleTree(w http.ResponseWriter, r *http.Request) {
 	dir := strings.Trim(r.URL.Query().Get("dir"), "/")
 	kids, ok := s.ix.Children(dir)
+	if !ok && !s.ix.Ready() {
+		// If indexing is still in flight, wait up to 300ms for this directory to be scanned
+		for i := 0; i < 30; i++ {
+			time.Sleep(10 * time.Millisecond)
+			if kids, ok = s.ix.Children(dir); ok {
+				break
+			}
+			if s.ix.Ready() {
+				kids, ok = s.ix.Children(dir)
+				break
+			}
+		}
+	}
 	if !ok {
 		fail(w, 404, "not indexed: "+dir)
 		return

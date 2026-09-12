@@ -66,23 +66,28 @@ func main() {
 	}
 
 	ix := NewIndex(root)
-	fmt.Printf("px0 %s  indexing %s ...", version, root)
-	ix.Build()
-	n, _, ms := ix.Stats()
-	fmt.Printf("\rpx0 %s  %s  %d files indexed in %dms\n", version, root, n, ms)
-
 	lsp := newLSPManager(root, !*noLSP)
-	if names := lsp.Available(); len(names) > 0 {
-		fmt.Printf("  language servers: %s (started on first use)\n", strings.Join(names, ", "))
-	}
-
-	url := "http://" + addr
-	fmt.Printf("  -> %s   (ctrl-c to stop)\n", url)
-	if !*noOpen {
-		go func() { time.Sleep(150 * time.Millisecond); openBrowser(url) }()
-	}
 
 	srv := &http.Server{Handler: NewServer(ix, lsp)}
+
+	url := "http://" + addr
+	fmt.Printf("px0 %s  %s\n", version, root)
+	fmt.Printf("  -> %s   (ctrl-c to stop)\n", url)
+
+	// Launch browser immediately without blocking startup.
+	if !*noOpen {
+		go openBrowser(url)
+	}
+
+	// Index workspace asynchronously so the server and UI respond in <1ms.
+	go func() {
+		ix.Build()
+		n, _, ms := ix.Stats()
+		fmt.Printf("  indexed %d files in %dms\n", n, ms)
+		if names := lsp.Available(); len(names) > 0 {
+			fmt.Printf("  language servers: %s (started on first use)\n", strings.Join(names, ", "))
+		}
+	}()
 
 	// Language servers are children that can hold gigabytes. Shut them down on
 	// the way out rather than leaving them for the OS to reap.
