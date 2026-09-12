@@ -63,9 +63,17 @@ Run `./benchmark.sh --vscode .` to measure both on your active machine:
 
 ## Installation
 
-### Option 1: Prebuilt Binaries
+### Option 1: Quick Install (macOS, Linux, BSD)
 
-Download the binary for your OS and architecture from `dist/`, make it executable, and place it on your `PATH`:
+Install the latest release with a single command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/arpitbbhayani/px0/master/install.sh | bash
+```
+
+### Option 2: Prebuilt Binaries
+
+Download the binary for your OS and architecture from GitHub Releases or `dist/`, make it executable, and place it on your `PATH`:
 
 ```bash
 # macOS (Apple Silicon)
@@ -75,21 +83,22 @@ sudo install dist/px0-0.1.0-darwin-arm64 /usr/local/bin/px0
 sudo install dist/px0-0.1.0-linux-amd64 /usr/local/bin/px0
 ```
 
-### Option 2: Build from Source
+### Option 3: Build from Source
 
 Requires Go 1.24 or newer. No npm, no node, no CGO, and no system libraries required:
 
 ```bash
 git clone https://github.com/arpitbbhayani/px0.git
 cd px0
-go build -o px0 .
+make build
 sudo install px0 /usr/local/bin/
 ```
 
 To cross-compile binaries for all 15 supported OS and architecture combinations:
 
 ```bash
-./build.sh
+make dist
+# or ./build.sh
 ```
 
 ## Usage
@@ -103,6 +112,16 @@ px0 ~/src/kernel    # view another repository
 
 `px0` starts the local viewer, prints the URL, and opens your default browser immediately.
 
+### Updating px0
+
+To check for updates and automatically upgrade `px0` to the latest release:
+
+```bash
+px0 --update
+```
+
+`px0` also checks asynchronously in the background once every 24 hours without delaying startup (<1 ms) and notifies you when an update is available.
+
 ### CLI Flags
 
 | Flag | Default | Description |
@@ -113,6 +132,7 @@ px0 ~/src/kernel    # view another repository
 | `-no-lsp` | `false` | Disable language server discovery and use regex-based outline |
 | `-no-color` | `false` | Strip ANSI escape sequences from terminal output |
 | `-quiet` | `false` | Suppress CLI narration (errors still print to stderr) |
+| `-update` | `false` | Check for updates and install the latest version |
 | `-version` | `false` | Print version and architecture and exit |
 
 ## Keyboard Shortcuts

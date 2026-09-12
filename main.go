@@ -30,6 +30,7 @@ func main() {
 		noLSP   = flag.Bool("no-lsp", false, "do not use language servers, even if installed")
 		dev     = flag.String("dev", "", "serve the UI from this source directory instead of the embedded copy")
 		showVer = flag.Bool("version", false, "print version and exit")
+		doUpdate = flag.Bool("update", false, "check for and install latest version of px0")
 		noColor = flag.Bool("no-color", false, "disable colour output")
 		quiet   = flag.Bool("quiet", false, "suppress narration")
 	)
@@ -49,6 +50,13 @@ func main() {
 
 	if *showVer {
 		fmt.Printf("px0 %s (%s/%s)\n", version, runtime.GOOS, runtime.GOARCH)
+		return
+	}
+
+	if *doUpdate {
+		if err := runSelfUpdate(version); err != nil {
+			fatal(err)
+		}
 		return
 	}
 
@@ -104,6 +112,9 @@ func main() {
 			uiBullet(fmt.Sprintf("language servers: %s (started on first use)", strings.Join(names, ", ")), os.Stdout)
 		}
 	}()
+
+	// Check for updates asynchronously once a day without delaying startup (<1ms).
+	go checkDailyUpdate(version)
 
 	// Language servers are children that can hold gigabytes. Shut them down on
 	// the way out rather than leaving them for the OS to reap.
