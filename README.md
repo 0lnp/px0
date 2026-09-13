@@ -1,6 +1,6 @@
-# px0: Super Fast Read-only IDE
+# px0: Read Code. Fast.
 
-px0 is a super fast, browser-based read-only IDE designed for instant code navigation and review. Booting in under 1 ms and using ~16 MB of RAM, it turns your browser into a zero-latency inspection console with symbol-level navigation, deep search, and syntax highlighting across massive codebases.
+px0 is a fast, lightweight, read-only IDE designed for instant code navigation and review in your browser. Booting in under 1 ms and using ~16 MB of RAM, it turns your browser into a zero-latency inspection console with symbol-level navigation, deep search, and syntax highlighting across massive codebases.
 
 ### Why a Read-Only IDE?
 
@@ -74,22 +74,25 @@ make dist
 
 `px0` works entirely out of the box without any language servers—fuzzy file search, project grep, and outline parsing are completely built-in.
 
-However, having language servers installed gives `px0` superpowers: semantic Go-to-Definition (`F12`), type hover docs, and jump-to-definition into standard library files. `px0` automatically detects any of the following servers if they exist in your `$PATH`:
+However, having language servers installed gives `px0` superpowers: semantic Go-to-Definition (`F12`), type hover docs, and jump-to-definition into standard library files. px0 does not ship any language server. It detects the ones below if they are on your `PATH` or in the usual install folders (`~/go/bin`, `~/.cargo/bin`, `~/.local/bin`, npm's global folder, and Homebrew's folders on macOS). Where a language has several, the first one found in the order listed is used:
 
 | Language | Server | Quick Install Command |
 | -------- | ------ | --------------------- |
 | **Go** | `gopls` | `go install golang.org/x/tools/gopls@latest` |
 | **Rust** | `rust-analyzer` | `rustup component add rust-analyzer` |
 | **TypeScript / JavaScript** | `typescript-language-server` | `npm install -g typescript-language-server typescript` |
-| **Python** | `pyright` or `ruff` | `npm install -g pyright` or `pip install ruff` |
+| **Python** | `pyright`, `pylsp` or `ruff` | `npm install -g pyright` or `pipx install python-lsp-server`. `ruff` (`pip install ruff`) is detected too, but gives no call trails |
 | **C / C++** | `clangd` | `sudo apt install clangd` or `brew install llvm` |
 | **Zig** | `zls` | `brew install zls` or download from [zigtools/zls](https://github.com/zigtools/zls) |
-| **Lua** | `lua-language-server` | `brew install lua-language-server` or `sudo apt install lua-language-server` |
+| **Lua** | `lua-language-server` | `brew install lua-language-server` (macOS) |
 | **Ruby** | `solargraph` | `gem install solargraph` |
+| **Java** | `jdtls` | `brew install jdtls` (macOS) |
+| **C#** | `omnisharp` | Install OmniSharp and put `omnisharp` on `PATH` |
+| **LaTeX** | `texlab` | `brew install texlab` (macOS) |
 
 Servers are spawned **lazily on first request** for that file type and shut down cleanly upon exit. You can also disable LSP detection entirely at any time using `px0 -no-lsp`.
 
-No server for the file you are reading? The status bar shows **LSP: set up**. Click it, open the Calls tab, or run `Set Up Language Server…` from the command palette to see the install options for your OS. px0 runs user-level installers (`go`, `rustup`, `npm`, `pipx`, `gem`, `brew`) for you on request, finds the result even when its install folder is not on `PATH`, and starts the server without a restart. Installers that need an administrator (`sudo apt`, `winget`) are shown for you to copy and run. Installing only works from px0's own page opened by IP address or `localhost`.
+No server for the file you are reading? The status bar shows **LSP: set up**. Click it, open the Calls tab, or run `Set Up Language Server…` from the command palette to see the install options for your OS. px0 runs user-level installers (`go`, `rustup`, `npm`, `pipx`, `gem`, `brew`) for you on request, finds the result in the usual install folders even when they are not on `PATH`, and starts the server without a restart. Installers that need an administrator (`sudo apt`, `winget`) are shown for you to copy and run. px0 has no installer for `zls`, `lua-language-server`, `jdtls` or `texlab` outside macOS, or for `omnisharp` and `ruff` anywhere: install those yourself, then click **Detect and start**. Installing only works from px0's own page opened by IP address or `localhost`.
 
 ---
 
@@ -285,7 +288,8 @@ make dist
 - `server.go`: HTTP routes, JSON API, gzip compression, and embedded asset serving.
 - `index.go`: Concurrently walks workspace, honors `.gitignore` (ignored files stay visible but dimmed in the explorer, and are never indexed or searched), builds in-memory path and trie structures in milliseconds.
 - `search.go` / `fuzzy.go`: High-performance substring and fuzzy file/symbol matching algorithms.
-- `lsp.go` / `lsp_client.go` / `lspservers.go`: Lightweight JSON-RPC client communicating with local language servers over stdio.
+- `lsp.go` / `lspnav.go` / `calls.go`: Lightweight JSON-RPC client communicating with local language servers over stdio, plus definitions, references and call trails.
+- `lspservers.go` / `lspsetup.go`: Language server registry, discovery, and install on request.
 - `web/`: Native zero-dependency ES module frontend (custom virtual scroll, syntax highlight rendering, tab manager).
 - `web/themes/`: One CSS file per colour theme, joined by the server into `/static/themes.css`. Token reference in [STYLING.md](STYLING.md).
 
