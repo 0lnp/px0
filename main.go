@@ -176,17 +176,29 @@ func openBrowser(url string) {
 	case "darwin":
 		cmds = []*exec.Cmd{exec.Command("open", url)}
 	case "windows":
-		cmds = []*exec.Cmd{exec.Command("rundll32", "url.dll,FileProtocolHandler", url)}
-	default:
-		// On Linux/Unix, try xdg-open, sensible-browser, gio, or common browsers
 		cmds = []*exec.Cmd{
+			exec.Command("rundll32", "url.dll,FileProtocolHandler", url),
+			exec.Command("cmd.exe", "/c", "start", url),
+		}
+	default:
+		// On Linux/Unix, detect WSL to open the browser on the Windows host seamlessly
+		if isWSL() {
+			cmds = append(cmds,
+				exec.Command("wslview", url),
+				exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Start-Process", fmt.Sprintf(`"%s"`, url)),
+				exec.Command("cmd.exe", "/c", "start", "", url),
+			)
+		}
+
+		// On Linux/Unix desktop, try xdg-open, sensible-browser, gio, or common browsers
+		cmds = append(cmds,
 			exec.Command("xdg-open", url),
 			exec.Command("sensible-browser", url),
 			exec.Command("gio", "open", url),
 			exec.Command("google-chrome", url),
 			exec.Command("firefox", url),
 			exec.Command("chromium", url),
-		}
+		)
 	}
 
 	for _, cmd := range cmds {
@@ -194,6 +206,17 @@ func openBrowser(url string) {
 			return
 		}
 	}
+}
+
+func isWSL() bool {
+	if os.Getenv("WSL_DISTRO_NAME") != "" || os.Getenv("WSL_INTEROP") != "" {
+		return true
+	}
+	data, err := os.ReadFile("/proc/version")
+	if err == nil && (strings.Contains(strings.ToLower(string(data)), "microsoft") || strings.Contains(strings.ToLower(string(data)), "wsl")) {
+		return true
+	}
+	return false
 }
 
 func fatal(err error) {
