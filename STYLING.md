@@ -110,7 +110,7 @@ Four steps from the editor outward. Each step should read as slightly raised aga
 | --------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--fg`    | Yes      | Primary text, directory names, active tab, current line number, plain identifiers in code.                                                           |
 | `--dim`   | Yes      | Secondary text: inactive tabs, file names in the tree, hover card docs, panel headings. Also the badge fill for file extensions and untyped symbols. |
-| `--faint` | Yes      | Tertiary text: line numbers, hints, counters, tree chevrons, close buttons at rest, LSP dot when off, scrollbar thumb on hover.                      |
+| `--faint` | Yes      | Tertiary text: line numbers, hints, counters, tree chevrons, close buttons at rest, read-only badge in the sidebar header, LSP dot when off, scrollbar thumb on hover. |
 
 ### Borders and Accent
 

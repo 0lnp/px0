@@ -2189,6 +2189,8 @@
   }
 
   // web/src/tabs.js
+  var closedTabs = [];
+  var MAX_CLOSED = 20;
   async function openFile(path, opts = {}) {
     const { line, push = true, col } = opts;
     let idx = S2.tabs.findIndex((t) => t.path === path);
@@ -2268,6 +2270,10 @@
     const [closed] = S2.tabs.splice(i, 1);
     if (closed) {
       if (closed.path) {
+        const scrollTop = i === S2.active ? vp.scrollTop : closed.scrollTop;
+        closedTabs.push({ path: closed.path, cur: closed.cur, scrollTop });
+        if (closedTabs.length > MAX_CLOSED)
+          closedTabs.shift();
         api("/api/close", { path: closed.path }).then(() => refreshMetrics()).catch(() => {});
       }
       closed.lines = null;
@@ -2294,6 +2300,20 @@
     vp.scrollTop = d.scrollTop;
     render();
     updateStatus();
+  }
+  async function reopenClosedTab() {
+    while (closedTabs.length) {
+      const t = closedTabs.pop();
+      if (S2.tabs.some((d) => d.path === t.path))
+        continue;
+      await openFile(t.path, { line: t.cur });
+      if (doc_()?.path !== t.path)
+        return;
+      vp.scrollTop = t.scrollTop;
+      render();
+      updateStatus();
+      return;
+    }
   }
   function drawTabs() {
     $("#tabs").innerHTML = S2.tabs.map((t, i) => '<div class="tab' + (i === S2.active ? " active" : "") + '" data-i="' + i + '" title="' + esc(t.path) + '">' + '<span class="tn">' + esc(t.name) + '</span><span class="x" data-close="' + i + '" title="' + withKeys("Close tab ({Alt+W})") + '"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 2l6 6M8 2l-6 6"/></svg></span></div>').join("");
@@ -2469,6 +2489,7 @@
     [["Alt+Left", "Alt+Right"], "Navigate back / forward"],
     [["Mod+B"], "Toggle sidebar"],
     [["Alt+W"], "Close tab"],
+    [["Alt+Shift+T"], "Reopen closed tab"],
     [["Ctrl+Tab"], "Next tab"],
     [["Alt+1…9"], "Select tab"],
     [["Double click"], "Highlight all occurrences"],
@@ -2611,6 +2632,11 @@
         e.stopPropagation();
         if (S2.active >= 0)
           closeTab(S2.active);
+        return;
+      }
+      if (e.altKey && e.shiftKey && !mod && e.code === "KeyT") {
+        e.preventDefault();
+        reopenClosedTab();
         return;
       }
       if (e.key === "F12") {
@@ -2805,6 +2831,7 @@
       while (S2.tabs.length)
         closeTab(0);
     } },
+    { name: withKeys("Reopen Closed Tab ({Alt+Shift+T})"), run: () => reopenClosedTab() },
     { name: "Keyboard Shortcuts", run: showHelp }
   ];
   var PAL_MODES = {

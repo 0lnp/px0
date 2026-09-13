@@ -12,6 +12,10 @@ import { clearLink } from './hover.js';
 import { clearFind } from './find.js';
 import { clearSelectAll } from './selbar.js';
 
+// Recently closed files, newest last, for Alt+Shift+T.
+const closedTabs = [];
+const MAX_CLOSED = 20;
+
 export async function openFile(path, opts = {}) {
   const { line, push = true, col } = opts;
   let idx = S.tabs.findIndex(t => t.path === path);
@@ -73,6 +77,10 @@ export function closeTab(i) {
   const [closed] = S.tabs.splice(i, 1);
   if (closed) {
     if (closed.path) {
+      // The active tab's scrollTop is only saved on switch, so read the live one.
+      const scrollTop = i === S.active ? vp.scrollTop : closed.scrollTop;
+      closedTabs.push({ path: closed.path, cur: closed.cur, scrollTop });
+      if (closedTabs.length > MAX_CLOSED) closedTabs.shift();
       api('/api/close', { path: closed.path })
         .then(() => refreshMetrics())
         .catch(() => {});
@@ -95,6 +103,19 @@ export function closeTab(i) {
   const d = doc_();
   drawTabs(); drawCrumbs(); layout();
   vp.scrollTop = d.scrollTop; render(); updateStatus();
+}
+
+// Reopens the most recently closed file that is not open already, where it was left.
+export async function reopenClosedTab() {
+  while (closedTabs.length) {
+    const t = closedTabs.pop();
+    if (S.tabs.some(d => d.path === t.path)) continue;
+    await openFile(t.path, { line: t.cur });
+    if (doc_()?.path !== t.path) return;
+    vp.scrollTop = t.scrollTop;
+    render(); updateStatus();
+    return;
+  }
 }
 
 export function drawTabs() {

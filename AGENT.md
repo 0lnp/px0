@@ -44,7 +44,7 @@ To quickly locate and modify UI features, refer to this structured section index
 | Section / Element ID | Description |
 | -------------------- | ----------- |
 | `<nav id="rail">` | Left activity rail (switch between Explorer, Search, Outline, Theme, Shortcuts) |
-| `<aside id="side">` | Collapsible sidebar containing panels: `#panel-files` (tree), `#panel-search`, `#panel-outline`. Its `.side-foot` holds the px0 logo linking to px0.ai (`.side-logo`, light or dark variant per theme), the version (`#st-ver`), and in `.side-actions` links to the GitHub repository, a feature request and a bug report, then the theme button (`#btn-theme`) |
+| `<aside id="side">` | Collapsible sidebar containing panels: `#panel-files` (tree), `#panel-search`, `#panel-outline`. Its `.panel-head` shows the workspace name (`#root-name`), a `.ro-badge` marking px0 as read-only, and the re-index button (`#btn-reindex`). Its `.side-foot` holds the px0 logo linking to px0.ai (`.side-logo`, light or dark variant per theme), the version (`#st-ver`), and in `.side-actions` links to the GitHub repository, a feature request and a bug report, then the theme button (`#btn-theme`) |
 | `<div id="resizer">` | Draggable splitter between sidebar and main editor viewport |
 | `<div id="tabs">` & `#crumbs` | Open file tabs bar and current file path breadcrumb navigation |
 | `<div id="editor">` | Core editor container with `#viewport`, `#sizer`, and virtual rows container `#rows` |
@@ -69,7 +69,7 @@ The frontend is modularized into clean ES modules under `web/src/` and bundled i
 | `web/src/state.js` | Core state object `S`, `doc_()`, `api()`, `apiPost()`, `esc()`, `$`, `$$`, constants (`LH`, `CHUNK`, `OVERSCAN`, `MOD`, `isMac`). Per-OS shortcut labels: `keyLabel()`, `keyCaps()`, `withKeys()`, `applyKeyLabels()` (markup uses `data-keys`, `data-caps` and `{Mod+P}` in titles) |
 | `web/src/ui.js` | DOM references (`vp`, `sizer`, `rowsEl`, `editor`, `toastEl`), `showToast()`, `copyToClipboard()` |
 | `web/src/renderer.js` | `measure()`, `layout()`, `render()`, `paint()`, `toggleWordWrap()`, `toggleLineNumbers()`, on-demand chunk fetching |
-| `web/src/tabs.js` | `openFile()`, `closeTab()`, `switchTab()`, `drawTabs()`, `drawCrumbs()`, `showImage()` |
+| `web/src/tabs.js` | `openFile()`, `closeTab()`, `switchTab()`, `drawTabs()`, `drawCrumbs()`, `showImage()`. `reopenClosedTab()` (Alt+Shift+T) reopens from a stack of the last 20 closed files, restoring caret line and scroll |
 | `web/src/history.js` | `pushHistory()`, `go()`: jump history back/forward (Alt+Left, Alt+Right) |
 | `web/src/status.js` | `updateStatus()`, `initMetrics()`, `updateMetricsDisplay()`, `setStatusNote()`, `fmtBytes()`, `setLspState()`, `drawLspStatus()` |
 | `web/src/cursor.js` | `wordAtPoint()`, `moveCursor()`, click / double-click selection, occurrence highlight |

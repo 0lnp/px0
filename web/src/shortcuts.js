@@ -3,7 +3,7 @@ import { $, $$, esc, S, doc_, isMac, MOD, LH, keyCaps } from './state.js';
 import { vp, sizer } from './ui.js';
 import { layout, render, paint, toggleWordWrap, toggleLineNumbers } from './renderer.js';
 import { updateStatus } from './status.js';
-import { closeTab, switchTab } from './tabs.js';
+import { closeTab, switchTab, reopenClosedTab } from './tabs.js';
 import { go } from './history.js';
 import { clearLink, hovercard } from './hover.js';
 import { openFind, clearFind, findbar } from './find.js';
@@ -30,7 +30,7 @@ export const SHORTCUTS = [
   [['Alt+Shift+H'], 'Call trail (callers / callees)'],
   [['Mod+J'], 'Toggle right inspector (Symbols/Refs)'],
   [['Alt+Left', 'Alt+Right'], 'Navigate back / forward'], [['Mod+B'], 'Toggle sidebar'],
-  [['Alt+W'], 'Close tab'], [['Ctrl+Tab'], 'Next tab'],
+  [['Alt+W'], 'Close tab'], [['Alt+Shift+T'], 'Reopen closed tab'], [['Ctrl+Tab'], 'Next tab'],
   [['Alt+1…9'], 'Select tab'], [['Double click'], 'Highlight all occurrences'],
   [['Mod+A'], 'Select whole file'],
   [['Alt+C', 'Alt+A'], 'Copy selection ref / for agent'], [['Alt+U'], 'Find usages of selection'],
@@ -117,6 +117,7 @@ export function initShortcuts() {
       if (S.active >= 0) closeTab(S.active);
       return;
     }
+    if (e.altKey && e.shiftKey && !mod && e.code === 'KeyT') { e.preventDefault(); reopenClosedTab(); return; }
     if (e.key === 'F12') {
       e.preventDefault();
       if (e.shiftKey) findReferences(); else gotoDefinition();
