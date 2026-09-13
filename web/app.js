@@ -59,6 +59,7 @@
     histIdx: -1,
     find: null,
     occ: null,
+    selAll: null,
     lastWord: "",
     at: null,
     link: null,
@@ -187,6 +188,7 @@
     const sel = saveSelection();
     rowsEl.style.transform = "translateY(" + first * LH + "px)";
     rowsEl.innerHTML = html;
+    rowsEl.classList.toggle("all", S2.selAll === d);
     decorate(first, last);
     if (sel)
       restoreSelection(sel);
@@ -2035,6 +2037,157 @@
     });
   }
 
+  // web/src/selbar.js
+  var status = $("#status");
+  var statsEl = $("#sel-stats");
+  var SEL_KEYS = { KeyC: "copy-ref", KeyA: "copy-agent", KeyU: "usages" };
+  var current = null;
+  var allText = null;
+  var allInfo = null;
+  function getSelectedRangeInfo() {
+    if (S2.selAll)
+      return allInfo;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount)
+      return null;
+    const d = doc_();
+    if (!d)
+      return null;
+    const range = sel.getRangeAt(0);
+    if (!vp.contains(range.commonAncestorContainer))
+      return null;
+    const text = sel.toString().trim();
+    if (!text)
+      return null;
+    let startEl = range.startContainer;
+    if (startEl.nodeType !== 1)
+      startEl = startEl.parentElement;
+    let endEl = range.endContainer;
+    if (endEl.nodeType !== 1)
+      endEl = endEl.parentElement;
+    const startRow = startEl ? startEl.closest(".row") : null;
+    const endRow = endEl ? endEl.closest(".row") : null;
+    let l1 = d.cur || 1, l2 = d.cur || 1;
+    if (startRow && startRow.dataset.l)
+      l1 = +startRow.dataset.l;
+    if (endRow && endRow.dataset.l)
+      l2 = +endRow.dataset.l;
+    if (l1 > l2) {
+      const tmp = l1;
+      l1 = l2;
+      l2 = tmp;
+    }
+    return { text, l1, l2, path: d.path };
+  }
+  var refOf = ({ path, l1, l2 }) => path + ":" + (l1 === l2 ? l1 : l1 + "-" + l2);
+  function showSelectionBar(info) {
+    current = info;
+    const ref = refOf(info);
+    const lines = info.l2 - info.l1 + 1;
+    statsEl.title = ref;
+    statsEl.textContent = (lines === 1 ? "1 line" : lines + " lines") + " · " + info.text.length.toLocaleString() + " chars";
+    status.classList.add("selecting");
+    fitStatus();
+  }
+  function hideSelectionBar() {
+    if (!current)
+      return;
+    current = null;
+    status.classList.remove("selecting");
+    fitStatus();
+  }
+  function updateSelectionBar() {
+    const info = getSelectedRangeInfo();
+    if (info)
+      showSelectionBar(info);
+    else
+      hideSelectionBar();
+  }
+  function selectAll() {
+    const d = doc_();
+    if (!d)
+      return;
+    window.getSelection()?.removeAllRanges();
+    S2.selAll = d;
+    allInfo = null;
+    render();
+    const text = allText = fetch("/api/raw?path=" + encodeURIComponent(d.path)).then((r) => {
+      if (!r.ok)
+        throw new Error(r.statusText);
+      return r.text();
+    });
+    text.then((t) => {
+      if (allText !== text)
+        return;
+      allInfo = { text: t, l1: 1, l2: d.total, path: d.path };
+      showSelectionBar(allInfo);
+    }, () => {
+      if (allText !== text)
+        return;
+      clearSelectAll();
+      showToast("!", "Could not read " + d.path);
+    });
+  }
+  function clearSelectAll() {
+    if (!S2.selAll)
+      return;
+    S2.selAll = null;
+    allText = null;
+    allInfo = null;
+    render();
+    hideSelectionBar();
+  }
+  function copySelectAll() {
+    const d = S2.selAll;
+    if (!d || !allText)
+      return false;
+    allText.then((t) => copyToClipboard(t, "Copied " + d.path + " (" + d.total.toLocaleString() + " lines)"), () => {});
+    return true;
+  }
+  function runSelectionAction(act) {
+    if (!current)
+      return false;
+    const { text, path } = current;
+    const ref = refOf(current);
+    if (act === "copy-ref") {
+      copyToClipboard(ref, "Copied " + ref);
+    } else if (act === "copy-agent") {
+      const ext = path.split(".").pop() || "";
+      copyToClipboard("### Reference: " + ref + "\n```" + ext + `
+` + text + "\n```", "Copied snippet for Agent (" + ref + ")");
+    } else if (act === "usages") {
+      findReferences(text.split(/\s+/)[0] || text);
+    } else {
+      return false;
+    }
+    return true;
+  }
+  function initSelectionBar() {
+    document.addEventListener("mouseup", () => setTimeout(updateSelectionBar, 20));
+    vp.addEventListener("keyup", (e) => {
+      if (e.shiftKey)
+        setTimeout(updateSelectionBar, 20);
+    });
+    document.addEventListener("selectionchange", () => {
+      if (current)
+        updateSelectionBar();
+    });
+    document.addEventListener("mousedown", (e) => {
+      if (!S2.selAll || e.target.closest?.("#footer-sel"))
+        return;
+      if (e.target === vp && (e.offsetX >= vp.clientWidth || e.offsetY >= vp.clientHeight))
+        return;
+      clearSelectAll();
+    }, true);
+    const bar = $("#footer-sel");
+    bar.addEventListener("mousedown", (e) => e.preventDefault());
+    bar.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-sel]");
+      if (btn)
+        runSelectionAction(btn.dataset.sel);
+    });
+  }
+
   // web/src/tabs.js
   async function openFile(path, opts = {}) {
     const { line, push = true, col } = opts;
@@ -2079,6 +2232,8 @@
     const prev = doc_();
     if (prev && prev !== S2.tabs[idx])
       prev.scrollTop = vp.scrollTop;
+    if (prev !== S2.tabs[idx])
+      clearSelectAll();
     S2.active = idx;
     const d = S2.tabs[idx];
     $("#empty").hidden = true;
@@ -2109,6 +2264,7 @@
     vp.scrollTop = Math.max(0, y);
   }
   function closeTab(i) {
+    clearSelectAll();
     const [closed] = S2.tabs.splice(i, 1);
     if (closed) {
       if (closed.path) {
@@ -2154,6 +2310,7 @@
       prev.scrollTop = vp.scrollTop;
     S2.active = i;
     clearFind();
+    clearSelectAll();
     S2.at = null;
     S2.lsp.state = S2.tabs[i].lsp && S2.tabs[i].lsp.state || "off";
     S2.lsp.server = S2.tabs[i].lsp && S2.tabs[i].lsp.server || "";
@@ -2215,107 +2372,6 @@
         }
       });
     }
-  }
-
-  // web/src/selbar.js
-  var status = $("#status");
-  var refEl = $("#sel-ref");
-  var statsEl = $("#sel-stats");
-  var SEL_KEYS = { KeyC: "copy-ref", KeyA: "copy-agent", KeyU: "usages" };
-  var current = null;
-  function getSelectedRangeInfo() {
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || !sel.rangeCount)
-      return null;
-    const d = doc_();
-    if (!d)
-      return null;
-    const range = sel.getRangeAt(0);
-    if (!vp.contains(range.commonAncestorContainer))
-      return null;
-    const text = sel.toString().trim();
-    if (!text)
-      return null;
-    let startEl = range.startContainer;
-    if (startEl.nodeType !== 1)
-      startEl = startEl.parentElement;
-    let endEl = range.endContainer;
-    if (endEl.nodeType !== 1)
-      endEl = endEl.parentElement;
-    const startRow = startEl ? startEl.closest(".row") : null;
-    const endRow = endEl ? endEl.closest(".row") : null;
-    let l1 = d.cur || 1, l2 = d.cur || 1;
-    if (startRow && startRow.dataset.l)
-      l1 = +startRow.dataset.l;
-    if (endRow && endRow.dataset.l)
-      l2 = +endRow.dataset.l;
-    if (l1 > l2) {
-      const tmp = l1;
-      l1 = l2;
-      l2 = tmp;
-    }
-    return { text, l1, l2, path: d.path };
-  }
-  var refOf = ({ path, l1, l2 }) => path + ":" + (l1 === l2 ? l1 : l1 + "-" + l2);
-  function showSelectionBar(info) {
-    current = info;
-    const ref = refOf(info);
-    const lines = info.l2 - info.l1 + 1;
-    refEl.textContent = ref;
-    refEl.title = ref;
-    statsEl.textContent = (lines === 1 ? "1 line" : lines + " lines") + " · " + info.text.length.toLocaleString() + " chars";
-    status.classList.add("selecting");
-    fitStatus();
-  }
-  function hideSelectionBar() {
-    if (!current)
-      return;
-    current = null;
-    status.classList.remove("selecting");
-    fitStatus();
-  }
-  function updateSelectionBar() {
-    const info = getSelectedRangeInfo();
-    if (info)
-      showSelectionBar(info);
-    else
-      hideSelectionBar();
-  }
-  function runSelectionAction(act) {
-    if (!current)
-      return false;
-    const { text, path } = current;
-    const ref = refOf(current);
-    if (act === "copy-ref") {
-      copyToClipboard(ref, "Copied " + ref);
-    } else if (act === "copy-agent") {
-      const ext = path.split(".").pop() || "";
-      copyToClipboard("### Reference: " + ref + "\n```" + ext + `
-` + text + "\n```", "Copied snippet for Agent (" + ref + ")");
-    } else if (act === "usages") {
-      findReferences(text.split(/\s+/)[0] || text);
-    } else {
-      return false;
-    }
-    return true;
-  }
-  function initSelectionBar() {
-    document.addEventListener("mouseup", () => setTimeout(updateSelectionBar, 20));
-    vp.addEventListener("keyup", (e) => {
-      if (e.shiftKey)
-        setTimeout(updateSelectionBar, 20);
-    });
-    document.addEventListener("selectionchange", () => {
-      if (current)
-        updateSelectionBar();
-    });
-    const bar = $("#footer-sel");
-    bar.addEventListener("mousedown", (e) => e.preventDefault());
-    bar.addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-sel]");
-      if (btn)
-        runSelectionAction(btn.dataset.sel);
-    });
   }
 
   // web/src/theme.js
@@ -2416,6 +2472,7 @@
     [["Ctrl+Tab"], "Next tab"],
     [["Alt+1…9"], "Select tab"],
     [["Double click"], "Highlight all occurrences"],
+    [["Mod+A"], "Select whole file"],
     [["Alt+C", "Alt+A"], "Copy selection ref / for agent"],
     [["Alt+U"], "Find usages of selection"],
     [["Mod+Home|Mod+Up", "Mod+End|Mod+Down"], "Top / bottom of file"],
@@ -2479,6 +2536,10 @@
         }
         if (!findbar.hidden) {
           clearFind();
+          return;
+        }
+        if (S2.selAll) {
+          clearSelectAll();
           return;
         }
         if (!document.body.classList.contains("right-hidden")) {
@@ -2602,6 +2663,16 @@
       }
       if (inField(document.activeElement))
         return;
+      const plainMod = mod && !e.shiftKey && !e.altKey;
+      if (plainMod && (e.key === "a" || e.key === "A")) {
+        e.preventDefault();
+        selectAll();
+        return;
+      }
+      if (plainMod && (e.key === "c" || e.key === "C") && copySelectAll()) {
+        e.preventDefault();
+        return;
+      }
       if (e.key === "?") {
         e.preventDefault();
         showHelp();

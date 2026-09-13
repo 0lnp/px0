@@ -44,7 +44,7 @@ To quickly locate and modify UI features, refer to this structured section index
 | Section / Element ID | Description |
 | -------------------- | ----------- |
 | `<nav id="rail">` | Left activity rail (switch between Explorer, Search, Outline, Theme, Shortcuts) |
-| `<aside id="side">` | Collapsible sidebar containing panels: `#panel-files` (tree), `#panel-search`, `#panel-outline`. Its `.side-foot` holds the version (`#st-ver`) and theme button (`#btn-theme`) |
+| `<aside id="side">` | Collapsible sidebar containing panels: `#panel-files` (tree), `#panel-search`, `#panel-outline`. Its `.side-foot` holds the px0 logo linking to px0.ai (`.side-logo`, light or dark variant per theme), the version (`#st-ver`), and in `.side-actions` links to the GitHub repository, a feature request and a bug report, then the theme button (`#btn-theme`) |
 | `<div id="resizer">` | Draggable splitter between sidebar and main editor viewport |
 | `<div id="tabs">` & `#crumbs` | Open file tabs bar and current file path breadcrumb navigation |
 | `<div id="editor">` | Core editor container with `#viewport`, `#sizer`, and virtual rows container `#rows` |
@@ -74,7 +74,7 @@ The frontend is modularized into clean ES modules under `web/src/` and bundled i
 | `web/src/status.js` | `updateStatus()`, `initMetrics()`, `updateMetricsDisplay()`, `setStatusNote()`, `fmtBytes()`, `setLspState()`, `drawLspStatus()` |
 | `web/src/cursor.js` | `wordAtPoint()`, `moveCursor()`, click / double-click selection, occurrence highlight |
 | `web/src/hover.js` | `onMove()`, `hoverAt()`, `showHover()`, `hideHover()`, token link modifier handling |
-| `web/src/selbar.js` | Status bar selection mode: `updateSelectionBar()`, `hideSelectionBar()`, `runSelectionAction()` (`Copy Ref`, `Copy for Agent`, `Find Usages`; Alt+C / Alt+A / Alt+U) |
+| `web/src/selbar.js` | Status bar selection mode: `updateSelectionBar()`, `hideSelectionBar()`, `runSelectionAction()` (`Copy Ref`, `Copy for Agent`, `Find Usages`; Alt+C / Alt+A / Alt+U). Whole-file selection: `selectAll()`, `clearSelectAll()`, `copySelectAll()` (Ctrl/Cmd+A, then Ctrl/Cmd+C) |
 | `web/src/lsp.js` | `gotoDefinition()`, `findReferences()`, `warmLSP()`, `lspCall()`, hit formatting |
 | `web/src/tree.js` | `drawTree()`, `fileKind()`, `revealDir()`, `revealFile()`, explorer tree click handlers |
 | `web/src/search.js` | `runSearch()`, `renderResults()`, `displayPath()`, workspace search panel |

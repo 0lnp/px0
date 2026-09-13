@@ -70,6 +70,7 @@ export function paint() {
   const sel = saveSelection();
   rowsEl.style.transform = 'translateY(' + (first * LH) + 'px)';
   rowsEl.innerHTML = html;
+  rowsEl.classList.toggle('all', S.selAll === d);
   decorate(first, last);
   if (sel) restoreSelection(sel);
   placeCaret();

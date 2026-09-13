@@ -13,7 +13,7 @@ import { showRightInspector, hideRightInspector } from './inspector.js';
 import { overlay, openPalette, closePalette } from './palette.js';
 import { moveCursor, moveCol, caretToEdge } from './cursor.js';
 import { showCalls } from './calls.js';
-import { SEL_KEYS, runSelectionAction } from './selbar.js';
+import { SEL_KEYS, runSelectionAction, selectAll, clearSelectAll, copySelectAll } from './selbar.js';
 
 import { cycleTheme } from './theme.js';
 
@@ -32,6 +32,7 @@ export const SHORTCUTS = [
   [['Alt+Left', 'Alt+Right'], 'Navigate back / forward'], [['Mod+B'], 'Toggle sidebar'],
   [['Alt+W'], 'Close tab'], [['Ctrl+Tab'], 'Next tab'],
   [['Alt+1…9'], 'Select tab'], [['Double click'], 'Highlight all occurrences'],
+  [['Mod+A'], 'Select whole file'],
   [['Alt+C', 'Alt+A'], 'Copy selection ref / for agent'], [['Alt+U'], 'Find usages of selection'],
   [['Mod+Home|Mod+Up', 'Mod+End|Mod+Down'], 'Top / bottom of file'],
   [['Home|Mod+Left', 'End|Mod+Right'], 'Start / end of line'],
@@ -81,6 +82,7 @@ export function initShortcuts() {
       if (!$('#helpsheet').hidden) { $('#helpsheet').hidden = true; return; }
       if (!hovercard.hidden) { clearLink(); return; }
       if (!findbar.hidden) { clearFind(); return; }
+      if (S.selAll) { clearSelectAll(); return; }
       if (!document.body.classList.contains('right-hidden')) { hideRightInspector(); return; }
       if (S.occ) { S.occ = null; paint(); return; }
       if (inField(document.activeElement)) document.activeElement.blur();
@@ -144,6 +146,11 @@ export function initShortcuts() {
     }
 
     if (inField(document.activeElement)) return;
+
+    // Select all takes the open file only, never the sidebar or status bar around it.
+    const plainMod = mod && !e.shiftKey && !e.altKey;
+    if (plainMod && (e.key === 'a' || e.key === 'A')) { e.preventDefault(); selectAll(); return; }
+    if (plainMod && (e.key === 'c' || e.key === 'C') && copySelectAll()) { e.preventDefault(); return; }
 
     if (e.key === '?') { e.preventDefault(); showHelp(); return; }
     const d = doc_();

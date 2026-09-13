@@ -8,7 +8,7 @@ px0 reads every colour in the UI through a CSS custom property, called a token. 
 - `web/themes/<id>.css` holds one theme: a single rule for `:root[data-theme="<id>"]`. The file name is the theme id.
 - The server joins every `web/themes/*.css` file in file name order and serves the result at `/static/themes.css`. `web/index.html` links it after `style.css`. No registry lists the themes.
 - `web/src/theme.js` discovers themes at boot. It scans the loaded stylesheets for rules whose whole selector is `[data-theme="<id>"]`, optionally prefixed by `:root` or `html`. It reads the display name from `--theme-name` and the light or dark hint from `color-scheme`.
-- The active theme is the `data-theme` attribute on `<html>`. The choice persists in `localStorage` under `px0.theme`. If the saved id no longer exists, px0 uses the default from `index.html` (`dark`), or the first discovered theme if that one is gone too.
+- The active theme is the `data-theme` attribute on `<html>`. The choice persists in `localStorage` under `px0.theme`. If the saved id no longer exists, px0 uses the default from `index.html` (`github-dark`), or the first discovered theme if that one is gone too.
 
 Theme rules use `:root[data-theme="<id>"]` rather than `[data-theme="<id>"]` on purpose. The extra `:root` raises specificity above the fallbacks in `style.css`, so a theme always wins regardless of stylesheet order.
 
@@ -19,7 +19,7 @@ Theme rules use `:root[data-theme="<id>"]` rather than `[data-theme="<id>"]` on 
 | Catppuccin Latte | `catppuccin-latte` | light  | Catppuccin palette           |
 | Catppuccin Mocha | `catppuccin-mocha` | dark   | Catppuccin palette           |
 | Dracula          | `dracula`          | dark   | Dracula palette              |
-| GitHub Dark      | `github-dark`      | dark   | GitHub dark default palette  |
+| GitHub Dark      | `github-dark`      | dark   | GitHub dark, the default     |
 | Gruvbox Dark     | `gruvbox-dark`     | dark   | Gruvbox palette              |
 | Gruvbox Light    | `gruvbox-light`    | light  | Gruvbox palette              |
 | Monokai          | `monokai`          | dark   | Classic Monokai palette      |
@@ -29,7 +29,7 @@ Theme rules use `:root[data-theme="<id>"]` rather than `[data-theme="<id>"]` on 
 | Rose Pine        | `rose-pine`        | dark   | Rose Pine palette            |
 | Solarized Dark   | `solarized-dark`   | dark   | Solarized palette            |
 | Solarized Light  | `solarized-light`  | light  | Solarized palette            |
-| Tokyo Night      | `dark`             | dark   | Tokyo Night, the default     |
+| Tokyo Night      | `dark`             | dark   | Tokyo Night                  |
 
 Each theme maps its source palette onto px0's tokens. UI surfaces and some syntax roles are adapted to fit px0, so colours follow the original palette without matching any single editor port exactly. Catppuccin Latte darkens its yellow, peach, sky, green, pink and lavender tones, which fall below 3:1 contrast on its light base otherwise. Solarized, Nord and One Dark keep their canonical values even where a few tones sit slightly below that line.
 
@@ -124,7 +124,7 @@ Four steps from the editor outward. Each step should read as slightly raised aga
 
 | Token           | Required | Controls                                                                                              |
 | --------------- | -------- | ----------------------------------------------------------------------------------------------------- |
-| `--sel`         | Yes      | Selected tree row, search result line, outline symbol, palette row, native text selection.            |
+| `--sel`         | Yes      | Selected tree row, search result line, outline symbol, palette row, native text selection, whole-file selection (Ctrl+A).            |
 | `--mark`        | Yes      | Background of search and find matches.                                                                |
 | `--mark-active` | Yes      | Current find match, minimap match ticks, pulsing LSP dot while starting or indexing, search warnings. |
 | `--cur`         | Yes      | Current line background, including its gutter cell.                                                   |

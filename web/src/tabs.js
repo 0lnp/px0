@@ -10,6 +10,7 @@ import { showPanel } from './panels.js';
 import { revealDir } from './tree.js';
 import { clearLink } from './hover.js';
 import { clearFind } from './find.js';
+import { clearSelectAll } from './selbar.js';
 
 export async function openFile(path, opts = {}) {
   const { line, push = true, col } = opts;
@@ -41,6 +42,7 @@ export async function openFile(path, opts = {}) {
   }
   const prev = doc_();
   if (prev && prev !== S.tabs[idx]) prev.scrollTop = vp.scrollTop;
+  if (prev !== S.tabs[idx]) clearSelectAll();
   S.active = idx;
   const d = S.tabs[idx];
 
@@ -67,6 +69,7 @@ export function centerLine(n) {
 }
 
 export function closeTab(i) {
+  clearSelectAll();
   const [closed] = S.tabs.splice(i, 1);
   if (closed) {
     if (closed.path) {
@@ -109,6 +112,7 @@ export function switchTab(i) {
   if (prev) prev.scrollTop = vp.scrollTop;
   S.active = i;
   clearFind();
+  clearSelectAll();
   S.at = null;
   S.lsp.state = (S.tabs[i].lsp && S.tabs[i].lsp.state) || 'off';
   S.lsp.server = (S.tabs[i].lsp && S.tabs[i].lsp.server) || '';

@@ -1,6 +1,7 @@
 // web/src/selbar.js
-import { $, doc_ } from './state.js';
-import { vp, copyToClipboard } from './ui.js';
+import { $, S, doc_ } from './state.js';
+import { vp, copyToClipboard, showToast } from './ui.js';
+import { render } from './renderer.js';
 import { findReferences } from './lsp.js';
 import { fitStatus } from './status.js';
 
@@ -9,15 +10,17 @@ import { fitStatus } from './status.js';
    is gone. Unlike a floating menu it never covers code, and its buttons stay put. */
 
 const status = $('#status');
-const refEl = $('#sel-ref');
 const statsEl = $('#sel-stats');
 
 // e.code, not e.key: Option+letter types a symbol on macOS.
 export const SEL_KEYS = { KeyC: 'copy-ref', KeyA: 'copy-agent', KeyU: 'usages' };
 
 let current = null;   // the selection the bar is showing, or null when it is not
+let allText = null;   // Ctrl+A: promise of the S.selAll file's full text
+let allInfo = null;   // the bar's view of that selection, once the text arrives
 
 export function getSelectedRangeInfo() {
+  if (S.selAll) return allInfo;
   const sel = window.getSelection();
   if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
   const d = doc_();
@@ -52,8 +55,7 @@ function showSelectionBar(info) {
   current = info;
   const ref = refOf(info);
   const lines = info.l2 - info.l1 + 1;
-  refEl.textContent = ref;
-  refEl.title = ref;
+  statsEl.title = ref;
   statsEl.textContent = (lines === 1 ? '1 line' : lines + ' lines') + ' · ' +
     info.text.length.toLocaleString() + ' chars';
   status.classList.add('selecting');
@@ -70,6 +72,45 @@ export function hideSelectionBar() {
 export function updateSelectionBar() {
   const info = getSelectedRangeInfo();
   if (info) showSelectionBar(info); else hideSelectionBar();
+}
+
+/* Ctrl+A selects the open file, not the page around it. Only the rows in view
+   exist in the DOM, so a native selection could never span the file: S.selAll
+   marks the doc, paint() shades its rows, and the text comes whole from /api/raw. */
+export function selectAll() {
+  const d = doc_();
+  if (!d) return;
+  window.getSelection()?.removeAllRanges();
+  S.selAll = d;
+  allInfo = null;
+  render();
+  const text = allText = fetch('/api/raw?path=' + encodeURIComponent(d.path))
+    .then(r => { if (!r.ok) throw new Error(r.statusText); return r.text(); });
+  text.then(t => {
+    if (allText !== text) return; // cleared or selected again meanwhile
+    allInfo = { text: t, l1: 1, l2: d.total, path: d.path };
+    showSelectionBar(allInfo);
+  }, () => {
+    if (allText !== text) return;
+    clearSelectAll();
+    showToast('!', 'Could not read ' + d.path);
+  });
+}
+
+export function clearSelectAll() {
+  if (!S.selAll) return;
+  S.selAll = null; allText = null; allInfo = null;
+  render();
+  hideSelectionBar();
+}
+
+/* Ctrl+C on a whole-file selection. Returns false when there is none, so the
+   browser copies a native selection as usual. */
+export function copySelectAll() {
+  const d = S.selAll;
+  if (!d || !allText) return false;
+  allText.then(t => copyToClipboard(t, 'Copied ' + d.path + ' (' + d.total.toLocaleString() + ' lines)'), () => {});
+  return true;
 }
 
 /* Runs one of the bar's actions on the current selection. Returns false when the
@@ -99,6 +140,12 @@ export function initSelectionBar() {
   document.addEventListener('mouseup', () => setTimeout(updateSelectionBar, 20));
   vp.addEventListener('keyup', e => { if (e.shiftKey) setTimeout(updateSelectionBar, 20); });
   document.addEventListener('selectionchange', () => { if (current) updateSelectionBar(); });
+  // Any click ends a whole-file selection, except on the bar's buttons or a viewport scrollbar.
+  document.addEventListener('mousedown', e => {
+    if (!S.selAll || e.target.closest?.('#footer-sel')) return;
+    if (e.target === vp && (e.offsetX >= vp.clientWidth || e.offsetY >= vp.clientHeight)) return;
+    clearSelectAll();
+  }, true);
 
   const bar = $('#footer-sel');
   // Pressing a button must not clear the selection it is about to act on.
