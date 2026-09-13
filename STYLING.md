@@ -101,7 +101,7 @@ Four steps from the editor outward. Each step should read as slightly raised aga
 | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--bg`  | Yes      | Editor, line-number gutter, active tab, empty screen, text inputs, hover card signature block, key hints in the status bar, scrollbar thumb border.                             |
 | `--bg2` | Yes      | File tree sidebar, tab bar, right inspector, status bar, hover card action row.                                                                                                 |
-| `--bg3` | Yes      | Floating surfaces (hover card, find bar, palette, shortcut sheet, selection menu, toast), row hover, key caps, count badges, active search toggles, image preview checkerboard. |
+| `--bg3` | Yes      | Floating surfaces (hover card, find bar, palette, shortcut sheet, toast), row hover, key caps, count badges, active search toggles, image preview checkerboard.                 |
 | `--bg4` | Yes      | Hover on small buttons (tab close, find bar, status bar), active status bar buttons, double-click occurrence highlight, version badge, scrollbar thumb.                         |
 
 ### Text
@@ -117,7 +117,7 @@ Four steps from the editor outward. Each step should read as slightly raised aga
 | Token         | Required | Controls                                                                                                                                                                                          |
 | ------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--line`      | Yes      | Every border and divider, occurrence outline, empty screen logo.                                                                                                                                  |
-| `--accent`    | Yes      | Active tab indicator, input focus border, resizer drag handle, Ctrl-hover link underline, palette mode chip, button hover fill, toast border, active search toggle border, key hint hover border. |
+| `--accent`    | Yes      | Active tab indicator, input focus border, resizer drag handle, Ctrl-hover link underline, palette mode chip, button hover fill, toast border, active search toggle border, key hint hover border, status bar top edge and chip in selection mode. |
 | `--accent-fg` | Yes      | Accent-coloured text: active inspector tab, matched characters in the palette, Markdown headings, version labels, status bar button hover, active search toggles, search result source labels.    |
 
 ### Selection and Highlights
@@ -136,14 +136,14 @@ Text in ordinary matches keeps its syntax colour on top of `--mark`, so make `--
 | Token         | Required | Fallback                         | Controls                                                                                                          |
 | ------------- | -------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `--shadow`    | Yes      | none                             | Large floating surfaces: hover card, find bar, palette, shortcut sheet, image preview. A full `box-shadow` value. |
-| `--shadow-sm` | No       | `0 6px 20px rgba(0, 0, 0, 0.28)` | Selection menu and toast. A full `box-shadow` value.                                                              |
+| `--shadow-sm` | No       | `0 6px 20px rgba(0, 0, 0, 0.28)` | Toast. A full `box-shadow` value.                                                                                 |
 | `--scrim`     | No       | `rgba(0, 0, 0, 0.45)`            | Backdrop behind the palette and the shortcut sheet.                                                               |
 
 ### Contrast Pairs
 
 | Token              | Required | Fallback    | Controls                                                                                                             |
 | ------------------ | -------- | ----------- | -------------------------------------------------------------------------------------------------------------------- |
-| `--on-accent`      | No       | `#fff`      | Text on an `--accent` fill: hover state of hover card and selection menu buttons.                                    |
+| `--on-accent`      | No       | `#fff`      | Text on an `--accent` fill: hover state of hover card buttons, status bar selection chip.                            |
 | `--on-badge`       | No       | `var(--bg)` | Text on coloured badges: symbol kind tags, file extension tags, palette mode chip.                                   |
 | `--on-mark-active` | No       | `var(--bg)` | Text of the current find match, drawn on the solid `--mark-active` fill. Light themes usually set it to `var(--fg)`. |
 

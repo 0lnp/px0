@@ -20,6 +20,12 @@
   <aside id="side">
     <header class="panel-head"><span id="root-name">-</span><button id="btn-reindex" class="mini" title="Re-index">&#8635;</button></header>
     <div class="panel-body" id="tree"></div>
+    <footer class="side-foot">
+      <span id="st-ver" class="status-ver" title="px0 Version"></span>
+      <button class="mini" id="btn-theme" title="Next theme (pick one: Command Palette > Select Theme)">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13a8 8 0 1 1-9-9 6.5 6.5 0 0 0 9 9z"/></svg>
+      </button>
+    </footer>
   </aside>
 
   <!-- Sidebar Resizer Divider -->
@@ -64,9 +70,6 @@
       <!-- Hovercard: Type signature, documentation, and quick AI/Usages actions -->
       <div id="hovercard" hidden></div>
 
-      <!-- Selection Menu: Floating menu on text selection for AI prompt copying & usage finding -->
-      <div id="refmenu" hidden></div>
-
       <!-- Find in File (Ctrl+F) Overlay Bar -->
       <div id="findbar" hidden>
         <input id="find-input" type="text" spellcheck="false" placeholder="Find" autocomplete="off">
@@ -82,6 +85,16 @@
 
     <!-- Bottom Status Bar -->
     <footer id="status">
+      <!-- Selection actions: replace the buttons and size below while code is selected -->
+      <div id="footer-sel">
+        <span class="sel-chip">Selection</span>
+        <span id="sel-ref"></span>
+        <span id="sel-stats"></span>
+        <span class="status-sep"></span>
+        <button class="footer-btn" data-sel="copy-ref" title="Copy file and line reference (Alt+C)"><span class="footer-btn-label">Copy Ref</span><kbd class="footer-kbd">Alt C</kbd></button>
+        <button class="footer-btn" data-sel="copy-agent" title="Copy snippet with file path for an AI agent (Alt+A)"><span class="footer-btn-label">Copy for Agent</span><kbd class="footer-kbd">Alt A</kbd></button>
+        <button class="footer-btn" data-sel="usages" title="Find usages across the workspace (Alt+U)"><span class="footer-btn-label">Find Usages</span><kbd class="footer-kbd">Alt U</kbd></button>
+      </div>
       <div id="footer-actions">
         <button class="footer-btn" data-action="quick-open" title="Go to File (Ctrl+P)"><span class="footer-btn-label">Files</span><kbd class="footer-kbd"><span class="mod-key">Ctrl</span>P</kbd></button>
         <button class="footer-btn" data-action="search" title="Search in Files (Ctrl+Shift+F)"><span class="footer-btn-label">Search</span><kbd class="footer-kbd"><span class="mod-key">Ctrl</span>⇧F</kbd></button>
@@ -99,16 +112,10 @@
       <span id="st-index" title="Indexing latency: time taken to index all workspace files"></span>
       <span class="status-sep"></span>
       <span id="st-metrics" class="status-metrics" title="Process metrics as seen by the OS">
-        <span id="st-cpu">CPU --%</span>
+        <span class="metric"><span class="metric-label">CPU</span> <span id="st-cpu">--%</span></span>
         <span class="metric-divider">·</span>
-        <span id="st-ram">RAM -- MB</span>
+        <span class="metric"><span class="metric-label">RAM</span> <span id="st-ram">-- MB</span></span>
       </span>
-      <span class="status-sep"></span>
-      <span id="st-ver" class="status-ver" title="px0 Version"></span>
-      <span class="status-sep"></span>
-      <button class="footer-btn footer-btn-icon" id="btn-theme" title="Next theme (pick one: Command Palette > Select Theme)">
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13a8 8 0 1 1-9-9 6.5 6.5 0 0 0 9 9z"/></svg>
-      </button>
     </footer>
   </main>
 

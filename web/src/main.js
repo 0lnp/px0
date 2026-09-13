@@ -4,7 +4,7 @@ import { measure, layout, render, initRenderer, updateEditorOptionControls } fro
 import { initTabs } from './tabs.js';
 import { initCursor } from './cursor.js';
 import { initHover } from './hover.js';
-import { initRefMenu } from './refmenu.js';
+import { initSelectionBar } from './selbar.js';
 import { drawTree, treeEl, initTree } from './tree.js';
 import { initSearch } from './search.js';
 import { initOutline } from './outline.js';
@@ -22,7 +22,7 @@ initRenderer();
 initTabs();
 initCursor();
 initHover();
-initRefMenu();
+initSelectionBar();
 initTree();
 initSearch();
 initOutline();

@@ -50,10 +50,9 @@ To quickly locate and modify UI features, refer to this structured section index
 | `<div id="editor">` | Core editor container with `#viewport`, `#sizer`, and virtual rows container `#rows` |
 | `<div id="empty">` | Welcome / splash screen shown when no files are open |
 | `<div id="hovercard">` | Floating LSP type signature, doc preview, and quick AI reference buttons |
-| `<div id="refmenu">` | Context action pill shown when text or lines are selected (Copy Ref, Copy for Claude, Usages) |
 | `<div id="findbar">` | In-file search overlay (Ctrl+F) |
 | `<div id="toast">` | Floating bottom notification toast confirming clipboard copy actions |
-| `<footer id="status">` | Bottom status bar: language, lines, size, cursor pos, LSP status, and index time |
+| `<footer id="status">` | Bottom status bar: language, lines, size, cursor pos, LSP status, and index time. While code is selected, `#footer-sel` (Copy Ref, Copy for Agent, Find Usages) replaces the left-side buttons |
 | `<div id="overlay">` | Modal overlay hosting Quick Open and Command Palette (`#palette`) |
 | `<div id="helpsheet">` | Keyboard shortcuts cheat-sheet modal overlay |
 
@@ -68,14 +67,14 @@ The frontend is modularized into clean ES modules under `web/src/` and bundled i
 | Module | Primary Responsibilities & Key Exports |
 | ------ | -------------------------------------- |
 | `web/src/state.js` | Core state object `S`, `doc_()`, `api()`, `esc()`, `$`, `$$`, constants (`LH`, `CHUNK`, `OVERSCAN`, `MOD`) |
-| `web/src/ui.js` | DOM references (`vp`, `sizer`, `rowsEl`, `editor`, `refmenu`, `toastEl`), `showToast()`, `copyToClipboard()` |
+| `web/src/ui.js` | DOM references (`vp`, `sizer`, `rowsEl`, `editor`, `toastEl`), `showToast()`, `copyToClipboard()` |
 | `web/src/renderer.js` | `measure()`, `layout()`, `render()`, `paint()`, `toggleWordWrap()`, `toggleLineNumbers()`, on-demand chunk fetching |
 | `web/src/tabs.js` | `openFile()`, `closeTab()`, `switchTab()`, `drawTabs()`, `drawCrumbs()`, `showImage()` |
 | `web/src/history.js` | `pushHistory()`, `go()`: jump history back/forward (Alt+Left, Alt+Right) |
 | `web/src/status.js` | `updateStatus()`, `initMetrics()`, `updateMetricsDisplay()`, `setStatusNote()`, `fmtBytes()`, `setLspState()`, `drawLspStatus()` |
 | `web/src/cursor.js` | `wordAtPoint()`, `moveCursor()`, click / double-click selection, occurrence highlight |
 | `web/src/hover.js` | `onMove()`, `hoverAt()`, `showHover()`, `hideHover()`, token link modifier handling |
-| `web/src/refmenu.js` | Context menu pill for selections (`Copy Ref`, `Copy for Claude`, `Find Usages`) |
+| `web/src/selbar.js` | Status bar selection mode: `updateSelectionBar()`, `hideSelectionBar()`, `runSelectionAction()` (`Copy Ref`, `Copy for Agent`, `Find Usages`; Alt+C / Alt+A / Alt+U) |
 | `web/src/lsp.js` | `gotoDefinition()`, `findReferences()`, `warmLSP()`, `lspCall()`, hit formatting |
 | `web/src/tree.js` | `drawTree()`, `fileKind()`, `revealDir()`, `revealFile()`, explorer tree click handlers |
 | `web/src/search.js` | `runSearch()`, `renderResults()`, `displayPath()`, workspace search panel |

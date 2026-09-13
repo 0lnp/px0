@@ -13,6 +13,7 @@ import { showRightInspector, hideRightInspector } from './inspector.js';
 import { overlay, openPalette, closePalette } from './palette.js';
 import { moveCursor, moveCol, caretToEdge } from './cursor.js';
 import { showCalls } from './calls.js';
+import { SEL_KEYS, runSelectionAction } from './selbar.js';
 
 import { cycleTheme } from './theme.js';
 
@@ -28,6 +29,7 @@ export const SHORTCUTS = [
   ['Alt ←  /  Alt →', 'Navigate back / forward'], ['Ctrl B', 'Toggle sidebar'],
   ['Ctrl W / Alt W', 'Close tab'], ['Ctrl Tab', 'Next tab'],
   ['Alt 1 … 9', 'Select tab'], ['Double click', 'Highlight all occurrences'],
+  ['Alt C / Alt A', 'Copy selection ref / for agent'], ['Alt U', 'Find usages of selection'],
   ['Ctrl Home / End', 'Top / bottom of file'], ['← → Home End', 'Move caret along the line'],
   ['Esc', 'Dismiss'],
 ];
@@ -121,6 +123,8 @@ export function initShortcuts() {
     }
     // e.code, not e.key: Option+Shift+H types a symbol on macOS.
     if (e.altKey && e.shiftKey && e.code === 'KeyH') { e.preventDefault(); showCalls(); return; }
+    // Selection actions, live only while the status bar is showing them.
+    if (e.altKey && !mod && !e.shiftKey && SEL_KEYS[e.code] && runSelectionAction(SEL_KEYS[e.code])) { e.preventDefault(); return; }
     if (e.altKey && (e.key === 'z' || e.key === 'Z')) {
       e.preventDefault();
       toggleWordWrap();

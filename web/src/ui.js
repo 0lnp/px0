@@ -5,7 +5,6 @@ export const vp = $('#viewport');
 export const sizer = $('#sizer');
 export const rowsEl = $('#rows');
 export const editor = $('#editor');
-export const refmenu = $('#refmenu');
 export const toastEl = $('#toast');
 
 let toastTimer = 0;

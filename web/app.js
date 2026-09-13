@@ -52,7 +52,6 @@
   var sizer = $("#sizer");
   var rowsEl = $("#rows");
   var editor = $("#editor");
-  var refmenu = $("#refmenu");
   var toastEl = $("#toast");
   var toastTimer = 0;
   function showToast(accentText, text) {
@@ -1374,110 +1373,6 @@
     });
   }
 
-  // web/src/refmenu.js
-  function hideRefMenu() {
-    if (refmenu && !refmenu.hidden) {
-      refmenu.hidden = true;
-      refmenu.innerHTML = "";
-    }
-  }
-  function getSelectedRangeInfo() {
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || !sel.rangeCount)
-      return null;
-    const d = doc_();
-    if (!d)
-      return null;
-    const range = sel.getRangeAt(0);
-    if (!vp.contains(range.commonAncestorContainer) && range.commonAncestorContainer !== vp) {
-      return null;
-    }
-    const text = sel.toString().trim();
-    if (!text)
-      return null;
-    let startEl = range.startContainer;
-    if (startEl.nodeType !== 1)
-      startEl = startEl.parentElement;
-    let endEl = range.endContainer;
-    if (endEl.nodeType !== 1)
-      endEl = endEl.parentElement;
-    const startRow = startEl ? startEl.closest(".row") : null;
-    const endRow = endEl ? endEl.closest(".row") : null;
-    let l1 = d.cur || 1, l2 = d.cur || 1;
-    if (startRow && startRow.dataset.l)
-      l1 = +startRow.dataset.l;
-    if (endRow && endRow.dataset.l)
-      l2 = +endRow.dataset.l;
-    if (l1 > l2) {
-      const tmp = l1;
-      l1 = l2;
-      l2 = tmp;
-    }
-    const rect = range.getBoundingClientRect();
-    return { text, l1, l2, rect, path: d.path };
-  }
-  function updateSelectionMenu() {
-    const info = getSelectedRangeInfo();
-    if (!info || !info.text) {
-      hideRefMenu();
-      return;
-    }
-    const { text, l1, l2, rect, path } = info;
-    const refPath = path + ":" + (l1 === l2 ? l1 : l1 + "-" + l2);
-    refmenu.innerHTML = '<button id="rm-copy-ref" title="Copy file and line number">Copy Ref</button>' + '<button id="rm-copy-claude" title="Copy formatted code snippet for AI Agent / LLM harness">Copy for Agent</button>' + '<button id="rm-find-refs" title="Find all occurrences across workspace">Find Usages</button>';
-    const btnRef = refmenu.querySelector("#rm-copy-ref");
-    const btnClaude = refmenu.querySelector("#rm-copy-claude");
-    const btnFind = refmenu.querySelector("#rm-find-refs");
-    if (btnRef)
-      btnRef.onclick = (e) => {
-        e.stopPropagation();
-        copyToClipboard(refPath, "Copied " + refPath);
-        hideRefMenu();
-      };
-    if (btnClaude)
-      btnClaude.onclick = (e) => {
-        e.stopPropagation();
-        const ext = path.split(".").pop() || "";
-        const formatted = "### Reference: " + refPath + "\n```" + ext + `
-` + text + "\n```";
-        copyToClipboard(formatted, "Copied snippet for Agent (" + refPath + ")");
-        hideRefMenu();
-      };
-    if (btnFind)
-      btnFind.onclick = (e) => {
-        e.stopPropagation();
-        hideRefMenu();
-        const q = text.split(/\s+/)[0] || text;
-        findReferences(q);
-      };
-    const edRect = editor.getBoundingClientRect();
-    refmenu.hidden = false;
-    const mRect = refmenu.getBoundingClientRect();
-    let left = rect.left - edRect.left + (rect.width - mRect.width) / 2;
-    left = Math.max(10, Math.min(edRect.width - mRect.width - 10, left));
-    let top = rect.top - edRect.top - mRect.height - 8;
-    if (top < 10) {
-      top = rect.bottom - edRect.top + 8;
-    }
-    refmenu.style.left = left + "px";
-    refmenu.style.top = top + "px";
-  }
-  function initRefMenu() {
-    document.addEventListener("selectionchange", () => {
-      const sel = window.getSelection();
-      if (!sel || sel.isCollapsed) {
-        hideRefMenu();
-      }
-    });
-    vp.addEventListener("mouseup", () => {
-      setTimeout(updateSelectionMenu, 20);
-    });
-    vp.addEventListener("keyup", (e) => {
-      if (e.shiftKey)
-        setTimeout(updateSelectionMenu, 20);
-    });
-  }
-
   // web/src/calls.js
   var T = null;
   var dirPref = "in";
@@ -1803,13 +1698,11 @@
     vp.addEventListener("scroll", () => {
       clearTimeout(hoverTimer);
       hideHover();
-      hideRefMenu();
     }, { passive: true });
     vp.addEventListener("mousedown", (e) => {
-      if (e.target.closest("#hovercard") || e.target.closest("#refmenu"))
+      if (e.target.closest("#hovercard"))
         return;
       hideHover();
-      hideRefMenu();
     });
     addEventListener("keydown", (e) => {
       if ((e.key === "Control" || e.key === "Meta") && pointerAt)
@@ -2119,6 +2012,105 @@
     }
   }
 
+  // web/src/selbar.js
+  var status = $("#status");
+  var refEl = $("#sel-ref");
+  var statsEl = $("#sel-stats");
+  var SEL_KEYS = { KeyC: "copy-ref", KeyA: "copy-agent", KeyU: "usages" };
+  var current = null;
+  function getSelectedRangeInfo() {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount)
+      return null;
+    const d = doc_();
+    if (!d)
+      return null;
+    const range = sel.getRangeAt(0);
+    if (!vp.contains(range.commonAncestorContainer))
+      return null;
+    const text = sel.toString().trim();
+    if (!text)
+      return null;
+    let startEl = range.startContainer;
+    if (startEl.nodeType !== 1)
+      startEl = startEl.parentElement;
+    let endEl = range.endContainer;
+    if (endEl.nodeType !== 1)
+      endEl = endEl.parentElement;
+    const startRow = startEl ? startEl.closest(".row") : null;
+    const endRow = endEl ? endEl.closest(".row") : null;
+    let l1 = d.cur || 1, l2 = d.cur || 1;
+    if (startRow && startRow.dataset.l)
+      l1 = +startRow.dataset.l;
+    if (endRow && endRow.dataset.l)
+      l2 = +endRow.dataset.l;
+    if (l1 > l2) {
+      const tmp = l1;
+      l1 = l2;
+      l2 = tmp;
+    }
+    return { text, l1, l2, path: d.path };
+  }
+  var refOf = ({ path, l1, l2 }) => path + ":" + (l1 === l2 ? l1 : l1 + "-" + l2);
+  function showSelectionBar(info) {
+    current = info;
+    const ref = refOf(info);
+    const lines = info.l2 - info.l1 + 1;
+    refEl.textContent = ref;
+    refEl.title = ref;
+    statsEl.textContent = (lines === 1 ? "1 line" : lines + " lines") + " · " + info.text.length.toLocaleString() + " chars";
+    status.classList.add("selecting");
+  }
+  function hideSelectionBar() {
+    if (!current)
+      return;
+    current = null;
+    status.classList.remove("selecting");
+  }
+  function updateSelectionBar() {
+    const info = getSelectedRangeInfo();
+    if (info)
+      showSelectionBar(info);
+    else
+      hideSelectionBar();
+  }
+  function runSelectionAction(act) {
+    if (!current)
+      return false;
+    const { text, path } = current;
+    const ref = refOf(current);
+    if (act === "copy-ref") {
+      copyToClipboard(ref, "Copied " + ref);
+    } else if (act === "copy-agent") {
+      const ext = path.split(".").pop() || "";
+      copyToClipboard("### Reference: " + ref + "\n```" + ext + `
+` + text + "\n```", "Copied snippet for Agent (" + ref + ")");
+    } else if (act === "usages") {
+      findReferences(text.split(/\s+/)[0] || text);
+    } else {
+      return false;
+    }
+    return true;
+  }
+  function initSelectionBar() {
+    document.addEventListener("mouseup", () => setTimeout(updateSelectionBar, 20));
+    vp.addEventListener("keyup", (e) => {
+      if (e.shiftKey)
+        setTimeout(updateSelectionBar, 20);
+    });
+    document.addEventListener("selectionchange", () => {
+      if (current)
+        updateSelectionBar();
+    });
+    const bar = $("#footer-sel");
+    bar.addEventListener("mousedown", (e) => e.preventDefault());
+    bar.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-sel]");
+      if (btn)
+        runSelectionAction(btn.dataset.sel);
+    });
+  }
+
   // web/src/theme.js
   var KEY = "px0.theme";
   var THEME_SELECTOR = /^(?::root|html)?\[data-theme=["']?([\w-]+)["']?\]$/;
@@ -2216,6 +2208,8 @@
     ["Ctrl Tab", "Next tab"],
     ["Alt 1 … 9", "Select tab"],
     ["Double click", "Highlight all occurrences"],
+    ["Alt C / Alt A", "Copy selection ref / for agent"],
+    ["Alt U", "Find usages of selection"],
     ["Ctrl Home / End", "Top / bottom of file"],
     ["← → Home End", "Move caret along the line"],
     ["Esc", "Dismiss"]
@@ -2376,6 +2370,10 @@
       if (e.altKey && e.shiftKey && e.code === "KeyH") {
         e.preventDefault();
         showCalls();
+        return;
+      }
+      if (e.altKey && !mod && !e.shiftKey && SEL_KEYS[e.code] && runSelectionAction(SEL_KEYS[e.code])) {
+        e.preventDefault();
         return;
       }
       if (e.altKey && (e.key === "z" || e.key === "Z")) {
@@ -2686,7 +2684,7 @@
   initTabs();
   initCursor();
   initHover();
-  initRefMenu();
+  initSelectionBar();
   initTree();
   initSearch();
   initOutline();

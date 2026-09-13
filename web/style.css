@@ -57,6 +57,12 @@ body.side-hidden #side, body.side-hidden #resizer { display: none; }
 .mini { margin-left: auto; color: var(--faint); font-size: 14px; line-height: 1; padding: 2px 4px; border-radius: 4px; }
 .mini:hover { color: var(--fg); background: var(--bg3); }
 .panel-body { flex: 1; overflow: auto; padding-bottom: 16px; }
+/* Version and theme, level with the status bar beside it. */
+.side-foot {
+  flex: none; height: 24px; display: flex; align-items: center; gap: 6px;
+  padding: 0 8px; border-top: 1px solid var(--line);
+}
+.side-foot .mini svg { display: block; }
 
 /* ---------- tree ---------- */
 .tw { display: block; }
@@ -220,7 +226,9 @@ body.right-hidden #right-side, body.right-hidden #right-resizer { display: none;
 
 /* ---------- the editor surface ---------- */
 #editor { flex: 1; position: relative; overflow: hidden; background: var(--bg); }
-#viewport { position: absolute; inset: 0; overflow: auto; contain: strict; }
+/* The whole surface takes the text cursor, not just the glyphs: past the end of a
+   line and below the last one still read as places the caret can go. */
+#viewport { position: absolute; inset: 0; overflow: auto; contain: strict; cursor: text; }
 #sizer { position: relative; }
 #rows { position: absolute; top: 0; left: 0; will-change: transform; }
 /* Read-only caret: an overlay positioned by measurement, never a node inside the code. */
@@ -305,16 +313,16 @@ body.hide-lines .c { padding-left: 16px; }
   display: flex; gap: 6px; padding: 6px 10px; background: var(--bg2);
   border-top: 1px solid var(--line); align-items: center;
 }
-#hovercard .actions button, #refmenu button {
+#hovercard .actions button {
   background: var(--bg); border: 1px solid var(--line); color: var(--fg);
   font: 11px/1 var(--ui); padding: 4px 8px; border-radius: 4px;
   cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
   white-space: nowrap; transition: background .12s, border-color .12s, color .12s;
 }
-#hovercard .actions button:hover, #refmenu button:hover {
+#hovercard .actions button:hover {
   background: var(--accent); color: var(--on-accent); border-color: var(--accent);
 }
-#hovercard .actions button .btn-icon, #refmenu button .btn-icon {
+#hovercard .actions button .btn-icon {
   font-size: 12px; opacity: 0.85;
 }
 #hovercard .foot {
@@ -322,19 +330,6 @@ body.hide-lines .c { padding-left: 16px; }
   border-top: 1px solid var(--line); display: flex; gap: 10px; align-items: center;
 }
 #hovercard .foot b { color: var(--dim); font-weight: 600; }
-
-/* ---------- selection action menu ---------- */
-#refmenu {
-  position: absolute; z-index: 35;
-  background: var(--bg3); border: 1px solid var(--line); border-radius: 6px;
-  box-shadow: var(--shadow-sm); padding: 4px; display: flex; gap: 4px;
-  align-items: center; animation: hcin .1s ease-out; user-select: none;
-}
-#refmenu .ref-label {
-  font: 10.5px/1 var(--mono); color: var(--dim); padding: 0 6px;
-  border-right: 1px solid var(--line); max-width: 220px; overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap;
-}
 
 /* ---------- toast notification ---------- */
 #toast {
@@ -396,8 +391,17 @@ kbd {
 #findbar button:hover { background: var(--bg4); color: var(--fg); }
 
 /* ---------- status ---------- */
-#status { height: 24px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 10px; background: var(--bg2); border-top: 1px solid var(--line); font: 11px var(--mono); color: var(--faint); user-select: none; }
-#status .grow { flex: 1; }
+#status { height: 24px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 10px; background: var(--bg2); border-top: 1px solid var(--line); font: 11px var(--mono); color: var(--faint); user-select: none; white-space: nowrap; overflow: hidden; }
+/* Nothing shrinks or wraps: an overflowing bar is what tells fitStatus() to shed detail. */
+#status > * { flex: none; }
+#status > .grow { flex: 1; }
+/* Shed in steps as the bar narrows; the classes accumulate, so each step keeps the ones before. */
+#status.fit-1 .footer-kbd,
+#status.fit-2 #st-index, #status.fit-2 #st-size, #status.fit-2 #sel-stats,
+#status.fit-3 .metric-label,
+#status.fit-4 [data-action="wrap"], #status.fit-4 [data-action="line-numbers"], #status.fit-4 [data-action="help"], #status.fit-4 .sel-chip,
+#status.fit-5 #st-metrics,
+#status.fit-6 #st-lsp { display: none; }
 #footer-actions { display: flex; align-items: center; gap: 3px; }
 .footer-btn {
   display: inline-flex; align-items: center; gap: 4px;
@@ -426,6 +430,24 @@ kbd {
   color: var(--fg); border-color: var(--accent);
 }
 .status-sep { width: 1px; height: 12px; background: var(--line); flex: none; }
+
+/* Selection mode: the left of the bar swaps to actions on the selected code.
+   The accent edge and chip make the swap noticeable at the bottom of the screen. */
+#footer-sel { display: none; align-items: center; gap: 8px; min-width: 0; }
+#status.selecting { border-top-color: var(--accent); }
+#status.selecting #footer-sel { display: flex; animation: sel-in .12s ease-out; }
+#status.selecting > #footer-actions,
+#status.selecting > #footer-actions + .status-sep,
+#status.selecting > #st-size { display: none; }
+@keyframes sel-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #status.selecting #footer-sel { animation: none; } }
+.sel-chip {
+  flex: none; font: 600 9.5px/1 var(--ui); letter-spacing: .06em; text-transform: uppercase;
+  color: var(--on-accent); background: var(--accent); padding: 3px 6px; border-radius: 3px;
+}
+#sel-ref { color: var(--fg); max-width: 48ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#sel-stats { flex: none; white-space: nowrap; }
+#footer-sel .footer-btn { flex: none; }
 #st-lsp { display: flex; align-items: center; gap: 5px; }
 #st-lsp::before {
   content: ""; width: 6px; height: 6px; border-radius: 50%;
@@ -435,7 +457,7 @@ kbd {
 #st-lsp[data-state="indexing"]::before,
 #st-lsp[data-state="starting"]::before { background: var(--mark-active); animation: pulse 1.1s ease-in-out infinite; }
 #st-lsp[data-state="failed"]::before { background: var(--gd); }
-#status span:empty { display: none; }
+#status span:empty:not(.grow) { display: none; }
 .status-metrics {
   display: inline-flex; align-items: center; gap: 6px;
   font: 11px var(--mono); color: var(--fg); opacity: 0.88;

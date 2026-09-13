@@ -5,7 +5,6 @@ import { paint } from './renderer.js';
 import { setLspState } from './status.js';
 import { wordAtPoint } from './cursor.js';
 import { findReferences } from './lsp.js';
-import { hideRefMenu } from './refmenu.js';
 import { showCalls } from './calls.js';
 
 export const hovercard = $('#hovercard');
@@ -160,11 +159,10 @@ export function initHover() {
   });
 
   vp.addEventListener('mouseleave', () => { pointerAt = null; clearLink(); });
-  vp.addEventListener('scroll', () => { clearTimeout(hoverTimer); hideHover(); hideRefMenu(); }, { passive: true });
+  vp.addEventListener('scroll', () => { clearTimeout(hoverTimer); hideHover(); }, { passive: true });
   vp.addEventListener('mousedown', (e) => {
-    if (e.target.closest('#hovercard') || e.target.closest('#refmenu')) return;
+    if (e.target.closest('#hovercard')) return;
     hideHover();
-    hideRefMenu();
   });
 
   /* The modifier can be pressed or released without the pointer moving, and the
