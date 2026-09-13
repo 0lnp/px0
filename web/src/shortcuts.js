@@ -173,12 +173,5 @@ export function initShortcuts() {
     if (e.key === 'PageUp') { e.preventDefault(); moveCursor(-(Math.floor(vp.clientHeight / LH) - 2)); return; }
   }, { capture: true });
 
-  // When files are open, prompt before accidentally closing the browser window/tab
-  // (e.g. if the browser intercepts Ctrl+W before JavaScript).
-  window.addEventListener('beforeunload', e => {
-    if (S.tabs.length > 0) {
-      e.preventDefault();
-      e.returnValue = '';
-    }
-  });
+
 }

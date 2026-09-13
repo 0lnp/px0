@@ -2780,12 +2780,6 @@
         return;
       }
     }, { capture: true });
-    window.addEventListener("beforeunload", (e) => {
-      if (S2.tabs.length > 0) {
-        e.preventDefault();
-        e.returnValue = "";
-      }
-    });
   }
 
   // web/src/palette.js
