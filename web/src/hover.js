@@ -6,6 +6,7 @@ import { setLspState } from './status.js';
 import { wordAtPoint } from './cursor.js';
 import { findReferences } from './lsp.js';
 import { hideRefMenu } from './refmenu.js';
+import { showCalls } from './calls.js';
 
 export const hovercard = $('#hovercard');
 export const HOVER_DELAY = 380;   // rest time before the card opens
@@ -76,9 +77,10 @@ export async function showHover(at, x, y) {
       '<button id="hc-copy-ref" title="Copy file and line reference">Copy Ref</button>' +
       '<button id="hc-copy-ai" title="Copy snippet with file path for AI Agent / LLMs">Copy for Agent</button>' +
       '<button id="hc-find-refs" title="Find all usages across codebase">Usages</button>' +
+      '<button id="hc-calls" title="Trace callers and callees (Alt+Shift+H)">Calls</button>' +
     '</div>' +
     '<div class="foot"><b>' + esc(j.server || 'lsp') + '</b>' +
-    '<span>' + (isMac ? '⌘' : 'Ctrl') + '+click usages</span>' +
+    '<span>' + (isMac ? '⌘' : 'Ctrl') + '+click definition</span>' +
     '<span>Shift+F12 references</span></div>';
 
   const btnRef = hovercard.querySelector('#hc-copy-ref');
@@ -100,6 +102,13 @@ export async function showHover(at, x, y) {
     e.stopPropagation();
     hideHover();
     findReferences(at.word);
+  };
+  const btnCalls = hovercard.querySelector('#hc-calls');
+  if (btnCalls) btnCalls.onclick = (e) => {
+    e.stopPropagation();
+    hideHover();
+    S.at = at;
+    showCalls(at);
   };
 
   hovercard.hidden = false;

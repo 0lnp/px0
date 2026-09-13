@@ -11,7 +11,8 @@ import { gotoDefinition, findReferences } from './lsp.js';
 import { showPanel } from './panels.js';
 import { showRightInspector, hideRightInspector } from './inspector.js';
 import { overlay, openPalette, closePalette } from './palette.js';
-import { moveCursor } from './cursor.js';
+import { moveCursor, moveCol, caretToEdge } from './cursor.js';
+import { showCalls } from './calls.js';
 
 import { cycleTheme } from './theme.js';
 
@@ -22,11 +23,13 @@ export const SHORTCUTS = [
   ['Ctrl G', 'Go to line'], ['Alt Z', 'Toggle word wrap'],
   ['Enter / Shift Enter', 'Next / previous match'],
   ['F12 or Ctrl Click', 'Go to definition'], ['Shift F12', 'Find all references'],
+  ['Alt Shift H', 'Call trail (callers / callees)'],
   ['Ctrl J', 'Toggle right inspector (Symbols/Refs)'],
   ['Alt ←  /  Alt →', 'Navigate back / forward'], ['Ctrl B', 'Toggle sidebar'],
   ['Ctrl W / Alt W', 'Close tab'], ['Ctrl Tab', 'Next tab'],
   ['Alt 1 … 9', 'Select tab'], ['Double click', 'Highlight all occurrences'],
-  ['Ctrl Home / End', 'Top / bottom of file'], ['Esc', 'Dismiss'],
+  ['Ctrl Home / End', 'Top / bottom of file'], ['← → Home End', 'Move caret along the line'],
+  ['Esc', 'Dismiss'],
 ];
 
 export function showHelp() {
@@ -116,6 +119,8 @@ export function initShortcuts() {
       if (S.tabs.length > 1) switchTab((S.active + (e.shiftKey ? -1 : 1) + S.tabs.length) % S.tabs.length);
       return;
     }
+    // e.code, not e.key: Option+Shift+H types a symbol on macOS.
+    if (e.altKey && e.shiftKey && e.code === 'KeyH') { e.preventDefault(); showCalls(); return; }
     if (e.altKey && (e.key === 'z' || e.key === 'Z')) {
       e.preventDefault();
       toggleWordWrap();
@@ -137,6 +142,9 @@ export function initShortcuts() {
     if (mod && e.key === 'End') { e.preventDefault(); vp.scrollTop = sizer.offsetHeight; d.cur = d.total; render(); updateStatus(); return; }
     if (e.key === 'ArrowDown' || e.key === 'j') { e.preventDefault(); moveCursor(1); return; }
     if (e.key === 'ArrowUp' || e.key === 'k') { e.preventDefault(); moveCursor(-1); return; }
+    if (!mod && !e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); moveCol(-1); return; }
+    if (!mod && !e.altKey && e.key === 'ArrowRight') { e.preventDefault(); moveCol(1); return; }
+    if (!mod && (e.key === 'Home' || e.key === 'End')) { e.preventDefault(); caretToEdge(e.key === 'End'); return; }
     if (e.key === 'PageDown') { e.preventDefault(); moveCursor(Math.floor(vp.clientHeight / LH) - 2); return; }
     if (e.key === 'PageUp') { e.preventDefault(); moveCursor(-(Math.floor(vp.clientHeight / LH) - 2)); return; }
   }, { capture: true });

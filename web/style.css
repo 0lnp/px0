@@ -83,6 +83,10 @@ body.side-hidden #side, body.side-hidden #resizer { display: none; }
 .tr.dir .nm { color: var(--fg); }
 .tr.file .nm { color: var(--dim); }
 .tr.file:hover .nm, .tr.sel .nm { color: var(--fg); }
+/* Ignored by .gitignore: listed but dimmed, and left out of search. */
+.tr.ignored .nm { color: var(--faint); }
+.tr.ignored .ic, .tr.ignored .ar { opacity: .45; }
+.tr.ignored:hover .nm, .tr.ignored.sel .nm { color: var(--dim); }
 .kids { display: none; }
 .kids.open { display: block; }
 
@@ -183,6 +187,13 @@ body.right-hidden #right-side, body.right-hidden #right-resizer { display: none;
   border-radius: 8px; padding: 1px 6px; flex: none;
 }
 
+/* call trail */
+.calls-dir { display: flex; gap: 2px; flex: none; }
+.cnode .car { width: 14px; flex: none; text-align: center; font-size: 9px; color: var(--faint); cursor: pointer; }
+.cnode .car:hover { color: var(--fg); }
+.cnode .car.cyc { cursor: default; font-size: 11px; }
+.cnone { padding-block: 1px; padding-right: 10px; font-size: 11px; font-style: italic; color: var(--faint); }
+
 /* ---------- main ---------- */
 #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
@@ -212,6 +223,14 @@ body.right-hidden #right-side, body.right-hidden #right-resizer { display: none;
 #viewport { position: absolute; inset: 0; overflow: auto; contain: strict; }
 #sizer { position: relative; }
 #rows { position: absolute; top: 0; left: 0; will-change: transform; }
+/* Read-only caret: an overlay positioned by measurement, never a node inside the code. */
+#caret {
+  position: absolute; top: 0; left: 0; z-index: 1; width: 2px; height: var(--lh);
+  background: var(--accent); pointer-events: none; will-change: transform;
+}
+#caret.blink { animation: caret-blink 1.06s steps(1) infinite; }
+@keyframes caret-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #caret.blink { animation: none; } }
 
 .row {
   display: flex; height: var(--lh);

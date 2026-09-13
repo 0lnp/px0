@@ -53,7 +53,7 @@ export function render() {
 
 export function paint() {
   const d = doc_();
-  if (!d) return;
+  if (!d) { const c = $('#caret'); if (c) c.hidden = true; return; }
   const top = vp.scrollTop;
   const first = Math.max(0, Math.floor(top / LH) - OVERSCAN);
   const count = Math.ceil(vp.clientHeight / LH) + OVERSCAN * 2;
@@ -67,9 +67,112 @@ export function paint() {
     html += '<div class="row' + (n === d.cur ? ' cur' : '') + '" data-l="' + n + '">' +
       '<div class="g">' + n + '</div><div class="c">' + (body === undefined ? '' : body) + '</div></div>';
   }
+  const sel = saveSelection();
   rowsEl.style.transform = 'translateY(' + (first * LH) + 'px)';
   rowsEl.innerHTML = html;
   decorate(first, last);
+  if (sel) restoreSelection(sel);
+  placeCaret();
+}
+
+let caretKey = '';
+
+/* Position the caret at d.cur / d.col (UTF-16 units into the line's text,
+   clamped to its length). It lives in #sizer rather than inside a row: rows are
+   rewritten on every paint, and their text nodes are what selection restore and
+   word lookup measure. Returns the caret's x within #sizer, or null if hidden. */
+export function placeCaret() {
+  const el = $('#caret');
+  if (!el) return null;
+  const d = doc_();
+  const row = d && rowFor(d.cur);
+  if (!row) { el.hidden = true; return null; }
+  const code = $('.c', row);
+  const col = Math.max(0, Math.min(d.col || 0, code.textContent.length));
+  const [node, off] = toPoint({ line: d.cur, col });
+  const base = sizer.getBoundingClientRect();
+  let x, y;
+  if (node.nodeType === 3) {
+    const r = document.createRange();
+    r.setStart(node, off);
+    r.collapse(true);
+    const rect = r.getClientRects()[0] || r.getBoundingClientRect();
+    x = rect.left;
+    // Wrapped rows are taller than one line; otherwise pin to the row's top.
+    y = S.wrap ? rect.top - (LH - rect.height) / 2 : row.getBoundingClientRect().top;
+  } else {
+    const cr = code.getBoundingClientRect();
+    x = cr.left + parseFloat(getComputedStyle(code).paddingLeft || '0');
+    y = cr.top;
+  }
+  // Scrolled horizontally under the sticky gutter: hide rather than draw over it.
+  const g = $('.g', row);
+  if (g && S.lineNumbers && x < g.getBoundingClientRect().right - 1) { el.hidden = true; return null; }
+  el.style.transform = 'translate(' + (x - base.left) + 'px,' + (y - base.top) + 'px)';
+  el.hidden = false;
+  const key = d.path + ':' + d.cur + ':' + col;
+  if (key !== caretKey) {
+    caretKey = key;
+    el.classList.remove('blink');
+    void el.offsetWidth; // restart the blink so a moving caret stays solid
+    el.classList.add('blink');
+  }
+  return x - base.left;
+}
+
+/* Rewriting the rows destroys any live DOM selection, and paint runs on far
+   more than scrolls: pressing Ctrl to underline a link, a double-click, a
+   background highlight refresh. Carry the selection across as line/column
+   positions so Ctrl+C still has something to copy. */
+function saveSelection() {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
+  if (!rowsEl.contains(sel.getRangeAt(0).commonAncestorContainer)) return null;
+  const a = toPos(sel.anchorNode, sel.anchorOffset);
+  const f = toPos(sel.focusNode, sel.focusOffset);
+  return a && f ? { a, f } : null;
+}
+
+function restoreSelection({ a, f }) {
+  const pa = toPoint(a), pf = toPoint(f);
+  if (pa && pf) window.getSelection().setBaseAndExtent(pa[0], pa[1], pf[0], pf[1]);
+}
+
+/* DOM boundary point -> { line, col } with col counted in the line's text. */
+function toPos(node, off) {
+  if (node === rowsEl) {
+    const row = rowsEl.children[off] || rowsEl.lastElementChild;
+    if (!row) return null;
+    const atEnd = !rowsEl.children[off];
+    return { line: +row.dataset.l, col: atEnd ? $('.c', row).textContent.length : 0 };
+  }
+  const el = node.nodeType === 1 ? node : node.parentElement;
+  const row = el && el.closest('.row');
+  if (!row || !rowsEl.contains(row)) return null;
+  const code = $('.c', row);
+  const r = document.createRange();
+  r.selectNodeContents(code);
+  const cmp = r.comparePoint(node, off);
+  if (cmp < 0) return { line: +row.dataset.l, col: 0 };
+  if (cmp > 0) return { line: +row.dataset.l, col: code.textContent.length };
+  r.setEnd(node, off);
+  return { line: +row.dataset.l, col: r.toString().length };
+}
+
+/* { line, col } -> DOM boundary point in the freshly painted rows, or null when
+   that line has scrolled out of the rendered window. */
+function toPoint({ line, col }) {
+  const row = rowFor(line);
+  if (!row) return null;
+  const code = $('.c', row);
+  const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+  let at = 0;
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const len = n.nodeValue.length;
+    if (col <= at + len) return [n, col - at];
+    at += len;
+  }
+  return [code, code.childNodes.length];
 }
 
 /* Decorations are applied to the ~60 live rows only, never to the whole file. */

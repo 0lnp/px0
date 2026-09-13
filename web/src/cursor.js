@@ -1,9 +1,10 @@
 // web/src/cursor.js
-import { S, doc_, MOD, LH } from './state.js';
+import { $, S, doc_, MOD, LH } from './state.js';
 import { vp, rowsEl } from './ui.js';
-import { paint, render } from './renderer.js';
+import { paint, render, rowFor, placeCaret } from './renderer.js';
 import { updateStatus } from './status.js';
-import { findReferences } from './lsp.js';
+import { gotoDefinition } from './lsp.js';
+import { pushHistory } from './history.js';
 
 export const WORD = /[A-Za-z0-9_$]/;
 
@@ -44,6 +45,65 @@ export function wordAtPoint(x, y) {
   return { word: full.slice(a, b), line: +row.dataset.l, col: a, path: d && d.path };
 }
 
+/* Column (UTF-16 units into the line's text) under a point. Clicking the gutter
+   gives 0; clicking the empty space right of the text gives the line's end. */
+export function colAtPoint(x, y) {
+  let node, off;
+  if (document.caretPositionFromPoint) {
+    const p = document.caretPositionFromPoint(x, y);
+    if (!p) return null;
+    node = p.offsetNode; off = p.offset;
+  } else if (document.caretRangeFromPoint) {
+    const r = document.caretRangeFromPoint(x, y);
+    if (!r) return null;
+    node = r.startContainer; off = r.startOffset;
+  } else return null;
+  const el = node && (node.nodeType === 1 ? node : node.parentElement);
+  const row = el && el.closest('.row');
+  if (!row) return null;
+  const code = $('.c', row);
+  const line = +row.dataset.l;
+  if (!code.contains(node)) return { line, col: el.closest('.g') ? 0 : code.textContent.length };
+  const r = document.createRange();
+  r.setStart(code, 0);
+  r.setEnd(node, off);
+  return { line, col: r.toString().length };
+}
+
+/* Keep the caret inside the horizontally scrolled area when it moves. */
+function revealCaretX(x) {
+  const d = doc_();
+  if (x == null || S.wrap || !d) return;
+  const g = rowFor(d.cur)?.querySelector('.g');
+  const gw = S.lineNumbers && g ? g.offsetWidth : 0;
+  if (x < vp.scrollLeft + gw + 8) vp.scrollLeft = Math.max(0, x - gw - 40);
+  else if (x > vp.scrollLeft + vp.clientWidth - 24) vp.scrollLeft = x - vp.clientWidth + 60;
+}
+
+/* Left/Right along the line, wrapping onto the neighbouring line at either end. */
+export function moveCol(delta) {
+  const d = doc_(); if (!d) return;
+  const row = rowFor(d.cur);
+  const len = row ? $('.c', row).textContent.length : 0;
+  const col = Math.min(d.col || 0, len) + delta;
+  if (col < 0) {
+    if (d.cur > 1) { d.col = Infinity; moveCursor(-1); } // clamped to the line end when placed
+    return;
+  }
+  if (col > len) {
+    if (d.cur < d.total) { d.col = 0; moveCursor(1); }
+    return;
+  }
+  d.col = col;
+  revealCaretX(placeCaret());
+}
+
+export function caretToEdge(end) {
+  const d = doc_(); if (!d) return;
+  d.col = end ? Infinity : 0;
+  revealCaretX(placeCaret());
+}
+
 export function moveCursor(delta) {
   const d = doc_(); if (!d) return;
   d.cur = Math.max(1, Math.min(d.total, d.cur + delta));
@@ -59,9 +119,21 @@ export function initCursor() {
     if (!row) return;
     const d = doc_(); if (!d) return;
     d.cur = +row.dataset.l;
+    const p = colAtPoint(e.clientX, e.clientY);
+    d.col = p && p.line === d.cur ? p.col : 0;
+    placeCaret(); // no repaint here: rewriting rows would break the drag that starts a selection
     updateStatus();
     const w = wordAtPoint(e.clientX, e.clientY);
-    if (e[MOD] && w) { e.preventDefault(); findReferences(w); return; }
+    // The clicked identifier is what F12, Shift+F12 and Alt+Shift+H act on.
+    S.at = w;
+    if (w) S.lastWord = w.word;
+    if (e[MOD] && w) {
+      e.preventDefault();
+      S.at = w; S.lastWord = w.word;
+      pushHistory(d.path, d.cur); // so Alt+Left returns to the call site
+      gotoDefinition(w);
+      return;
+    }
     for (const r of rowsEl.children) r.classList.toggle('cur', +r.dataset.l === d.cur);
   });
 

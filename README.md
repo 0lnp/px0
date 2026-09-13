@@ -187,10 +187,12 @@ px0 --update
 | `Cmd/Ctrl+Shift+P` | Command palette |
 | `Cmd/Ctrl+Shift+O` | Go to symbol in file |
 | `Cmd/Ctrl+Shift+F` | Full workspace search |
-| `Cmd/Ctrl+F` | Find in active file |
+| `Cmd/Ctrl+F` | Find in active file (seeded with the current editor selection) |
 | `Cmd/Ctrl+G` | Jump to line |
 | `F12`, `Cmd/Ctrl+Click` | Go to definition |
 | `Shift+F12` | Find all references |
+| `←` / `→`, `Home` / `End` | Move the (read-only) caret along the line; click places it |
+| `Alt+Shift+H` | Call trail: callers and callees of the function under the cursor, expandable level by level |
 | `Hover` | Type signature & doc hover |
 | `Cmd/Ctrl + Hover` | Inspect identifier link |
 | `Alt+Left` / `Alt+Right` | Navigate back / forward in history |
@@ -273,7 +275,7 @@ make dist
 - `main.go` / `ui.go`: CLI entrypoint, flag parsing, signal management, Ape terminal experience.
 - `update.go`: Self-updater and asynchronous daily version check.
 - `server.go`: HTTP routes, JSON API, gzip compression, and embedded asset serving.
-- `index.go`: Concurrently walks workspace, honors `.gitignore`, builds in-memory path and trie structures in milliseconds.
+- `index.go`: Concurrently walks workspace, honors `.gitignore` (ignored files stay visible but dimmed in the explorer, and are never indexed or searched), builds in-memory path and trie structures in milliseconds.
 - `search.go` / `fuzzy.go`: High-performance substring and fuzzy file/symbol matching algorithms.
 - `lsp.go` / `lsp_client.go` / `lspservers.go`: Lightweight JSON-RPC client communicating with local language servers over stdio.
 - `web/`: Native zero-dependency ES module frontend (custom virtual scroll, syntax highlight rendering, tab manager).

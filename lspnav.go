@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -58,17 +57,10 @@ func (m *lspManager) resolve(c *lspClient, locs []lspLocation, markDef bool) []N
 		if err != nil {
 			continue
 		}
-		rel, err := filepath.Rel(m.root, abs)
-		ext := false
-		if err != nil || strings.HasPrefix(rel, "..") {
-			// Outside the indexed tree: the standard library, or a dependency
-			// in the module cache. Still worth jumping to, so allow this exact
-			// file to be opened even though the tree guard would refuse it.
-			rel, ext = filepath.ToSlash(abs), true
-			m.allow(abs)
-		} else {
-			rel = filepath.ToSlash(rel)
-		}
+		// Outside the indexed tree is still worth jumping to, so treePath
+		// allows this exact file to be opened even though the tree guard
+		// would refuse it.
+		rel, ext := m.treePath(abs, true)
 		k := fileKey{abs, rel, ext}
 		if _, seen := byFile[k]; !seen {
 			order = append(order, k)

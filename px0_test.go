@@ -172,6 +172,61 @@ func TestIndexHonoursGitignore(t *testing.T) {
 	}
 }
 
+// Ignored entries stay visible in the tree, flagged, but out of search.
+func TestTreeListsIgnoredEntries(t *testing.T) {
+	_, root := newTestServer(t)
+	os.MkdirAll(filepath.Join(root, ".git"), 0o755)
+	os.WriteFile(filepath.Join(root, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644)
+	ix := NewIndex(root)
+	ix.Build()
+	s := NewServer(ix, nil)
+
+	entries := func(url string) (int, map[string]map[string]any) {
+		code, body := get(t, s, url)
+		out := map[string]map[string]any{}
+		kids, _ := body["children"].([]any)
+		for _, k := range kids {
+			m := k.(map[string]any)
+			out[m["name"].(string)] = m
+		}
+		return code, out
+	}
+
+	_, top := entries("/api/tree?dir=")
+	if e := top["secret"]; e == nil || e["ignored"] != true || e["dir"] != true {
+		t.Errorf("secret/ = %v, want a listed, ignored directory", e)
+	}
+	if e := top["main.go"]; e == nil || e["ignored"] != nil {
+		t.Errorf("main.go = %v, want listed and not ignored", e)
+	}
+	if _, ok := top[".git"]; ok {
+		t.Error(".git is listed; version control internals should stay hidden")
+	}
+
+	code, inside := entries("/api/tree?dir=secret")
+	if code != http.StatusOK || inside["keys.go"] == nil || inside["keys.go"]["ignored"] != true {
+		t.Errorf("secret listing = %d %v, want keys.go marked ignored", code, inside)
+	}
+	for _, bad := range []string{"secret/..", "secret/../..", "secret/../../etc", "secret//keys.go"} {
+		if code, _ := get(t, s, "/api/tree?dir="+bad); code == http.StatusOK {
+			t.Errorf("tree listing for %q returned 200", bad)
+		}
+	}
+
+	if _, body := get(t, s, "/api/search?q=Token"); body["files"] != float64(0) {
+		t.Errorf("workspace search reached an ignored file: %v", body)
+	}
+	if _, body := get(t, s, "/api/search?q=Token&glob=secret/keys.go"); body["files"] != float64(1) {
+		t.Errorf("find-in-file on an open ignored file found %v files, want 1", body["files"])
+	}
+	if _, body := get(t, s, "/api/search?q=Token&glob=secret/../secret/keys.go"); body["files"] != float64(0) {
+		t.Errorf("a glob with .. reached an unindexed file: %v", body)
+	}
+	if code, _ := get(t, s, "/api/file?path=secret/keys.go"); code != http.StatusOK {
+		t.Errorf("opening an ignored file returned %d", code)
+	}
+}
+
 func TestPathTraversalRefused(t *testing.T) {
 	s, _ := newTestServer(t)
 	for _, bad := range []string{

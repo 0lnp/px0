@@ -373,6 +373,7 @@ func (c *lspClient) initialize(ctx context.Context) error {
 				"typeDefinition":  map[string]any{"linkSupport": true},
 				"implementation":  map[string]any{"linkSupport": true},
 				"references":      map[string]any{"dynamicRegistration": false},
+				"callHierarchy":   map[string]any{"dynamicRegistration": false},
 				"documentSymbol": map[string]any{
 					"hierarchicalDocumentSymbolSupport": true,
 					"dynamicRegistration":               false,

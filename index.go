@@ -20,11 +20,16 @@ type FileEntry struct {
 }
 
 type Node struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-	Dir  bool   `json:"dir"`
-	Size int64  `json:"size"`
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	Dir     bool   `json:"dir"`
+	Size    int64  `json:"size"`
+	Ignored bool   `json:"ignored,omitempty"` // matched by .gitignore: listed, never indexed
 }
+
+// vcsDirs are version control internals. Unlike other ignored entries they are
+// not even listed: nobody reads them, and .git is present in nearly every repo.
+var vcsDirs = map[string]bool{".git": true, ".hg": true, ".svn": true}
 
 type Index struct {
 	root string
@@ -73,11 +78,76 @@ func (ix *Index) Files() []FileEntry {
 	return ix.files
 }
 
+// Children lists a directory for the tree. Ignored directories are never walked,
+// so their contents are read from disk on demand, all marked ignored: git cannot
+// re-include anything beneath an excluded directory either.
 func (ix *Index) Children(dir string) ([]Node, bool) {
 	ix.mu.RLock()
-	defer ix.mu.RUnlock()
 	c, ok := ix.children[dir]
-	return c, ok
+	under := !ok && ix.underIgnoredLocked(dir)
+	ix.mu.RUnlock()
+	if ok || !under {
+		return c, ok
+	}
+	return ix.listIgnored(dir)
+}
+
+// underIgnoredLocked reports whether dir sits inside a directory the walk
+// listed as ignored. The caller holds ix.mu.
+func (ix *Index) underIgnoredLocked(dir string) bool {
+	if dir == "" || strings.ContainsRune(dir, '\\') {
+		return false
+	}
+	for _, seg := range strings.Split(dir, "/") {
+		if seg == "" || seg == "." || seg == ".." {
+			return false // never let a crafted path climb out of the root
+		}
+	}
+	// The nearest ancestor the walk visited decides: its entry for the next
+	// segment down must be an ignored directory.
+	for p := dir; p != ""; {
+		parent := ""
+		if i := strings.LastIndexByte(p, '/'); i >= 0 {
+			parent = p[:i]
+		}
+		if kids, ok := ix.children[parent]; ok {
+			name := strings.TrimPrefix(p[len(parent):], "/")
+			for _, k := range kids {
+				if k.Name == name {
+					return k.Dir && k.Ignored
+				}
+			}
+			return false
+		}
+		p = parent
+	}
+	return false
+}
+
+func (ix *Index) listIgnored(dir string) ([]Node, bool) {
+	ents, err := os.ReadDir(filepath.Join(ix.root, filepath.FromSlash(dir)))
+	if err != nil {
+		return nil, false
+	}
+	kids := make([]Node, 0, len(ents))
+	for _, e := range ents {
+		if e.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		kids = append(kids, Node{Name: e.Name(), Path: dir + "/" + e.Name(), Dir: e.IsDir(), Ignored: true})
+	}
+	sortNodes(kids)
+	return kids, true
+}
+
+// sortNodes orders a listing directories first, then case-insensitively by name.
+func sortNodes(kids []Node) {
+	sort.Slice(kids, func(i, j int) bool {
+		if kids[i].Dir != kids[j].Dir {
+			return kids[i].Dir
+		}
+		return strings.ToLower(kids[i].Name) < strings.ToLower(kids[j].Name)
+	})
 }
 
 // Build walks the tree once, honouring .gitignore at every level, and
@@ -125,6 +195,11 @@ func (ix *Index) Build() {
 				continue
 			}
 			if ig.match(childRel, isDir) {
+				// Listed so the tree can show it dimmed, but never walked or
+				// indexed, so search and quick open stay out of it.
+				if !(isDir && vcsDirs[name]) {
+					kids = append(kids, Node{Name: name, Path: childRel, Dir: isDir, Ignored: true})
+				}
 				continue
 			}
 			if isDir {
@@ -144,12 +219,7 @@ func (ix *Index) Build() {
 			})
 			mu.Unlock()
 		}
-		sort.Slice(kids, func(i, j int) bool {
-			if kids[i].Dir != kids[j].Dir {
-				return kids[i].Dir
-			}
-			return strings.ToLower(kids[i].Name) < strings.ToLower(kids[j].Name)
-		})
+		sortNodes(kids)
 		mu.Lock()
 		children[rel] = kids
 		mu.Unlock()

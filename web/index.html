@@ -34,7 +34,7 @@
     <div id="editor">
       <!-- #viewport handles scrolling; #sizer sets full document scroll height; #rows renders only visible DOM rows -->
       <div id="viewport">
-        <div id="sizer"><div id="rows"></div></div>
+        <div id="sizer"><div id="rows"></div><div id="caret" hidden></div></div>
       </div>
       <div id="minimap-hits"></div>
 
@@ -121,6 +121,7 @@
       <div class="inspector-tabs">
         <button class="inspector-tab active" data-itab="refs" title="View references across workspace">References</button>
         <button class="inspector-tab" data-itab="symbols" title="View file symbols outline">Symbols</button>
+        <button class="inspector-tab" data-itab="calls" title="Trace callers and callees (Alt+Shift+H)">Calls</button>
       </div>
       <div class="inspector-head-actions">
         <button id="btn-close-right" class="mini" title="Close inspector (Esc)">&#10005;</button>
@@ -144,6 +145,20 @@
         <input id="right-symbols-filter" type="text" spellcheck="false" placeholder="Filter file symbols" autocomplete="off">
       </div>
       <div class="panel-body" id="right-symbols-list"></div>
+    </section>
+
+    <!-- Right Pane 3: Call trail (callers / callees) for a function -->
+    <section class="inspector-pane" id="pane-right-calls">
+      <div class="inspector-bar">
+        <span class="inspector-sym-title" id="right-calls-target">-</span>
+        <span class="calls-dir" id="calls-dir">
+          <button class="opt on" data-dir="in" title="Functions that call this one, up toward entry points">Callers</button>
+          <button class="opt" data-dir="out" title="Functions this one calls, down toward leaves">Callees</button>
+        </span>
+      </div>
+      <div class="panel-body" id="right-calls-list">
+        <div class="hint">Click a function name, then press <b>Alt+Shift+H</b> to trace its calls.</div>
+      </div>
     </section>
   </aside>
 </div>

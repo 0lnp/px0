@@ -10,12 +10,15 @@ export async function drawTree(dir, container, depth) {
   try { j = await api('/api/tree', { dir }); } catch { return; }
   container.innerHTML = j.children.map(c => {
     const pad = 8 + depth * 12;
+    // Ignored by .gitignore: still browsable, dimmed, and absent from search.
+    const ig = c.ignored ? ' ignored' : '';
+    const note = c.ignored ? ' (ignored by .gitignore, not searched)' : '';
     if (c.dir) {
-      return '<div class="tw"><div class="tr dir" data-dir="' + esc(c.path) + '" style="padding-left:' + pad + 'px" title="Folder: ' + esc(c.path) + '">' +
+      return '<div class="tw"><div class="tr dir' + ig + '" data-dir="' + esc(c.path) + '" style="padding-left:' + pad + 'px" title="Folder: ' + esc(c.path) + note + '">' +
         '<span class="ar"></span><span class="nm">' + esc(c.name) + '</span></div>' +
         '<div class="kids" data-kids="' + esc(c.path) + '"></div></div>';
     }
-    return '<div class="tr file" data-file="' + esc(c.path) + '" style="padding-left:' + (pad + 12) + 'px" title="Open ' + esc(c.path) + '">' +
+    return '<div class="tr file' + ig + '" data-file="' + esc(c.path) + '" style="padding-left:' + (pad + 12) + 'px" title="Open ' + esc(c.path) + note + '">' +
       '<span class="ic" data-t="' + fileKind(c.name) + '"></span><span class="nm">' + esc(c.name) + '</span></div>';
   }).join('');
 }

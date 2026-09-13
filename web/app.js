@@ -143,8 +143,12 @@
   }
   function paint() {
     const d = doc_();
-    if (!d)
+    if (!d) {
+      const c = $("#caret");
+      if (c)
+        c.hidden = true;
       return;
+    }
     const top = vp.scrollTop;
     const first = Math.max(0, Math.floor(top / LH) - OVERSCAN);
     const count = Math.ceil(vp.clientHeight / LH) + OVERSCAN * 2;
@@ -156,9 +160,110 @@
       const body = d.lines[i];
       html += '<div class="row' + (n === d.cur ? " cur" : "") + '" data-l="' + n + '">' + '<div class="g">' + n + '</div><div class="c">' + (body === undefined ? "" : body) + "</div></div>";
     }
+    const sel = saveSelection();
     rowsEl.style.transform = "translateY(" + first * LH + "px)";
     rowsEl.innerHTML = html;
     decorate(first, last);
+    if (sel)
+      restoreSelection(sel);
+    placeCaret();
+  }
+  var caretKey = "";
+  function placeCaret() {
+    const el = $("#caret");
+    if (!el)
+      return null;
+    const d = doc_();
+    const row = d && rowFor(d.cur);
+    if (!row) {
+      el.hidden = true;
+      return null;
+    }
+    const code = $(".c", row);
+    const col = Math.max(0, Math.min(d.col || 0, code.textContent.length));
+    const [node, off] = toPoint({ line: d.cur, col });
+    const base = sizer.getBoundingClientRect();
+    let x, y;
+    if (node.nodeType === 3) {
+      const r = document.createRange();
+      r.setStart(node, off);
+      r.collapse(true);
+      const rect = r.getClientRects()[0] || r.getBoundingClientRect();
+      x = rect.left;
+      y = S2.wrap ? rect.top - (LH - rect.height) / 2 : row.getBoundingClientRect().top;
+    } else {
+      const cr = code.getBoundingClientRect();
+      x = cr.left + parseFloat(getComputedStyle(code).paddingLeft || "0");
+      y = cr.top;
+    }
+    const g = $(".g", row);
+    if (g && S2.lineNumbers && x < g.getBoundingClientRect().right - 1) {
+      el.hidden = true;
+      return null;
+    }
+    el.style.transform = "translate(" + (x - base.left) + "px," + (y - base.top) + "px)";
+    el.hidden = false;
+    const key = d.path + ":" + d.cur + ":" + col;
+    if (key !== caretKey) {
+      caretKey = key;
+      el.classList.remove("blink");
+      el.offsetWidth;
+      el.classList.add("blink");
+    }
+    return x - base.left;
+  }
+  function saveSelection() {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount)
+      return null;
+    if (!rowsEl.contains(sel.getRangeAt(0).commonAncestorContainer))
+      return null;
+    const a = toPos(sel.anchorNode, sel.anchorOffset);
+    const f = toPos(sel.focusNode, sel.focusOffset);
+    return a && f ? { a, f } : null;
+  }
+  function restoreSelection({ a, f }) {
+    const pa = toPoint(a), pf = toPoint(f);
+    if (pa && pf)
+      window.getSelection().setBaseAndExtent(pa[0], pa[1], pf[0], pf[1]);
+  }
+  function toPos(node, off) {
+    if (node === rowsEl) {
+      const row2 = rowsEl.children[off] || rowsEl.lastElementChild;
+      if (!row2)
+        return null;
+      const atEnd = !rowsEl.children[off];
+      return { line: +row2.dataset.l, col: atEnd ? $(".c", row2).textContent.length : 0 };
+    }
+    const el = node.nodeType === 1 ? node : node.parentElement;
+    const row = el && el.closest(".row");
+    if (!row || !rowsEl.contains(row))
+      return null;
+    const code = $(".c", row);
+    const r = document.createRange();
+    r.selectNodeContents(code);
+    const cmp = r.comparePoint(node, off);
+    if (cmp < 0)
+      return { line: +row.dataset.l, col: 0 };
+    if (cmp > 0)
+      return { line: +row.dataset.l, col: code.textContent.length };
+    r.setEnd(node, off);
+    return { line: +row.dataset.l, col: r.toString().length };
+  }
+  function toPoint({ line, col }) {
+    const row = rowFor(line);
+    if (!row)
+      return null;
+    const code = $(".c", row);
+    const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+    let at = 0;
+    for (let n = walker.nextNode();n; n = walker.nextNode()) {
+      const len = n.nodeValue.length;
+      if (col <= at + len)
+        return [n, col - at];
+      at += len;
+    }
+    return [code, code.childNodes.length];
   }
   function decorate(first, last) {
     const d = doc_();
@@ -551,10 +656,12 @@
     }
     container.innerHTML = j.children.map((c) => {
       const pad = 8 + depth * 12;
+      const ig = c.ignored ? " ignored" : "";
+      const note = c.ignored ? " (ignored by .gitignore, not searched)" : "";
       if (c.dir) {
-        return '<div class="tw"><div class="tr dir" data-dir="' + esc(c.path) + '" style="padding-left:' + pad + 'px" title="Folder: ' + esc(c.path) + '">' + '<span class="ar"></span><span class="nm">' + esc(c.name) + "</span></div>" + '<div class="kids" data-kids="' + esc(c.path) + '"></div></div>';
+        return '<div class="tw"><div class="tr dir' + ig + '" data-dir="' + esc(c.path) + '" style="padding-left:' + pad + 'px" title="Folder: ' + esc(c.path) + note + '">' + '<span class="ar"></span><span class="nm">' + esc(c.name) + "</span></div>" + '<div class="kids" data-kids="' + esc(c.path) + '"></div></div>';
       }
-      return '<div class="tr file" data-file="' + esc(c.path) + '" style="padding-left:' + (pad + 12) + 'px" title="Open ' + esc(c.path) + '">' + '<span class="ic" data-t="' + fileKind(c.name) + '"></span><span class="nm">' + esc(c.name) + "</span></div>";
+      return '<div class="tr file' + ig + '" data-file="' + esc(c.path) + '" style="padding-left:' + (pad + 12) + 'px" title="Open ' + esc(c.path) + note + '">' + '<span class="ic" data-t="' + fileKind(c.name) + '"></span><span class="nm">' + esc(c.name) + "</span></div>";
     }).join("");
   }
   var FILE_KIND = {
@@ -822,6 +929,7 @@
     $$(".inspector-tab").forEach((b) => b.classList.toggle("active", b.dataset.itab === tab));
     $("#pane-right-refs")?.classList.toggle("active", tab === "refs");
     $("#pane-right-symbols")?.classList.toggle("active", tab === "symbols");
+    $("#pane-right-calls")?.classList.toggle("active", tab === "calls");
     if (tab === "symbols") {
       loadOutline();
       $("#right-symbols-filter")?.focus();
@@ -1143,6 +1251,77 @@
     const d = doc_();
     return { word: full.slice(a, b), line: +row.dataset.l, col: a, path: d && d.path };
   }
+  function colAtPoint(x, y) {
+    let node, off;
+    if (document.caretPositionFromPoint) {
+      const p = document.caretPositionFromPoint(x, y);
+      if (!p)
+        return null;
+      node = p.offsetNode;
+      off = p.offset;
+    } else if (document.caretRangeFromPoint) {
+      const r2 = document.caretRangeFromPoint(x, y);
+      if (!r2)
+        return null;
+      node = r2.startContainer;
+      off = r2.startOffset;
+    } else
+      return null;
+    const el = node && (node.nodeType === 1 ? node : node.parentElement);
+    const row = el && el.closest(".row");
+    if (!row)
+      return null;
+    const code = $(".c", row);
+    const line = +row.dataset.l;
+    if (!code.contains(node))
+      return { line, col: el.closest(".g") ? 0 : code.textContent.length };
+    const r = document.createRange();
+    r.setStart(code, 0);
+    r.setEnd(node, off);
+    return { line, col: r.toString().length };
+  }
+  function revealCaretX(x) {
+    const d = doc_();
+    if (x == null || S2.wrap || !d)
+      return;
+    const g = rowFor(d.cur)?.querySelector(".g");
+    const gw = S2.lineNumbers && g ? g.offsetWidth : 0;
+    if (x < vp.scrollLeft + gw + 8)
+      vp.scrollLeft = Math.max(0, x - gw - 40);
+    else if (x > vp.scrollLeft + vp.clientWidth - 24)
+      vp.scrollLeft = x - vp.clientWidth + 60;
+  }
+  function moveCol(delta) {
+    const d = doc_();
+    if (!d)
+      return;
+    const row = rowFor(d.cur);
+    const len = row ? $(".c", row).textContent.length : 0;
+    const col = Math.min(d.col || 0, len) + delta;
+    if (col < 0) {
+      if (d.cur > 1) {
+        d.col = Infinity;
+        moveCursor(-1);
+      }
+      return;
+    }
+    if (col > len) {
+      if (d.cur < d.total) {
+        d.col = 0;
+        moveCursor(1);
+      }
+      return;
+    }
+    d.col = col;
+    revealCaretX(placeCaret());
+  }
+  function caretToEdge(end) {
+    const d = doc_();
+    if (!d)
+      return;
+    d.col = end ? Infinity : 0;
+    revealCaretX(placeCaret());
+  }
   function moveCursor(delta) {
     const d = doc_();
     if (!d)
@@ -1165,11 +1344,20 @@
       if (!d)
         return;
       d.cur = +row.dataset.l;
+      const p = colAtPoint(e.clientX, e.clientY);
+      d.col = p && p.line === d.cur ? p.col : 0;
+      placeCaret();
       updateStatus();
       const w = wordAtPoint(e.clientX, e.clientY);
+      S2.at = w;
+      if (w)
+        S2.lastWord = w.word;
       if (e[MOD] && w) {
         e.preventDefault();
-        findReferences(w);
+        S2.at = w;
+        S2.lastWord = w.word;
+        pushHistory(d.path, d.cur);
+        gotoDefinition(w);
         return;
       }
       for (const r of rowsEl.children)
@@ -1290,6 +1478,175 @@
     });
   }
 
+  // web/src/calls.js
+  var T = null;
+  var dirPref = "in";
+  var seq = 0;
+  var flat = [];
+  var listEl = () => $("#right-calls-list");
+  var hint = (html) => {
+    const el = listEl();
+    if (el)
+      el.innerHTML = '<div class="hint">' + html + "</div>";
+  };
+  var base = (p) => p.split("/").pop();
+  var explain = (msg) => /connection lost|exited|EOF/i.test(msg) ? msg + " (the language server crashed answering this; px0 restarts it on the next request)" : msg;
+  function wrap(n, parent) {
+    let cycle = false;
+    for (let p = parent;p; p = p.parent) {
+      if (p.n.path === n.path && p.n.line === n.line && p.n.name === n.name) {
+        cycle = true;
+        break;
+      }
+    }
+    return { n, parent, kids: null, open: false, loading: false, err: "", cycle };
+  }
+  function target(node) {
+    const n = node.n;
+    if (T.dir === "in" && n.sites && n.sites.length)
+      return { path: n.sitePath, line: n.sites[0] };
+    return { path: n.path, line: n.line };
+  }
+  async function showCalls(arg) {
+    const d = doc_();
+    const at = arg && arg.word ? arg : positionNow(typeof arg === "string" ? arg : S2.lastWord);
+    showRightInspector("calls");
+    if (!d)
+      return;
+    if (!at || at.imprecise) {
+      hint("Click a function name in the editor, then press <b>Alt+Shift+H</b>.");
+      return;
+    }
+    if (S2.lsp.state === "off" || S2.lsp.state === "failed") {
+      hint("Call trails come from a language server, and none is running for this file type.");
+      return;
+    }
+    const my = ++seq;
+    T = null;
+    $("#right-calls-target").textContent = at.word;
+    hint('Tracing calls for "' + esc(at.word) + '"…');
+    setStatusNote("call trail for " + at.word + "…");
+    let j;
+    try {
+      j = await api("/api/lsp/calls", { path: d.path, line: at.line, col: at.col, wait: S2.lsp.state === "ready" ? 1e4 : 30000 });
+    } catch (e) {
+      if (my === seq) {
+        updateStatus();
+        hint('Could not trace "' + esc(at.word) + '": ' + esc(explain(e.message)));
+      }
+      return;
+    }
+    if (my !== seq)
+      return;
+    setLspState(j);
+    updateStatus();
+    if (!j.nodes || !j.nodes.length) {
+      hint('"' + esc(at.word) + '" is not a function ' + esc(j.server || "the language server") + " can trace.");
+      return;
+    }
+    T = { path: d.path, word: at.word, dir: dirPref, roots: j.nodes.map((n) => wrap(n, null)) };
+    for (const r of T.roots)
+      expand(r);
+  }
+  async function expand(node) {
+    if (node.cycle)
+      return;
+    node.open = true;
+    if (node.kids) {
+      draw();
+      return;
+    }
+    node.loading = true;
+    draw();
+    const t = T, dir = t.dir;
+    try {
+      const j = await api("/api/lsp/calls", { path: t.path, item: node.n.item, dir, wait: 30000 });
+      if (t !== T || dir !== T.dir)
+        return;
+      node.kids = (j.nodes || []).map((n) => wrap(n, node));
+    } catch (e) {
+      if (t !== T || dir !== T.dir)
+        return;
+      node.err = explain(e.message);
+      node.kids = [];
+    }
+    node.loading = false;
+    draw();
+  }
+  function setDir(dir) {
+    dirPref = dir;
+    $$("#calls-dir [data-dir]").forEach((b) => b.classList.toggle("on", b.dataset.dir === dir));
+    if (!T || T.dir === dir)
+      return;
+    T.dir = dir;
+    for (const r of T.roots)
+      Object.assign(r, { kids: null, open: false, loading: false, err: "" });
+    for (const r of T.roots)
+      expand(r);
+  }
+  function draw() {
+    const el = listEl();
+    if (!el || !T)
+      return;
+    flat.length = 0;
+    const none = T.dir === "in" ? "no callers found" : "calls nothing traceable";
+    let html = "";
+    const walk = (node, depth) => {
+      const i = flat.push(node) - 1;
+      const n = node.n, t = target(node);
+      const arrow = node.cycle ? "&#8635;" : node.loading ? "&#8230;" : node.open ? "&#9660;" : "&#9654;";
+      const calls = n.sites && n.sites.length > 1 ? " &times;" + n.sites.length : "";
+      const tip = t.path + ":" + t.line + (node.cycle ? `
+(recursive, already in this trail)` : "") + (n.detail ? `
+` + n.detail : "");
+      html += '<div class="sym cnode" data-i="' + i + '" style="padding-left:' + (6 + depth * 14) + 'px" title="' + esc(tip) + '">' + '<span class="car' + (node.cycle ? " cyc" : "") + '">' + arrow + "</span>" + '<span class="kd" data-k="' + esc(n.kind) + '">' + esc(n.kind) + "</span>" + '<span class="sn">' + esc(n.name) + "</span>" + '<span class="sl">' + esc(base(t.path)) + ":" + t.line + calls + "</span></div>";
+      const pad = 'style="padding-left:' + (26 + (depth + 1) * 14) + 'px"';
+      if (node.err)
+        html += '<div class="cnone" ' + pad + ">" + esc(node.err) + "</div>";
+      else if (node.open && node.kids && !node.kids.length)
+        html += '<div class="cnone" ' + pad + ">" + none + "</div>";
+      if (node.open && node.kids)
+        for (const k of node.kids)
+          walk(k, depth + 1);
+    };
+    for (const r of T.roots)
+      walk(r, 0);
+    el.innerHTML = html;
+  }
+  function initCalls() {
+    $("#calls-dir")?.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-dir]");
+      if (b)
+        setDir(b.dataset.dir);
+    });
+    $('.inspector-tab[data-itab="calls"]')?.addEventListener("click", () => {
+      if (!T && S2.at)
+        showCalls(S2.at);
+    });
+    listEl()?.addEventListener("click", async (e) => {
+      const row = e.target.closest(".cnode");
+      if (!row)
+        return;
+      const node = flat[+row.dataset.i];
+      if (!node)
+        return;
+      if (e.target.closest(".car")) {
+        if (node.open) {
+          node.open = false;
+          draw();
+        } else
+          expand(node);
+        return;
+      }
+      $$("#right-calls-list .cnode.sel").forEach((x) => x.classList.remove("sel"));
+      row.classList.add("sel");
+      const t = target(node);
+      await openFile(t.path, { line: t.line });
+      const called = T && T.dir === "in" && node.parent ? node.parent.n.name : node.n.name;
+      flashFind(called);
+    });
+  }
+
   // web/src/hover.js
   var hovercard = $("#hovercard");
   var HOVER_DELAY = 380;
@@ -1343,14 +1700,14 @@
     const d = doc_();
     if (!d || at.path !== d.path)
       return;
-    const seq = ++hoverSeq;
+    const seq2 = ++hoverSeq;
     let j;
     try {
       j = await api("/api/lsp/hover", { path: d.path, line: at.line, col: at.col, wait: 4000 });
     } catch {
       return;
     }
-    if (seq !== hoverSeq || doc_() !== d)
+    if (seq2 !== hoverSeq || doc_() !== d)
       return;
     setLspState(j);
     if (!j || j.empty || !j.signature && !j.doc)
@@ -1358,7 +1715,7 @@
     S2.hover = at;
     S2.hoverAnchor = { x, y };
     const refPath = d.path + ":" + at.line;
-    hovercard.innerHTML = (j.signature ? '<div class="sig">' + j.signature + "</div>" : "") + (j.doc ? '<div class="doc">' + esc(j.doc) + "</div>" : "") + '<div class="actions">' + '<button id="hc-copy-ref" title="Copy file and line reference">Copy Ref</button>' + '<button id="hc-copy-ai" title="Copy snippet with file path for AI Agent / LLMs">Copy for Agent</button>' + '<button id="hc-find-refs" title="Find all usages across codebase">Usages</button>' + "</div>" + '<div class="foot"><b>' + esc(j.server || "lsp") + "</b>" + "<span>" + (isMac ? "⌘" : "Ctrl") + "+click usages</span>" + "<span>Shift+F12 references</span></div>";
+    hovercard.innerHTML = (j.signature ? '<div class="sig">' + j.signature + "</div>" : "") + (j.doc ? '<div class="doc">' + esc(j.doc) + "</div>" : "") + '<div class="actions">' + '<button id="hc-copy-ref" title="Copy file and line reference">Copy Ref</button>' + '<button id="hc-copy-ai" title="Copy snippet with file path for AI Agent / LLMs">Copy for Agent</button>' + '<button id="hc-find-refs" title="Find all usages across codebase">Usages</button>' + '<button id="hc-calls" title="Trace callers and callees (Alt+Shift+H)">Calls</button>' + "</div>" + '<div class="foot"><b>' + esc(j.server || "lsp") + "</b>" + "<span>" + (isMac ? "⌘" : "Ctrl") + "+click definition</span>" + "<span>Shift+F12 references</span></div>";
     const btnRef = hovercard.querySelector("#hc-copy-ref");
     const btnAi = hovercard.querySelector("#hc-copy-ai");
     const btnRefs = hovercard.querySelector("#hc-find-refs");
@@ -1381,6 +1738,14 @@
         e.stopPropagation();
         hideHover();
         findReferences(at.word);
+      };
+    const btnCalls = hovercard.querySelector("#hc-calls");
+    if (btnCalls)
+      btnCalls.onclick = (e) => {
+        e.stopPropagation();
+        hideHover();
+        S2.at = at;
+        showCalls(at);
       };
     hovercard.hidden = false;
     placeHover(x, y);
@@ -1459,12 +1824,24 @@
   // web/src/find.js
   var findbar = $("#findbar");
   var findInput = $("#find-input");
+  function editorSelection() {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount)
+      return "";
+    if (!vp.contains(sel.getRangeAt(0).commonAncestorContainer))
+      return "";
+    const line = sel.toString().split(/\r?\n/).find((l) => l.trim());
+    return line ? line.trim() : "";
+  }
   function openFind(seed) {
     if (!doc_())
       return;
-    findbar.hidden = false;
-    if (seed)
+    const sel = editorSelection();
+    if (sel)
+      findInput.value = sel;
+    else if (findbar.hidden && seed)
       findInput.value = seed;
+    findbar.hidden = false;
     findInput.focus();
     findInput.select();
     if (findInput.value)
@@ -1831,6 +2208,7 @@
     ["Enter / Shift Enter", "Next / previous match"],
     ["F12 or Ctrl Click", "Go to definition"],
     ["Shift F12", "Find all references"],
+    ["Alt Shift H", "Call trail (callers / callees)"],
     ["Ctrl J", "Toggle right inspector (Symbols/Refs)"],
     ["Alt ←  /  Alt →", "Navigate back / forward"],
     ["Ctrl B", "Toggle sidebar"],
@@ -1839,6 +2217,7 @@
     ["Alt 1 … 9", "Select tab"],
     ["Double click", "Highlight all occurrences"],
     ["Ctrl Home / End", "Top / bottom of file"],
+    ["← → Home End", "Move caret along the line"],
     ["Esc", "Dismiss"]
   ];
   function showHelp() {
@@ -1994,6 +2373,11 @@
           switchTab((S2.active + (e.shiftKey ? -1 : 1) + S2.tabs.length) % S2.tabs.length);
         return;
       }
+      if (e.altKey && e.shiftKey && e.code === "KeyH") {
+        e.preventDefault();
+        showCalls();
+        return;
+      }
       if (e.altKey && (e.key === "z" || e.key === "Z")) {
         e.preventDefault();
         toggleWordWrap();
@@ -2040,6 +2424,21 @@
         moveCursor(-1);
         return;
       }
+      if (!mod && !e.altKey && e.key === "ArrowLeft") {
+        e.preventDefault();
+        moveCol(-1);
+        return;
+      }
+      if (!mod && !e.altKey && e.key === "ArrowRight") {
+        e.preventDefault();
+        moveCol(1);
+        return;
+      }
+      if (!mod && (e.key === "Home" || e.key === "End")) {
+        e.preventDefault();
+        caretToEdge(e.key === "End");
+        return;
+      }
       if (e.key === "PageDown") {
         e.preventDefault();
         moveCursor(Math.floor(vp.clientHeight / LH) - 2);
@@ -2072,6 +2471,7 @@
     { name: "Find in Current File", run: () => openFind(S2.lastWord) },
     { name: "Go to Definition", run: () => gotoDefinition() },
     { name: "Find All References (Right Panel)", run: () => findReferences() },
+    { name: "Show Call Trail: Callers / Callees (Alt+Shift+H)", run: () => showCalls() },
     { name: "Toggle Right Inspector (Symbols & References)", run: () => {
       if (document.body.classList.contains("right-hidden"))
         showRightInspector("refs");
@@ -2292,6 +2692,7 @@
   initOutline();
   initPanels();
   initInspector();
+  initCalls();
   initFind();
   initPalette();
   initShortcuts();

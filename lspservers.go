@@ -102,6 +102,9 @@ const (
 	lspFailed   lspState = "failed"
 )
 
+// maxLSPRestarts bounds how often one crashed language server is respawned.
+const maxLSPRestarts = 3
+
 type lspManager struct {
 	root    string
 	enabled bool
@@ -112,6 +115,7 @@ type lspManager struct {
 	starting  map[string]chan struct{}
 	failed    map[string]string
 	available []string
+	restarts  map[string]int // crashes recovered from, per server name
 
 	// external holds absolute paths outside the indexed tree that a language
 	// server pointed us at. Only these are openable beyond the root, so a
@@ -240,11 +244,27 @@ func (m *lspManager) client(ctx context.Context, rel string) (*lspClient, error)
 			return nil, errFailed{why}
 		}
 		if c, ok := m.clients[def.Name]; ok {
-			m.mu.Unlock()
-			if err := c.alive(); err != nil {
+			err := c.alive()
+			if err == nil {
+				m.mu.Unlock()
+				return c, nil
+			}
+			// A crashed server would otherwise take hover, definitions and
+			// references down with it for the rest of the session. Start a
+			// fresh one, but stop after a few crashes so a server that dies on
+			// every request is not respawned forever.
+			if m.restarts == nil {
+				m.restarts = map[string]int{}
+			}
+			if m.restarts[def.Name] >= maxLSPRestarts {
+				m.mu.Unlock()
 				return nil, err
 			}
-			return c, nil
+			m.restarts[def.Name]++
+			delete(m.clients, def.Name)
+			m.mu.Unlock()
+			go c.shutdown()
+			continue
 		}
 		if wait, ok := m.starting[def.Name]; ok {
 			m.mu.Unlock()

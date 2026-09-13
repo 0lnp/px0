@@ -8,10 +8,24 @@ import { updateStatus } from './status.js';
 export const findbar = $('#findbar');
 export const findInput = $('#find-input');
 
+/* Text currently selected inside the editor viewport, reduced to its first
+   non-empty line since find matches within a single line. */
+function editorSelection() {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || !sel.rangeCount) return '';
+  if (!vp.contains(sel.getRangeAt(0).commonAncestorContainer)) return '';
+  const line = sel.toString().split(/\r?\n/).find(l => l.trim());
+  return line ? line.trim() : '';
+}
+
+/* Seed priority: live editor selection, then the query already in an open
+   findbar, then the caller's fallback (the last double-clicked word). */
 export function openFind(seed) {
   if (!doc_()) return;
+  const sel = editorSelection();
+  if (sel) findInput.value = sel;
+  else if (findbar.hidden && seed) findInput.value = seed;
   findbar.hidden = false;
-  if (seed) findInput.value = seed;
   findInput.focus(); findInput.select();
   if (findInput.value) runFind();
 }

@@ -25,6 +25,7 @@ export function setRightInspectorTab(tab) {
   $$('.inspector-tab').forEach(b => b.classList.toggle('active', b.dataset.itab === tab));
   $('#pane-right-refs')?.classList.toggle('active', tab === 'refs');
   $('#pane-right-symbols')?.classList.toggle('active', tab === 'symbols');
+  $('#pane-right-calls')?.classList.toggle('active', tab === 'calls');
   if (tab === 'symbols') {
     loadOutline();
     $('#right-symbols-filter')?.focus();

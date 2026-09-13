@@ -66,6 +66,7 @@ func NewServer(ix *Index, lsp *lspManager) *Server {
 	s.mux.HandleFunc("/api/reindex", s.handleReindex)
 	s.mux.HandleFunc("/api/lsp/def", s.handleLSPDef)
 	s.mux.HandleFunc("/api/lsp/refs", s.handleLSPRefs)
+	s.mux.HandleFunc("/api/lsp/calls", s.handleLSPCalls)
 	s.mux.HandleFunc("/api/lsp/symbols", s.handleLSPSymbols)
 	s.mux.HandleFunc("/api/lsp/hover", s.handleLSPHover)
 	s.mux.HandleFunc("/api/lsp/warm", s.handleLSPWarm)
@@ -298,6 +299,37 @@ func (s *Server) handleLSPRefs(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	hits, err := s.lsp.References(ctx, abs, rel, line, col)
 	s.lspRespond(w, rel, hits, err)
+}
+
+// handleLSPCalls serves call trails. Without item it resolves the function at
+// path/line/col into trail roots; with item (a node's opaque item, echoed back)
+// it expands that node into callers, or callees when dir=out. path always names
+// the file the trail started in, which picks the language server.
+func (s *Server) handleLSPCalls(w http.ResponseWriter, r *http.Request) {
+	abs, rel, line, col, ok := s.lspPos(r)
+	if !ok {
+		fail(w, 400, "bad path")
+		return
+	}
+	ctx, cancel := lspCtx(r)
+	defer cancel()
+	q := r.URL.Query()
+	var nodes []CallNode
+	var err error
+	if item := q.Get("item"); item != "" {
+		nodes, err = s.lsp.Calls(ctx, rel, item, q.Get("dir") == "out")
+	} else {
+		nodes, err = s.lsp.PrepareCalls(ctx, abs, rel, line, col)
+	}
+	if nodes == nil {
+		nodes = []CallNode{}
+	}
+	state, server := s.lsp.State(rel)
+	resp := map[string]any{"nodes": nodes, "state": string(state), "server": server}
+	if err != nil {
+		resp["error"] = err.Error()
+	}
+	writeJSON(w, resp)
 }
 
 // handleLSPWarm starts the server for this file type if it is not running and
