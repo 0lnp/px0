@@ -1,18 +1,18 @@
-# px0: Read-Only IDE for the AI-Agent Era
+# px0: Super Fast Read-only IDE
 
-px0 is a lightning-fast, zero-bloat, browser-based read-only IDE built for the AI-agent era. Starting in < 1 ms and using ~16 MB of RAM, it turns your browser into an instant verification console with symbol-level navigation, deep search, and syntax highlighting across massive codebases.
+px0 is a super fast, browser-based read-only IDE designed for instant code navigation and review. Booting in under 1 ms and using ~16 MB of RAM, it turns your browser into a zero-latency inspection console with symbol-level navigation, deep search, and syntax highlighting across massive codebases.
 
 ### Why a Read-Only IDE?
 
-Software development has fundamentally changed. Today, coding agents, harnesses, and orchestrators generate code directly from our terminals and consoles. We no longer spend most of our time typing out boilerplate character-by-character inside heavy, sluggish IDEs that consume gigabytes of memory and take seconds to boot.
+More and more, code generation happens directly in the terminal—driven by coding agents, CLI tools, and background orchestrators. We spend less time hand-typing boilerplate inside heavy, sluggish editors that consume gigabytes of memory and take seconds to boot.
 
-Instead, developers are shifting into **review, audit, and navigation mode**:
+Instead, the developer's role is shifting toward review, navigation, and audit:
 
-- Terminals drive generation: Agents write the code, run tests, and manage workflows.
-- Developers drive verification: We need to quickly inspect diffs, verify symbol references, browse surrounding context, and review architecture.
-- Traditional IDEs are bloated and bulky: Spinning up bloated Electron apps or resource-intensive IDE suites just to inspect agent output is overkill.
+• Terminals drive generation: Tools generate the code, execute tests, and manage workflows.
+• Developers drive verification: We need to quickly inspect diffs, verify symbol references, trace definitions, and sanity-check architecture.
+• Desktop IDEs are overkill for review: Launching a massive Electron app or heavy IDE suite just to inspect generated code wastes time and system resources.
 
-In this AI-native workflow, an IDE should do one thing exceptionally well: provide an instantaneous, zero-latency, distraction-free environment to read, explore, and verify code. **px0** is built from the ground up for this paradigm—giving you full LSP intelligence, instant search, and sleek navigation with zero overhead.
+When you're reviewing code, you don't need a heavy editing environment—you need an instant, zero-latency window into your codebase. px0 is built for this: sub-millisecond startup, deep code intelligence, and instant search with virtually zero footprint.
 
 ---
 

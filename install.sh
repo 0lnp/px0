@@ -112,6 +112,46 @@ fi
 
 BINARY_EXT=""
 [ "$OS" = "windows" ] && BINARY_EXT=".exe"
+
+# 5. Determine installation target directory
+if [ -n "${INSTALL_DIR:-}" ]; then
+  TARGET_DIR="$INSTALL_DIR"
+elif [ -w "/usr/local/bin" ]; then
+  TARGET_DIR="/usr/local/bin"
+elif command -v sudo >/dev/null 2>&1 && [ -d "/usr/local/bin" ]; then
+  USE_SUDO=1
+  TARGET_DIR="/usr/local/bin"
+else
+  # Fallback to ~/.local/bin or ~/bin
+  TARGET_DIR="${HOME}/.local/bin"
+  mkdir -p "$TARGET_DIR"
+fi
+
+TARGET_BIN="${TARGET_DIR}/px0${BINARY_EXT}"
+
+# 6. Check existing installation and version
+ACTION="Installed"
+if [ -f "$TARGET_BIN" ] || [ -L "$TARGET_BIN" ]; then
+  CURRENT_VER=""
+  if [ -x "$TARGET_BIN" ]; then
+    CURRENT_VER=$("$TARGET_BIN" -version 2>&1 | grep -oE "[0-9]+\.[0-9]+(\.[0-9]+)?" | head -n 1 || true)
+    if [ -z "$CURRENT_VER" ]; then
+      CURRENT_VER=$("$TARGET_BIN" --version 2>&1 | grep -oE "[0-9]+\.[0-9]+(\.[0-9]+)?" | head -n 1 || true)
+    fi
+    if [ -z "$CURRENT_VER" ]; then
+      CURRENT_VER=$("$TARGET_BIN" version 2>&1 | grep -oE "[0-9]+\.[0-9]+(\.[0-9]+)?" | head -n 1 || true)
+    fi
+  fi
+
+  if [ -n "$CURRENT_VER" ]; then
+    log_step "Found existing px0 v${CURRENT_VER} at ${BOLD}${TARGET_BIN}${RESET}"
+    ACTION="Updated"
+  else
+    log_step "Replacing existing binary at ${BOLD}${TARGET_BIN}${RESET}..."
+    ACTION="Replaced"
+  fi
+fi
+
 BINARY_NAME="px0-${VERSION}-${OS}-${ARCH}${BINARY_EXT}"
 DOWNLOAD_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${BINARY_NAME}"
 
@@ -134,43 +174,164 @@ fi
 
 chmod +x "$TMP_FILE"
 
-# 5. Determine installation target directory
-if [ -n "${INSTALL_DIR:-}" ]; then
-  TARGET_DIR="$INSTALL_DIR"
-elif [ -w "/usr/local/bin" ]; then
-  TARGET_DIR="/usr/local/bin"
-elif command -v sudo >/dev/null 2>&1 && [ -d "/usr/local/bin" ]; then
-  USE_SUDO=1
-  TARGET_DIR="/usr/local/bin"
-else
-  # Fallback to ~/.local/bin or ~/bin
-  TARGET_DIR="${HOME}/.local/bin"
-  mkdir -p "$TARGET_DIR"
-fi
-
-TARGET_BIN="${TARGET_DIR}/px0${BINARY_EXT}"
+# 7. Install / Replace binary
 log_step "Installing to ${BOLD}${TARGET_BIN}${RESET}..."
 
 if [ "${USE_SUDO:-0}" = "1" ]; then
+  sudo rm -f "$TARGET_BIN"
   sudo mv "$TMP_FILE" "$TARGET_BIN"
   sudo chmod 755 "$TARGET_BIN"
 else
   mkdir -p "$TARGET_DIR"
+  rm -f "$TARGET_BIN"
   mv "$TMP_FILE" "$TARGET_BIN"
   chmod 755 "$TARGET_BIN"
 fi
 
-log_info "px0 v${VERSION} installed successfully!"
+if [ "$ACTION" = "Updated" ]; then
+  log_info "px0 successfully updated (v${CURRENT_VER} -> v${VERSION})!"
+else
+  log_info "px0 v${VERSION} installed successfully!"
+fi
 
 # Check if TARGET_DIR is in PATH
+PATH_ALREADY_CONFIGURED=0
 case ":$PATH:" in
-  *":$TARGET_DIR:"*) ;;
-  *)
-    log_warn "${TARGET_DIR} is not in your PATH."
+  *":$TARGET_DIR:"*) PATH_ALREADY_CONFIGURED=1 ;;
+esac
+
+# 8. Shell profile configuration (PATH & Aliases)
+detect_shell_rc() {
+  case "$(basename "${SHELL:-}")" in
+    zsh)
+      echo "${HOME}/.zshrc"
+      ;;
+    bash)
+      if [ -f "${HOME}/.bashrc" ]; then
+        echo "${HOME}/.bashrc"
+      elif [ -f "${HOME}/.bash_profile" ]; then
+        echo "${HOME}/.bash_profile"
+      else
+        echo "${HOME}/.profile"
+      fi
+      ;;
+    fish)
+      echo "${HOME}/.config/fish/config.fish"
+      ;;
+    *)
+      if [ -f "${HOME}/.zshrc" ]; then
+        echo "${HOME}/.zshrc"
+      elif [ -f "${HOME}/.bashrc" ]; then
+        echo "${HOME}/.bashrc"
+      elif [ -f "${HOME}/.bash_profile" ]; then
+        echo "${HOME}/.bash_profile"
+      elif [ -f "${HOME}/.profile" ]; then
+        echo "${HOME}/.profile"
+      else
+        echo ""
+      fi
+      ;;
+  esac
+}
+
+SHELL_RC="$(detect_shell_rc)"
+
+# Check if PATH is already exported in profile
+has_path_configured() {
+  rc="$1"
+  dir="$2"
+  [ -f "$rc" ] && grep -Fq "$dir" "$rc"
+}
+
+# Check if alias already exists
+has_alias_configured() {
+  rc="$1"
+  alias_name="$2"
+  [ -f "$rc" ] && grep -Eq "^[[:space:]]*alias[[:space:]]+${alias_name}=" "$rc"
+}
+
+# Auto-add TARGET_DIR to PATH in shell profile if not in current PATH and not already written
+if [ "$PATH_ALREADY_CONFIGURED" = "0" ]; then
+  log_warn "${TARGET_DIR} is not in your current PATH."
+  if [ -n "$SHELL_RC" ]; then
+    if has_path_configured "$SHELL_RC" "$TARGET_DIR"; then
+      log_info "PATH addition already present in ${SHELL_RC}."
+    else
+      printf "\n# Added by px0 installer\nexport PATH=\"%s:\$PATH\"\n" "$TARGET_DIR" >> "$SHELL_RC"
+      log_info "Added ${TARGET_DIR} to PATH in ${SHELL_RC}"
+    fi
+  else
     printf "   Add it by running:\n"
     printf "     export PATH=\"%s:\$PATH\"\n\n" "$TARGET_DIR"
-    ;;
-esac
+  fi
+fi
+
+# Windows PATH and command wrapper guidance
+if [ "$OS" = "windows" ]; then
+  printf "\n${BOLD}Windows Shell Setup:${RESET}\n"
+  printf "  To use px0 as %s or %s in PowerShell, you can create function wrappers or doskeys:\n" "${BOLD}code${RESET}" "${BOLD}cursor${RESET}"
+  printf "    ${DIM}Set-Alias -Name code -Value px0${RESET}\n"
+  printf "    ${DIM}Set-Alias -Name cursor -Value px0${RESET}\n"
+else
+  # Check if terminal is available for interactive prompt (either stdin or /dev/tty)
+  CAN_PROMPT=0
+  if [ "${PX0_NO_ALIAS:-0}" != "1" ] && [ -n "$SHELL_RC" ]; then
+    if [ -t 0 ] || [ -r /dev/tty ]; then
+      CAN_PROMPT=1
+    fi
+  fi
+
+  if [ -z "$WANT_ALIAS" ] && [ "$CAN_PROMPT" = "1" ]; then
+    printf "\n${BOLD}Optional CLI Aliases:${RESET}\n"
+    printf "You can invoke px0 with existing editor commands like %b or %b.\n" "${BOLD}code${RESET}" "${BOLD}cursor${RESET}"
+    printf "Would you like to alias px0? [1) code / 2) cursor / 3) both / 4) custom / n) none] (default: n): "
+    choice="n"
+    if [ -r /dev/tty ]; then
+      read -r choice </dev/tty || choice="n"
+    else
+      read -r choice || choice="n"
+    fi
+    case "$choice" in
+      1|[cC]|[cC][oO][dD][eE])
+        WANT_ALIAS="code"
+        ;;
+      2|[cC][uU][rR][sS][oO][rR])
+        WANT_ALIAS="cursor"
+        ;;
+      3|[bB]|[bB][oO][tT][hH])
+        WANT_ALIAS="code cursor"
+        ;;
+      4)
+        printf "Enter custom alias name: "
+        custom_name=""
+        if [ -r /dev/tty ]; then
+          read -r custom_name </dev/tty || custom_name=""
+        else
+          read -r custom_name || custom_name=""
+        fi
+        [ -n "$custom_name" ] && WANT_ALIAS="$custom_name"
+        ;;
+      *)
+        WANT_ALIAS=""
+        ;;
+    esac
+  fi
+
+  if [ -n "$WANT_ALIAS" ] && [ -n "$SHELL_RC" ]; then
+    for a in $WANT_ALIAS; do
+      # Sanitize alias name to alphanumeric and underscore
+      clean_alias=$(printf '%s' "$a" | tr -cd 'a-zA-Z0-9_-')
+      [ -z "$clean_alias" ] && continue
+
+      if has_alias_configured "$SHELL_RC" "$clean_alias"; then
+        log_info "Alias ${BOLD}${clean_alias}${RESET} already exists in ${SHELL_RC} (skipped)."
+      else
+        printf "alias %s=\"px0\"\n" "$clean_alias" >> "$SHELL_RC"
+        log_info "Added alias ${BOLD}${clean_alias}=\"px0\"${RESET} to ${SHELL_RC}."
+      fi
+    done
+  fi
+fi
 
 printf "\nRun %b to inspect any repository:\n" "${BOLD}px0${RESET}"
 printf "  ${AMBER}px0 .${RESET}\n\n"
