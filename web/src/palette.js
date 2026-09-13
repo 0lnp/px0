@@ -1,5 +1,5 @@
 // web/src/palette.js
-import { $, esc, S, doc_, api, debounce } from './state.js';
+import { $, esc, S, doc_, api, debounce, withKeys } from './state.js';
 import { render, toggleWordWrap, toggleLineNumbers } from './renderer.js';
 import { openFile, centerLine, closeTab } from './tabs.js';
 import { updateStatus } from './status.js';
@@ -9,7 +9,7 @@ import { openFind } from './find.js';
 import { gotoDefinition, findReferences } from './lsp.js';
 import { revealFile } from './tree.js';
 import { showRightInspector, hideRightInspector } from './inspector.js';
-import { showCalls } from './calls.js';
+import { showCalls, openLspSetup } from './calls.js';
 import { showHelp } from './shortcuts.js';
 import { listThemes, currentTheme, setTheme, cycleTheme } from './theme.js';
 
@@ -26,16 +26,17 @@ export const COMMANDS = [
   { name: 'Find in Current File', run: () => openFind(S.lastWord) },
   { name: 'Go to Definition', run: () => gotoDefinition() },
   { name: 'Find All References (Right Panel)', run: () => findReferences() },
-  { name: 'Show Call Trail: Callers / Callees (Alt+Shift+H)', run: () => showCalls() },
+  { name: withKeys('Show Call Trail: Callers / Callees ({Alt+Shift+H})'), run: () => showCalls() },
+  { name: 'Set Up Language Server…', run: () => openLspSetup() },
   { name: 'Toggle Right Inspector (Symbols & References)', run: () => {
     if (document.body.classList.contains('right-hidden')) showRightInspector('refs');
     else hideRightInspector();
   } },
   { name: 'Show File Symbols (Right Panel)', run: () => showRightInspector('symbols') },
   { name: 'Reveal Active File in Explorer', run: () => { const d = doc_(); if (d) { showPanel('files'); revealFile(d.path); } } },
-  { name: 'Toggle Word Wrap (Alt+Z)', run: () => toggleWordWrap() },
-  { name: 'Toggle Line Numbers', run: () => toggleLineNumbers() },
-  { name: 'Toggle Sidebar', run: () => document.body.classList.toggle('side-hidden') },
+  { name: withKeys('Toggle Word Wrap ({Alt+Z})'), run: () => toggleWordWrap() },
+  { name: withKeys('Toggle Line Numbers ({Alt+L})'), run: () => toggleLineNumbers() },
+  { name: withKeys('Toggle Sidebar ({Mod+B})'), run: () => document.body.classList.toggle('side-hidden') },
   { name: 'Select Theme…', run: () => openPalette('theme') },
   { name: 'Next Theme', run: cycleTheme },
   { name: 'Re-index Workspace', run: () => $('#btn-reindex').click() },

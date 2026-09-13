@@ -21,7 +21,7 @@ Whenever modifying, adding, or refactoring code in this repository, you must aud
 | Indexing / Tree Walk / Gitignore | `index.go`, `ignore.go` | `ARCHITECTURE.md`, `README.md` |
 | Search / Regex / Fuzzy Finder | `search.go`, `fuzzy.go` | `ARCHITECTURE.md`, `BENCHMARKS.md` |
 | Syntax Highlighting & Lexing | `highlight.go` | `ARCHITECTURE.md`, `README.md` |
-| Language Servers (LSP) | `lsp.go`, `lspnav.go`, `lspservers.go`, `calls.go` | `README.md`, `BENCHMARKS.md` |
+| Language Servers (LSP) | `lsp.go`, `lspnav.go`, `lspservers.go`, `lspsetup.go`, `calls.go` | `README.md`, `BENCHMARKS.md` |
 | Frontend UI / Virtualization | `web/app.js`, `web/index.html`, `web/style.css` | `ARCHITECTURE.md`, `README.md` |
 | Themes / Colour Tokens | `web/themes/*.css`, `web/style.css`, `web/src/theme.js` | `STYLING.md` |
 | CLI Flags / Configuration | `main.go` | `README.md` |
@@ -66,7 +66,7 @@ The frontend is modularized into clean ES modules under `web/src/` and bundled i
 
 | Module | Primary Responsibilities & Key Exports |
 | ------ | -------------------------------------- |
-| `web/src/state.js` | Core state object `S`, `doc_()`, `api()`, `esc()`, `$`, `$$`, constants (`LH`, `CHUNK`, `OVERSCAN`, `MOD`) |
+| `web/src/state.js` | Core state object `S`, `doc_()`, `api()`, `apiPost()`, `esc()`, `$`, `$$`, constants (`LH`, `CHUNK`, `OVERSCAN`, `MOD`, `isMac`). Per-OS shortcut labels: `keyLabel()`, `keyCaps()`, `withKeys()`, `applyKeyLabels()` (markup uses `data-keys`, `data-caps` and `{Mod+P}` in titles) |
 | `web/src/ui.js` | DOM references (`vp`, `sizer`, `rowsEl`, `editor`, `toastEl`), `showToast()`, `copyToClipboard()` |
 | `web/src/renderer.js` | `measure()`, `layout()`, `render()`, `paint()`, `toggleWordWrap()`, `toggleLineNumbers()`, on-demand chunk fetching |
 | `web/src/tabs.js` | `openFile()`, `closeTab()`, `switchTab()`, `drawTabs()`, `drawCrumbs()`, `showImage()` |
@@ -81,7 +81,8 @@ The frontend is modularized into clean ES modules under `web/src/` and bundled i
 | `web/src/outline.js` | `loadOutline()`, `upgradeOutline()`, `drawOutline()`, symbol kind badges |
 | `web/src/panels.js` | `showPanel()`, sidebar switching, reindex trigger, draggable sidebar resizer |
 | `web/src/inspector.js` | `showRightInspector()`, `setRightInspectorTab()`, `inspectReferences()`, right resizer |
-| `web/src/calls.js` | `showCalls()`, `initCalls()`: call trail tree in the right inspector (callers / callees via `/api/lsp/calls`, expanded lazily) |
+| `web/src/calls.js` | `showCalls()`, `initCalls()`, `openLspSetup()`: call trail tree in the right inspector (callers / callees via `/api/lsp/calls`, expanded lazily) |
+| `web/src/lspsetup.js` | `renderLspSetup()`, `cancelLspSetup()`: install / detect-and-start panel shown when no language server is running (`/api/lsp/setup`, `/api/lsp/install`, `/api/lsp/start`) |
 | `web/src/find.js` | `openFind()`, `clearFind()`, `runFind()`, `jumpToHit()`, minimap hit dots (Ctrl+F) |
 | `web/src/palette.js` | `openPalette()`, `refreshPalette()`, `COMMANDS`, fuzzy file/symbol/command finder |
 | `web/src/shortcuts.js` | `showHelp()`, Alt+Z word wrap toggle, keyboard shortcuts listener |

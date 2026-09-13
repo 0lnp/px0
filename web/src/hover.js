@@ -1,5 +1,5 @@
 // web/src/hover.js
-import { $, esc, S, doc_, api, isMac, MOD } from './state.js';
+import { $, esc, S, doc_, api, isMac, MOD, withKeys } from './state.js';
 import { vp, editor, copyToClipboard } from './ui.js';
 import { paint } from './renderer.js';
 import { setLspState } from './status.js';
@@ -76,11 +76,11 @@ export async function showHover(at, x, y) {
       '<button id="hc-copy-ref" title="Copy file and line reference">Copy Ref</button>' +
       '<button id="hc-copy-ai" title="Copy snippet with file path for AI Agent / LLMs">Copy for Agent</button>' +
       '<button id="hc-find-refs" title="Find all usages across codebase">Usages</button>' +
-      '<button id="hc-calls" title="Trace callers and callees (Alt+Shift+H)">Calls</button>' +
+      '<button id="hc-calls" title="' + withKeys('Trace callers and callees ({Alt+Shift+H})') + '">Calls</button>' +
     '</div>' +
     '<div class="foot"><b>' + esc(j.server || 'lsp') + '</b>' +
-    '<span>' + (isMac ? '⌘' : 'Ctrl') + '+click definition</span>' +
-    '<span>Shift+F12 references</span></div>';
+    '<span>' + withKeys('{Mod+Click} definition') + '</span>' +
+    '<span>' + withKeys('{Shift+F12} references') + '</span></div>';
 
   const btnRef = hovercard.querySelector('#hc-copy-ref');
   const btnAi = hovercard.querySelector('#hc-copy-ai');
@@ -167,10 +167,11 @@ export function initHover() {
 
   /* The modifier can be pressed or released without the pointer moving, and the
      underline has to follow. */
+  const modKey = isMac ? 'Meta' : 'Control';   // the key MOD tests; Ctrl+click on a Mac is a right click
   addEventListener('keydown', e => {
-    if ((e.key === 'Control' || e.key === 'Meta') && pointerAt) onMove({ ...pointerAt, mod: true });
+    if (e.key === modKey && pointerAt) onMove({ ...pointerAt, mod: true });
   });
   addEventListener('keyup', e => {
-    if (e.key === 'Control' || e.key === 'Meta') clearLink();
+    if (e.key === modKey) clearLink();
   });
 }

@@ -1,5 +1,5 @@
 // web/src/tabs.js
-import { $, esc, S, doc_, api, LH, CHUNK } from './state.js';
+import { $, esc, S, doc_, api, LH, CHUNK, withKeys } from './state.js';
 import { vp, sizer, rowsEl, editor } from './ui.js';
 import { render, layout, refineChunk } from './renderer.js';
 import { updateStatus, setStatusNote, refreshMetrics } from './status.js';
@@ -49,6 +49,7 @@ export async function openFile(path, opts = {}) {
   if (!S.at || S.at.path !== d.path) S.at = null;
   S.lsp.state = (d.lsp && d.lsp.state) || 'off';
   S.lsp.server = (d.lsp && d.lsp.server) || '';
+  S.lsp.missing = (d.lsp && d.lsp.missing) || '';
   warmLSP(d);
   drawTabs(); drawCrumbs(); layout();
 
@@ -96,7 +97,7 @@ export function closeTab(i) {
 export function drawTabs() {
   $('#tabs').innerHTML = S.tabs.map((t, i) =>
     '<div class="tab' + (i === S.active ? ' active' : '') + '" data-i="' + i + '" title="' + esc(t.path) + '">' +
-    '<span class="tn">' + esc(t.name) + '</span><span class="x" data-close="' + i + '" title="Close tab (Ctrl+W / Alt+W)"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 2l6 6M8 2l-6 6"/></svg></span></div>').join('');
+    '<span class="tn">' + esc(t.name) + '</span><span class="x" data-close="' + i + '" title="' + withKeys('Close tab ({Alt+W})') + '"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 2l6 6M8 2l-6 6"/></svg></span></div>').join('');
   const act = $('#tabs .tab.active');
   if (act) act.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
@@ -111,6 +112,7 @@ export function switchTab(i) {
   S.at = null;
   S.lsp.state = (S.tabs[i].lsp && S.tabs[i].lsp.state) || 'off';
   S.lsp.server = (S.tabs[i].lsp && S.tabs[i].lsp.server) || '';
+  S.lsp.missing = (S.tabs[i].lsp && S.tabs[i].lsp.missing) || '';
   warmLSP(S.tabs[i]);
   drawTabs(); drawCrumbs(); layout();
   vp.scrollTop = S.tabs[i].scrollTop;

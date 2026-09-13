@@ -34,15 +34,25 @@ export function setLspState(j) {
   if (!j || !j.state) return;
   S.lsp.state = j.state;
   S.lsp.server = j.server || S.lsp.server;
+  // Only file, warm and start replies say what is missing; any running server means nothing is.
+  if ('missing' in j || j.state !== 'off') S.lsp.missing = j.missing || '';
   drawLspStatus();
 }
 
 export function drawLspStatus() {
   const el = $('#st-lsp');
-  const { state, server } = S.lsp;
+  const { state, server, missing } = S.lsp;
+  el.title = '';
+  if (state === 'off' && missing) {
+    el.dataset.state = 'missing';
+    el.textContent = 'LSP: set up';
+    el.title = 'No language server for ' + missing + '. Click to install or start one.';
+    return;
+  }
   if (!server || state === 'off') { el.textContent = ''; el.removeAttribute('data-state'); return; }
   el.dataset.state = state;
   el.textContent = state === 'ready' ? server : server + ' ' + state;
+  if (state === 'failed') el.title = 'The language server did not start. Click for details.';
 }
 
 export function updateMetricsDisplay(m) {

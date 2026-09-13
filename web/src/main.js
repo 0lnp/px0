@@ -1,5 +1,5 @@
 // web/src/main.js
-import { $, S, api, isMac } from './state.js';
+import { $, S, api, applyKeyLabels } from './state.js';
 import { measure, layout, render, initRenderer, updateEditorOptionControls } from './renderer.js';
 import { initTabs } from './tabs.js';
 import { initCursor } from './cursor.js';
@@ -53,9 +53,7 @@ initStatusFit();
     updateEditorOptionControls();
   } catch {}
 
-  if (isMac) {
-    document.querySelectorAll('.mod-key').forEach(el => el.textContent = '⌘');
-  }
+  applyKeyLabels();
 
   measure();
   S.meta = await api('/api/meta');

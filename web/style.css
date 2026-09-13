@@ -457,6 +457,35 @@ kbd {
 #st-lsp[data-state="indexing"]::before,
 #st-lsp[data-state="starting"]::before { background: var(--mark-active); animation: pulse 1.1s ease-in-out infinite; }
 #st-lsp[data-state="failed"]::before { background: var(--gd); }
+#st-lsp[data-state="missing"], #st-lsp[data-state="failed"] { cursor: pointer; }
+#st-lsp[data-state="missing"]:hover, #st-lsp[data-state="failed"]:hover { color: var(--accent-fg); }
+
+/* ---------- language server setup (calls pane) ---------- */
+.lsp-setup { padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; font-size: 12px; line-height: 1.55; color: var(--dim); }
+.lsp-setup p { margin: 0; }
+.lsp-setup b { color: var(--fg); font-weight: 600; }
+.lsp-setup code { font: 11px var(--mono); color: var(--fg); }
+.lsp-server { border: 1px solid var(--line); border-radius: 6px; background: var(--bg); overflow: hidden; }
+.lsp-name { padding: 5px 10px; font: 600 11.5px var(--mono); color: var(--fg); border-bottom: 1px solid var(--line); }
+.lsp-opt { display: flex; align-items: center; gap: 8px; padding: 6px 10px; }
+.lsp-opt + .lsp-opt { border-top: 1px solid var(--line); }
+.lsp-opt code { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.lsp-acts { display: flex; align-items: center; gap: 4px; flex: none; }
+.lsp-need { font-size: 11px; color: var(--faint); white-space: nowrap; }
+.lsp-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lsp-btn {
+  font: 11px/1 var(--ui); padding: 4px 8px; border-radius: 4px; white-space: nowrap;
+  border: 1px solid var(--line); background: var(--bg2); color: var(--fg);
+}
+.lsp-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-fg); }
+.lsp-btn.primary, .lsp-btn.primary:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.lsp-btn:disabled { opacity: .5; cursor: default; }
+.lsp-job { padding: 6px 10px; border-top: 1px solid var(--line); font-size: 11.5px; }
+.lsp-job.err, .lsp-reason { color: var(--err); }
+.lsp-job pre {
+  margin: 6px 0 0; max-height: 160px; overflow: auto; white-space: pre-wrap; word-break: break-all;
+  font: 10.5px/1.45 var(--mono); color: var(--dim);
+}
 #status span:empty:not(.grow) { display: none; }
 .status-metrics {
   display: inline-flex; align-items: center; gap: 6px;
@@ -510,7 +539,8 @@ kbd {
 .help-version { font: 11px var(--mono); color: var(--accent-fg); background: var(--bg4); padding: 2px 6px; border-radius: 4px; }
 #empty-ver { font: 12px var(--mono); color: var(--accent-fg); opacity: 0.8; font-weight: 400; text-transform: none; letter-spacing: normal; }
 .help-grid { display: grid; grid-template-columns: repeat(2, auto auto); gap: 8px 18px; align-items: center; font-size: 12.5px; }
-.help-grid dt { display: flex; gap: 3px; justify-content: flex-end; }
+.help-grid dt { display: flex; gap: 3px; justify-content: flex-end; align-items: center; }
+.key-or { color: var(--faint); margin: 0 3px; font-size: 11px; }
 .help-grid dd { margin: 0 22px 0 0; color: var(--dim); }
 
 #measure { position: absolute; visibility: hidden; font: var(--fs)/var(--lh) var(--mono); white-space: pre; top: -999px; }

@@ -89,6 +89,8 @@ However, having language servers installed gives `px0` superpowers: semantic Go-
 
 Servers are spawned **lazily on first request** for that file type and shut down cleanly upon exit. You can also disable LSP detection entirely at any time using `px0 -no-lsp`.
 
+No server for the file you are reading? The status bar shows **LSP: set up**. Click it, open the Calls tab, or run `Set Up Language Server…` from the command palette to see the install options for your OS. px0 runs user-level installers (`go`, `rustup`, `npm`, `pipx`, `gem`, `brew`) for you on request, finds the result even when its install folder is not on `PATH`, and starts the server without a restart. Installers that need an administrator (`sudo apt`, `winget`) are shown for you to copy and run. Installing only works from px0's own page opened by IP address or `localhost`.
+
 ---
 
 ## Why a Dedicated Code Viewer?
@@ -180,6 +182,8 @@ px0 --update
 
 ## Keyboard Shortcuts
 
+`Cmd` on macOS, `Ctrl` on Windows and Linux; `Alt` is `Option` on a Mac. The in-app sheet (`?`), footer hints and tooltips show each key the way your keyboard labels it (`⌘⇧F` on a Mac, `Ctrl+Shift+F` elsewhere).
+
 | Key | Action |
 | --- | ------ |
 | `Cmd/Ctrl+K` | Universal palette / quick open |
@@ -191,14 +195,18 @@ px0 --update
 | `Cmd/Ctrl+G` | Jump to line |
 | `F12`, `Cmd/Ctrl+Click` | Go to definition |
 | `Shift+F12` | Find all references |
-| `←` / `→`, `Home` / `End` | Move the (read-only) caret along the line; click places it |
+| `←` / `→`, `Home` / `End` (`Cmd+←` / `Cmd+→` on macOS) | Move the (read-only) caret along the line; click places it |
+| `Ctrl+Home` / `Ctrl+End` (`Cmd+↑` / `Cmd+↓` on macOS) | Top / bottom of file |
+| `Alt+Z` / `Alt+L` | Toggle word wrap / line numbers |
+| `Alt+C` / `Alt+A` / `Alt+U` | With code selected: copy reference / copy for agent / find usages |
 | `Alt+Shift+H` | Call trail: callers and callees of the function under the cursor, expandable level by level |
 | `Hover` | Type signature & doc hover |
 | `Cmd/Ctrl + Hover` | Inspect identifier link |
 | `Alt+Left` / `Alt+Right` | Navigate back / forward in history |
 | `Cmd/Ctrl+B` | Toggle file tree sidebar |
-| `Cmd/Ctrl+W` | Close active tab |
+| `Alt+W` | Close active tab (`Cmd/Ctrl+W` too, where the browser lets a page have it) |
 | `Ctrl+Tab` | Switch to next tab |
+| `Alt+1` … `Alt+9` | Select tab by position |
 | `?` | Show all keyboard shortcuts |
 
 ---

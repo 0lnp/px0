@@ -70,6 +70,9 @@ func NewServer(ix *Index, lsp *lspManager) *Server {
 	s.mux.HandleFunc("/api/lsp/symbols", s.handleLSPSymbols)
 	s.mux.HandleFunc("/api/lsp/hover", s.handleLSPHover)
 	s.mux.HandleFunc("/api/lsp/warm", s.handleLSPWarm)
+	s.mux.HandleFunc("/api/lsp/setup", s.handleLSPSetup)
+	s.mux.HandleFunc("/api/lsp/install", s.handleLSPInstall)
+	s.mux.HandleFunc("/api/lsp/start", s.handleLSPStart)
 	s.lastReq.Store(time.Now().UnixNano())
 	go s.scavenge()
 	return s
@@ -353,8 +356,7 @@ func (s *Server) handleLSPWarm(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	// The spawn keeps going even when this call gives up waiting on it.
 	s.lsp.client(ctx, rel)
-	state, srv := s.lsp.State(rel)
-	writeJSON(w, map[string]any{"state": string(state), "server": srv})
+	writeJSON(w, s.lspBrief(rel))
 }
 
 func (s *Server) handleLSPHover(w http.ResponseWriter, r *http.Request) {
@@ -479,12 +481,11 @@ func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
 	}
 	lines, exact := d.Lines(start, start+count)
 	_, coming := d.Exact()
-	state, srv := s.lsp.State(rel)
 	writeJSON(w, map[string]any{
 		"path": rel, "lang": d.Lang, "total": d.Total, "maxCols": d.MaxCols,
 		"start": start, "lines": lines, "size": st.Size(),
 		"exact": exact, "refine": !exact && coming,
-		"lsp": map[string]any{"state": string(state), "server": srv},
+		"lsp": s.lspBrief(rel),
 	})
 }
 

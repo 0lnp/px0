@@ -3,17 +3,19 @@
   var $ = (s, r = document) => r.querySelector(s);
   var $$ = (s, r = document) => [...r.querySelectorAll(s)];
   var esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-  var api = async (path, params) => {
+  var request = async (method, path, params) => {
     const u = new URL(path, location.origin);
     for (const [k, v] of Object.entries(params || {}))
       if (v !== undefined && v !== "")
         u.searchParams.set(k, v);
-    const r = await fetch(u);
+    const r = await fetch(u, { method });
     const j = await r.json();
     if (j.error)
       throw new Error(j.error);
     return j;
   };
+  var api = (path, params) => request("GET", path, params);
+  var apiPost = (path, params) => request("POST", path, params);
   var debounce = (fn, ms) => {
     let t;
     return (...a) => {
@@ -21,8 +23,31 @@
       t = setTimeout(() => fn(...a), ms);
     };
   };
-  var isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+  var isMac = /mac|iphone|ipad/i.test(navigator.userAgentData?.platform || navigator.platform || "");
   var MOD = isMac ? "metaKey" : "ctrlKey";
+  var MAC_KEYS = { Mod: "⌘", Ctrl: "⌃", Alt: "⌥", Shift: "⇧", Enter: "↩", Left: "←", Right: "→", Up: "↑", Down: "↓" };
+  var PC_KEYS = { Mod: "Ctrl", Left: "←", Right: "→", Up: "↑", Down: "↓" };
+  var keyParts = (combo) => {
+    const c = combo.includes("|") ? combo.split("|")[isMac ? 1 : 0] : combo;
+    return c ? c.split("+").map((k) => (isMac ? MAC_KEYS : PC_KEYS)[k] || k) : [];
+  };
+  var keyLabel = (combo) => {
+    const parts = keyParts(combo);
+    if (!isMac)
+      return parts.join("+");
+    const key = parts.pop() || "";
+    return parts.join("") + (parts.length && /^[a-z]{2,}$/i.test(key) ? " " : "") + key;
+  };
+  var keyCaps = (combo) => keyParts(combo).map((k) => "<kbd>" + esc(k) + "</kbd>").join("");
+  var withKeys = (text) => text.replace(/\{([^}]+)\}/g, (_, combo) => keyLabel(combo));
+  function applyKeyLabels(root = document) {
+    for (const el of $$("[data-keys]", root))
+      el.textContent = keyLabel(el.dataset.keys);
+    for (const el of $$("[data-caps]", root))
+      el.innerHTML = keyCaps(el.dataset.caps);
+    for (const el of $$('[title*="{"]', root))
+      el.title = withKeys(el.title);
+  }
   var LH = 20;
   var CHUNK = 1000;
   var OVERSCAN = 24;
@@ -461,11 +486,20 @@
       return;
     S2.lsp.state = j.state;
     S2.lsp.server = j.server || S2.lsp.server;
+    if ("missing" in j || j.state !== "off")
+      S2.lsp.missing = j.missing || "";
     drawLspStatus();
   }
   function drawLspStatus() {
     const el = $("#st-lsp");
-    const { state, server } = S2.lsp;
+    const { state, server, missing } = S2.lsp;
+    el.title = "";
+    if (state === "off" && missing) {
+      el.dataset.state = "missing";
+      el.textContent = "LSP: set up";
+      el.title = "No language server for " + missing + ". Click to install or start one.";
+      return;
+    }
     if (!server || state === "off") {
       el.textContent = "";
       el.removeAttribute("data-state");
@@ -473,6 +507,8 @@
     }
     el.dataset.state = state;
     el.textContent = state === "ready" ? server : server + " " + state;
+    if (state === "failed")
+      el.title = "The language server did not start. Click for details.";
   }
   function updateMetricsDisplay(m) {
     if (!m)
@@ -1116,7 +1152,7 @@
     }
     if (!S2.tabs.includes(d))
       return;
-    d.lsp = { state: j.state, server: j.server };
+    d.lsp = { state: j.state, server: j.server, missing: j.missing || "" };
     if (doc_() === d)
       setLspState(j);
     if (j.state === "starting" || j.state === "indexing") {
@@ -1387,13 +1423,153 @@
     });
   }
 
+  // web/src/lspsetup.js
+  var seq = 0;
+  var pollTimer = 0;
+  var hint = (html) => '<div class="hint">' + html + "</div>";
+  function cancelLspSetup() {
+    seq++;
+    clearTimeout(pollTimer);
+  }
+  async function renderLspSetup(el, onReady) {
+    const d = doc_();
+    if (!el || !d)
+      return;
+    cancelLspSetup();
+    const my = seq;
+    let s;
+    try {
+      s = await api("/api/lsp/setup", { path: d.path });
+    } catch (e) {
+      if (my === seq)
+        el.innerHTML = hint("Could not check language servers: " + esc(e.message));
+      return;
+    }
+    if (my !== seq || doc_() !== d)
+      return;
+    const again = (ms) => {
+      pollTimer = setTimeout(() => {
+        if (my === seq)
+          renderLspSetup(el, onReady);
+      }, ms);
+    };
+    if (s.state === "starting" && !s.server) {
+      el.innerHTML = hint("Looking for language servers…");
+      again(700);
+      return;
+    }
+    if (s.state !== "off" && s.state !== "failed") {
+      start(el, d, onReady);
+      return;
+    }
+    el.innerHTML = draw(s, d);
+    wire(el, d, onReady);
+    if (s.servers.some((v) => v.job && v.job.running))
+      again(1000);
+  }
+  async function start(el, d, onReady) {
+    cancelLspSetup();
+    el.innerHTML = hint("Starting the language server…");
+    let j;
+    try {
+      j = await apiPost("/api/lsp/start", { path: d.path });
+    } catch (e) {
+      el.innerHTML = hint("Could not start the language server: " + esc(e.message));
+      return;
+    }
+    if (doc_() !== d)
+      return;
+    for (const t of S2.tabs) {
+      if (t !== d && t.lsp && (t.lsp.state === "off" || t.lsp.state === "failed"))
+        t.lsp = { state: "starting", server: "" };
+    }
+    d.lsp = { state: j.state, server: j.server, missing: j.missing || "" };
+    setLspState(j);
+    updateStatus();
+    warmLSP(d);
+    if (j.state === "off" || j.state === "failed") {
+      renderLspSetup(el, onReady);
+      return;
+    }
+    if (onReady)
+      onReady();
+  }
+  function draw(s, d) {
+    const ext = (d.path.match(/\.[^./]+$/) || [d.name])[0];
+    if (!s.enabled) {
+      return hint("Language servers are turned off: px0 was started with <b>-no-lsp</b>. " + "Restart it without that flag for call trails, hover and precise references.");
+    }
+    if (!s.servers.length) {
+      return hint("px0 knows no language server for <b>" + esc(ext) + "</b> files, so call trails are not available here.");
+    }
+    const offer = s.servers.filter((v) => v.options.length || v.job);
+    const running = s.servers.some((v) => v.job && v.job.running);
+    let html = '<div class="lsp-setup">';
+    if (s.state === "failed") {
+      html += "<p><b>" + esc(s.server) + '</b> did not start: <span class="lsp-reason">' + esc(s.reason || "unknown error") + "</span></p>" + '<div class="lsp-row"><button class="lsp-btn" data-start>Retry</button></div>';
+      if (offer.length)
+        html += "<p>If it is broken or incomplete, install it again:</p>";
+    } else {
+      html += "<p>Call trails, hover and precise references for " + esc(s.lang) + " need a language server, and none is installed.</p>";
+    }
+    for (const v of offer) {
+      html += '<div class="lsp-server"><div class="lsp-name">' + esc(v.name) + "</div>";
+      v.options.forEach((o, i) => {
+        html += '<div class="lsp-opt"><code>' + esc(o.cmd) + '</code><span class="lsp-acts">';
+        if (!o.auto)
+          html += '<span class="lsp-need">run in a terminal</span>';
+        else if (!o.hasTool)
+          html += '<span class="lsp-need">needs ' + esc(o.tool) + "</span>";
+        else
+          html += '<button class="lsp-btn primary" data-install="' + esc(v.name) + '" data-option="' + i + '"' + (running ? " disabled" : "") + ">Install</button>";
+        html += '<button class="lsp-btn" data-copy="' + esc(o.cmd) + '">Copy</button></span></div>';
+      });
+      if (v.job)
+        html += job(v.job);
+      html += "</div>";
+    }
+    if (!offer.length) {
+      html += "<p>px0 has no installer for this one. Install " + s.servers.map((v) => "<b>" + esc(v.name) + "</b>").join(" or ") + " and make sure it is on PATH.</p>";
+    }
+    html += '<div class="lsp-row"><span>Installed one yourself?</span><button class="lsp-btn" data-start>Detect and start</button></div></div>';
+    return html;
+  }
+  function job(j) {
+    const tail = (j.log || "").trimEnd().split(`
+`).slice(-12).join(`
+`);
+    const log = tail ? "<pre>" + esc(tail) + "</pre>" : "";
+    if (j.running)
+      return '<div class="lsp-job">Installing with <code>' + esc(j.cmd) + "</code>…" + log + "</div>";
+    if (j.error)
+      return '<div class="lsp-job err">Install failed: ' + esc(j.error) + log + "</div>";
+    return "";
+  }
+  function wire(el, d, onReady) {
+    el.querySelectorAll("[data-install]").forEach((b) => b.addEventListener("click", async () => {
+      el.querySelectorAll("[data-install]").forEach((x) => {
+        x.disabled = true;
+      });
+      try {
+        await apiPost("/api/lsp/install", { server: b.dataset.install, option: b.dataset.option });
+      } catch (e) {
+        showToast("!", e.message);
+      }
+      renderLspSetup(el, onReady);
+    }));
+    el.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", () => {
+      copyToClipboard(b.dataset.copy, "Copied " + b.dataset.copy);
+    }));
+    el.querySelectorAll("[data-start]").forEach((b) => b.addEventListener("click", () => start(el, d, onReady)));
+  }
+
   // web/src/calls.js
   var T = null;
   var dirPref = "in";
-  var seq = 0;
+  var seq2 = 0;
   var flat = [];
   var listEl = () => $("#right-calls-list");
-  var hint = (html) => {
+  var hint2 = (html) => {
     const el = listEl();
     if (el)
       el.innerHTML = '<div class="hint">' + html + "</div>";
@@ -1420,37 +1596,40 @@
     const d = doc_();
     const at = arg && arg.word ? arg : positionNow(typeof arg === "string" ? arg : S2.lastWord);
     showRightInspector("calls");
+    cancelLspSetup();
     if (!d)
       return;
-    if (!at || at.imprecise) {
-      hint("Click a function name in the editor, then press <b>Alt+Shift+H</b>.");
-      return;
-    }
     if (S2.lsp.state === "off" || S2.lsp.state === "failed") {
-      hint("Call trails come from a language server, and none is running for this file type.");
+      T = null;
+      $("#right-calls-target").textContent = at ? at.word : "-";
+      renderLspSetup(listEl(), () => showCalls(arg));
       return;
     }
-    const my = ++seq;
+    if (!at || at.imprecise) {
+      hint2("Click a function name in the editor, then press <b>" + esc(keyLabel("Alt+Shift+H")) + "</b>.");
+      return;
+    }
+    const my = ++seq2;
     T = null;
     $("#right-calls-target").textContent = at.word;
-    hint('Tracing calls for "' + esc(at.word) + '"…');
+    hint2('Tracing calls for "' + esc(at.word) + '"…');
     setStatusNote("call trail for " + at.word + "…");
     let j;
     try {
       j = await api("/api/lsp/calls", { path: d.path, line: at.line, col: at.col, wait: S2.lsp.state === "ready" ? 1e4 : 30000 });
     } catch (e) {
-      if (my === seq) {
+      if (my === seq2) {
         updateStatus();
-        hint('Could not trace "' + esc(at.word) + '": ' + esc(explain(e.message)));
+        hint2('Could not trace "' + esc(at.word) + '": ' + esc(explain(e.message)));
       }
       return;
     }
-    if (my !== seq)
+    if (my !== seq2)
       return;
     setLspState(j);
     updateStatus();
     if (!j.nodes || !j.nodes.length) {
-      hint('"' + esc(at.word) + '" is not a function ' + esc(j.server || "the language server") + " can trace.");
+      hint2('"' + esc(at.word) + '" is not a function ' + esc(j.server || "the language server") + " can trace.");
       return;
     }
     T = { path: d.path, word: at.word, dir: dirPref, roots: j.nodes.map((n) => wrap(n, null)) };
@@ -1462,11 +1641,11 @@
       return;
     node.open = true;
     if (node.kids) {
-      draw();
+      draw2();
       return;
     }
     node.loading = true;
-    draw();
+    draw2();
     const t = T, dir = t.dir;
     try {
       const j = await api("/api/lsp/calls", { path: t.path, item: node.n.item, dir, wait: 30000 });
@@ -1480,7 +1659,7 @@
       node.kids = [];
     }
     node.loading = false;
-    draw();
+    draw2();
   }
   function setDir(dir) {
     dirPref = dir;
@@ -1493,7 +1672,7 @@
     for (const r of T.roots)
       expand(r);
   }
-  function draw() {
+  function draw2() {
     const el = listEl();
     if (!el || !T)
       return;
@@ -1522,6 +1701,11 @@
       walk(r, 0);
     el.innerHTML = html;
   }
+  function openLspSetup() {
+    showRightInspector("calls");
+    T = null;
+    renderLspSetup(listEl(), () => showCalls(S2.at));
+  }
   function initCalls() {
     $("#calls-dir")?.addEventListener("click", (e) => {
       const b = e.target.closest("[data-dir]");
@@ -1529,8 +1713,12 @@
         setDir(b.dataset.dir);
     });
     $('.inspector-tab[data-itab="calls"]')?.addEventListener("click", () => {
-      if (!T && S2.at)
+      if (!T && (S2.at || S2.lsp.state === "off" || S2.lsp.state === "failed"))
         showCalls(S2.at);
+    });
+    $("#st-lsp")?.addEventListener("click", () => {
+      if (S2.lsp.missing || S2.lsp.state === "failed")
+        openLspSetup();
     });
     listEl()?.addEventListener("click", async (e) => {
       const row = e.target.closest(".cnode");
@@ -1542,7 +1730,7 @@
       if (e.target.closest(".car")) {
         if (node.open) {
           node.open = false;
-          draw();
+          draw2();
         } else
           expand(node);
         return;
@@ -1609,14 +1797,14 @@
     const d = doc_();
     if (!d || at.path !== d.path)
       return;
-    const seq2 = ++hoverSeq;
+    const seq3 = ++hoverSeq;
     let j;
     try {
       j = await api("/api/lsp/hover", { path: d.path, line: at.line, col: at.col, wait: 4000 });
     } catch {
       return;
     }
-    if (seq2 !== hoverSeq || doc_() !== d)
+    if (seq3 !== hoverSeq || doc_() !== d)
       return;
     setLspState(j);
     if (!j || j.empty || !j.signature && !j.doc)
@@ -1624,7 +1812,7 @@
     S2.hover = at;
     S2.hoverAnchor = { x, y };
     const refPath = d.path + ":" + at.line;
-    hovercard.innerHTML = (j.signature ? '<div class="sig">' + j.signature + "</div>" : "") + (j.doc ? '<div class="doc">' + esc(j.doc) + "</div>" : "") + '<div class="actions">' + '<button id="hc-copy-ref" title="Copy file and line reference">Copy Ref</button>' + '<button id="hc-copy-ai" title="Copy snippet with file path for AI Agent / LLMs">Copy for Agent</button>' + '<button id="hc-find-refs" title="Find all usages across codebase">Usages</button>' + '<button id="hc-calls" title="Trace callers and callees (Alt+Shift+H)">Calls</button>' + "</div>" + '<div class="foot"><b>' + esc(j.server || "lsp") + "</b>" + "<span>" + (isMac ? "⌘" : "Ctrl") + "+click definition</span>" + "<span>Shift+F12 references</span></div>";
+    hovercard.innerHTML = (j.signature ? '<div class="sig">' + j.signature + "</div>" : "") + (j.doc ? '<div class="doc">' + esc(j.doc) + "</div>" : "") + '<div class="actions">' + '<button id="hc-copy-ref" title="Copy file and line reference">Copy Ref</button>' + '<button id="hc-copy-ai" title="Copy snippet with file path for AI Agent / LLMs">Copy for Agent</button>' + '<button id="hc-find-refs" title="Find all usages across codebase">Usages</button>' + '<button id="hc-calls" title="' + withKeys("Trace callers and callees ({Alt+Shift+H})") + '">Calls</button>' + "</div>" + '<div class="foot"><b>' + esc(j.server || "lsp") + "</b>" + "<span>" + withKeys("{Mod+Click} definition") + "</span>" + "<span>" + withKeys("{Shift+F12} references") + "</span></div>";
     const btnRef = hovercard.querySelector("#hc-copy-ref");
     const btnAi = hovercard.querySelector("#hc-copy-ai");
     const btnRefs = hovercard.querySelector("#hc-find-refs");
@@ -1718,12 +1906,13 @@
         return;
       hideHover();
     });
+    const modKey = isMac ? "Meta" : "Control";
     addEventListener("keydown", (e) => {
-      if ((e.key === "Control" || e.key === "Meta") && pointerAt)
+      if (e.key === modKey && pointerAt)
         onMove({ ...pointerAt, mod: true });
     });
     addEventListener("keyup", (e) => {
-      if (e.key === "Control" || e.key === "Meta")
+      if (e.key === modKey)
         clearLink();
     });
   }
@@ -1852,9 +2041,9 @@
     let idx = S2.tabs.findIndex((t) => t.path === path);
     if (idx < 0) {
       let j;
-      const start = line ? Math.max(0, Math.floor((line - 1) / CHUNK) * CHUNK) : 0;
+      const start2 = line ? Math.max(0, Math.floor((line - 1) / CHUNK) * CHUNK) : 0;
       try {
-        j = await api("/api/file", { path, start, count: CHUNK });
+        j = await api("/api/file", { path, start: start2, count: CHUNK });
       } catch (e) {
         setStatusNote(path + ": " + e.message);
         return;
@@ -1871,7 +2060,7 @@
         maxCols: j.maxCols,
         size: j.size,
         lines: new Array(j.total),
-        chunks: new Set([start / CHUNK]),
+        chunks: new Set([start2 / CHUNK]),
         pending: new Set,
         refining: new Set,
         scrollTop: 0,
@@ -1885,7 +2074,7 @@
       S2.tabs.push(d2);
       idx = S2.tabs.length - 1;
       if (j.refine)
-        refineChunk(d2, start / CHUNK);
+        refineChunk(d2, start2 / CHUNK);
     }
     const prev = doc_();
     if (prev && prev !== S2.tabs[idx])
@@ -1898,6 +2087,7 @@
       S2.at = null;
     S2.lsp.state = d.lsp && d.lsp.state || "off";
     S2.lsp.server = d.lsp && d.lsp.server || "";
+    S2.lsp.missing = d.lsp && d.lsp.missing || "";
     warmLSP(d);
     drawTabs();
     drawCrumbs();
@@ -1950,7 +2140,7 @@
     updateStatus();
   }
   function drawTabs() {
-    $("#tabs").innerHTML = S2.tabs.map((t, i) => '<div class="tab' + (i === S2.active ? " active" : "") + '" data-i="' + i + '" title="' + esc(t.path) + '">' + '<span class="tn">' + esc(t.name) + '</span><span class="x" data-close="' + i + '" title="Close tab (Ctrl+W / Alt+W)"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 2l6 6M8 2l-6 6"/></svg></span></div>').join("");
+    $("#tabs").innerHTML = S2.tabs.map((t, i) => '<div class="tab' + (i === S2.active ? " active" : "") + '" data-i="' + i + '" title="' + esc(t.path) + '">' + '<span class="tn">' + esc(t.name) + '</span><span class="x" data-close="' + i + '" title="' + withKeys("Close tab ({Alt+W})") + '"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 2l6 6M8 2l-6 6"/></svg></span></div>').join("");
     const act = $("#tabs .tab.active");
     if (act)
       act.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -1967,6 +2157,7 @@
     S2.at = null;
     S2.lsp.state = S2.tabs[i].lsp && S2.tabs[i].lsp.state || "off";
     S2.lsp.server = S2.tabs[i].lsp && S2.tabs[i].lsp.server || "";
+    S2.lsp.missing = S2.tabs[i].lsp && S2.tabs[i].lsp.missing || "";
     warmLSP(S2.tabs[i]);
     drawTabs();
     drawCrumbs();
@@ -2205,35 +2396,37 @@
 
   // web/src/shortcuts.js
   var SHORTCUTS = [
-    ["Ctrl K", "Quick search / palette"],
-    ["Ctrl P", "Go to file"],
-    ["Ctrl Shift P", "Command palette"],
-    ["Ctrl Shift O", "Go to symbol"],
-    ["Ctrl Shift F", "Search in files"],
-    ["Ctrl F", "Find in file"],
-    ["Ctrl G", "Go to line"],
-    ["Alt Z", "Toggle word wrap"],
-    ["Enter / Shift Enter", "Next / previous match"],
-    ["F12 or Ctrl Click", "Go to definition"],
-    ["Shift F12", "Find all references"],
-    ["Alt Shift H", "Call trail (callers / callees)"],
-    ["Ctrl J", "Toggle right inspector (Symbols/Refs)"],
-    ["Alt ←  /  Alt →", "Navigate back / forward"],
-    ["Ctrl B", "Toggle sidebar"],
-    ["Ctrl W / Alt W", "Close tab"],
-    ["Ctrl Tab", "Next tab"],
-    ["Alt 1 … 9", "Select tab"],
-    ["Double click", "Highlight all occurrences"],
-    ["Alt C / Alt A", "Copy selection ref / for agent"],
-    ["Alt U", "Find usages of selection"],
-    ["Ctrl Home / End", "Top / bottom of file"],
-    ["← → Home End", "Move caret along the line"],
-    ["Esc", "Dismiss"]
+    [["Mod+K"], "Quick search / palette"],
+    [["Mod+P"], "Go to file"],
+    [["Mod+Shift+P"], "Command palette"],
+    [["Mod+Shift+O"], "Go to symbol"],
+    [["Mod+Shift+F"], "Search in files"],
+    [["Mod+F"], "Find in file"],
+    [["Mod+G"], "Go to line"],
+    [["Alt+Z"], "Toggle word wrap"],
+    [["Alt+L"], "Toggle line numbers"],
+    [["Enter", "Shift+Enter"], "Next / previous match"],
+    [["F12", "Mod+Click"], "Go to definition"],
+    [["Shift+F12"], "Find all references"],
+    [["Alt+Shift+H"], "Call trail (callers / callees)"],
+    [["Mod+J"], "Toggle right inspector (Symbols/Refs)"],
+    [["Alt+Left", "Alt+Right"], "Navigate back / forward"],
+    [["Mod+B"], "Toggle sidebar"],
+    [["Alt+W"], "Close tab"],
+    [["Ctrl+Tab"], "Next tab"],
+    [["Alt+1…9"], "Select tab"],
+    [["Double click"], "Highlight all occurrences"],
+    [["Alt+C", "Alt+A"], "Copy selection ref / for agent"],
+    [["Alt+U"], "Find usages of selection"],
+    [["Mod+Home|Mod+Up", "Mod+End|Mod+Down"], "Top / bottom of file"],
+    [["Home|Mod+Left", "End|Mod+Right"], "Start / end of line"],
+    [["Left", "Right"], "Move caret along the line"],
+    [["Esc"], "Dismiss"]
   ];
   function showHelp() {
     const h = $("#helpsheet");
     const ver = S2.meta?.version ? ` <span class="help-version">v${esc(S2.meta.version)}</span>` : "";
-    h.innerHTML = '<div class="help-card"><div class="help-header"><h2>Keyboard Shortcuts</h2>' + ver + '</div><dl class="help-grid">' + SHORTCUTS.map(([k, v]) => "<dt>" + k.split(" ").map((x) => "<kbd>" + esc(x.replace("Ctrl", isMac ? "⌘" : "Ctrl")) + "</kbd>").join("") + "</dt>" + "<dd>" + esc(v) + "</dd>").join("") + "</dl></div>";
+    h.innerHTML = '<div class="help-card"><div class="help-header"><h2>Keyboard Shortcuts</h2>' + ver + '</div><dl class="help-grid">' + SHORTCUTS.map(([combos, v]) => "<dt>" + combos.map(keyCaps).filter(Boolean).join('<span class="key-or">/</span>') + "</dt>" + "<dd>" + esc(v) + "</dd>").join("") + "</dl></div>";
     h.hidden = false;
   }
   var inField = (el) => el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
@@ -2352,7 +2545,7 @@
         render();
         return;
       }
-      if ((mod || e.altKey) && (e.key === "w" || e.key === "W")) {
+      if (mod && (e.key === "w" || e.key === "W") || e.altKey && e.code === "KeyW") {
         e.preventDefault();
         e.stopPropagation();
         if (S2.active >= 0)
@@ -2388,16 +2581,21 @@
         showCalls();
         return;
       }
+      if (e.altKey && !mod && !e.shiftKey && /^Digit[1-9]$/.test(e.code)) {
+        e.preventDefault();
+        switchTab(+e.code.slice(5) - 1);
+        return;
+      }
       if (e.altKey && !mod && !e.shiftKey && SEL_KEYS[e.code] && runSelectionAction(SEL_KEYS[e.code])) {
         e.preventDefault();
         return;
       }
-      if (e.altKey && (e.key === "z" || e.key === "Z")) {
+      if (e.altKey && e.code === "KeyZ") {
         e.preventDefault();
         toggleWordWrap();
         return;
       }
-      if (e.altKey && (e.key === "l" || e.key === "L")) {
+      if (e.altKey && e.code === "KeyL") {
         e.preventDefault();
         toggleLineNumbers();
         return;
@@ -2412,20 +2610,41 @@
       const d = doc_();
       if (!d)
         return;
-      if (mod && e.key === "Home") {
-        e.preventDefault();
+      const toTop = () => {
         vp.scrollTop = 0;
         d.cur = 1;
         render();
         updateStatus();
-        return;
-      }
-      if (mod && e.key === "End") {
-        e.preventDefault();
+      };
+      const toBottom = () => {
         vp.scrollTop = sizer.offsetHeight;
         d.cur = d.total;
         render();
         updateStatus();
+      };
+      if (mod && e.key === "Home") {
+        e.preventDefault();
+        toTop();
+        return;
+      }
+      if (mod && e.key === "End") {
+        e.preventDefault();
+        toBottom();
+        return;
+      }
+      if (isMac && mod && e.key === "ArrowUp") {
+        e.preventDefault();
+        toTop();
+        return;
+      }
+      if (isMac && mod && e.key === "ArrowDown") {
+        e.preventDefault();
+        toBottom();
+        return;
+      }
+      if (isMac && mod && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+        e.preventDefault();
+        caretToEdge(e.key === "ArrowRight");
         return;
       }
       if (e.key === "ArrowDown" || e.key === "j") {
@@ -2485,7 +2704,8 @@
     { name: "Find in Current File", run: () => openFind(S2.lastWord) },
     { name: "Go to Definition", run: () => gotoDefinition() },
     { name: "Find All References (Right Panel)", run: () => findReferences() },
-    { name: "Show Call Trail: Callers / Callees (Alt+Shift+H)", run: () => showCalls() },
+    { name: withKeys("Show Call Trail: Callers / Callees ({Alt+Shift+H})"), run: () => showCalls() },
+    { name: "Set Up Language Server…", run: () => openLspSetup() },
     { name: "Toggle Right Inspector (Symbols & References)", run: () => {
       if (document.body.classList.contains("right-hidden"))
         showRightInspector("refs");
@@ -2500,9 +2720,9 @@
         revealFile(d.path);
       }
     } },
-    { name: "Toggle Word Wrap (Alt+Z)", run: () => toggleWordWrap() },
-    { name: "Toggle Line Numbers", run: () => toggleLineNumbers() },
-    { name: "Toggle Sidebar", run: () => document.body.classList.toggle("side-hidden") },
+    { name: withKeys("Toggle Word Wrap ({Alt+Z})"), run: () => toggleWordWrap() },
+    { name: withKeys("Toggle Line Numbers ({Alt+L})"), run: () => toggleLineNumbers() },
+    { name: withKeys("Toggle Sidebar ({Mod+B})"), run: () => document.body.classList.toggle("side-hidden") },
     { name: "Select Theme…", run: () => openPalette("theme") },
     { name: "Next Theme", run: cycleTheme },
     { name: "Re-index Workspace", run: () => $("#btn-reindex").click() },
@@ -2723,9 +2943,7 @@
       document.body.classList.toggle("hide-lines", !S2.lineNumbers);
       updateEditorOptionControls();
     } catch {}
-    if (isMac) {
-      document.querySelectorAll(".mod-key").forEach((el) => el.textContent = "⌘");
-    }
+    applyKeyLabels();
     measure();
     S2.meta = await api("/api/meta");
     if (S2.meta.metrics)

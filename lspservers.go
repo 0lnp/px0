@@ -2,23 +2,27 @@ package main
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 )
 
 // lspServerDef describes one language server we know how to drive. Nothing here
-// is required for px0 to work; a server is used only if its binary happens to
-// be on PATH.
+// is required for px0 to work; a server is used only if its binary is found on
+// PATH or in one of the folders installers commonly use (lspBinDirs).
 type lspServerDef struct {
 	Name        string
+	Lang        string // language name, shown when offering to install the server
 	Cmd         []string
 	Exts        []string          // file extensions this server handles
 	LangIDs     map[string]string // ext -> LSP languageId, when it differs
 	DefaultLang string
 	InitOptions map[string]any
+	Install     []lspInstall // ways to get the binary, best first
 }
 
 func (d lspServerDef) LanguageID(rel string) string {
@@ -33,60 +37,103 @@ func (d lspServerDef) LanguageID(rel string) string {
 // extension, so a more capable server listed earlier takes precedence.
 var lspRegistry = []lspServerDef{
 	{
-		Name: "gopls", Cmd: []string{"gopls"},
+		Name: "gopls", Lang: "Go", Cmd: []string{"gopls"},
 		Exts: []string{".go"}, DefaultLang: "go",
+		Install: []lspInstall{
+			{Cmd: []string{"go", "install", "golang.org/x/tools/gopls@latest"}, Auto: true},
+			{OS: "darwin", Cmd: []string{"brew", "install", "gopls"}, Auto: true},
+		},
 	},
 	{
-		Name: "rust-analyzer", Cmd: []string{"rust-analyzer"},
+		Name: "rust-analyzer", Lang: "Rust", Cmd: []string{"rust-analyzer"},
 		Exts: []string{".rs"}, DefaultLang: "rust",
+		Install: []lspInstall{
+			{Cmd: []string{"rustup", "component", "add", "rust-analyzer"}, Auto: true},
+			{OS: "darwin", Cmd: []string{"brew", "install", "rust-analyzer"}, Auto: true},
+		},
 	},
 	{
-		Name: "pyright", Cmd: []string{"pyright-langserver", "--stdio"},
+		Name: "pyright", Lang: "Python", Cmd: []string{"pyright-langserver", "--stdio"},
 		Exts: []string{".py", ".pyi"}, DefaultLang: "python",
+		Install: []lspInstall{
+			{Cmd: []string{"npm", "install", "-g", "pyright"}, Auto: true},
+			{OS: "darwin", Cmd: []string{"brew", "install", "pyright"}, Auto: true},
+		},
 	},
 	{
-		Name: "pylsp", Cmd: []string{"pylsp"},
+		Name: "pylsp", Lang: "Python", Cmd: []string{"pylsp"},
 		Exts: []string{".py", ".pyi"}, DefaultLang: "python",
+		Install: []lspInstall{
+			{Cmd: []string{"pipx", "install", "python-lsp-server"}, Auto: true},
+			{OS: "darwin", Cmd: []string{"brew", "install", "python-lsp-server"}, Auto: true},
+		},
 	},
 	{
-		Name: "ruff", Cmd: []string{"ruff", "server"},
+		// Not offered for install: it lints, but answers no call hierarchy.
+		Name: "ruff", Lang: "Python", Cmd: []string{"ruff", "server"},
 		Exts: []string{".py"}, DefaultLang: "python",
 	},
 	{
-		Name: "typescript", Cmd: []string{"typescript-language-server", "--stdio"},
+		Name: "typescript", Lang: "TypeScript and JavaScript", Cmd: []string{"typescript-language-server", "--stdio"},
 		Exts:        []string{".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"},
 		LangIDs:     map[string]string{".ts": "typescript", ".tsx": "typescriptreact", ".jsx": "javascriptreact"},
 		DefaultLang: "javascript",
+		Install: []lspInstall{
+			{Cmd: []string{"npm", "install", "-g", "typescript-language-server", "typescript"}, Auto: true},
+			{OS: "darwin", Cmd: []string{"brew", "install", "typescript-language-server"}, Auto: true},
+		},
 	},
 	{
-		Name: "clangd", Cmd: []string{"clangd", "--background-index"},
+		Name: "clangd", Lang: "C and C++", Cmd: []string{"clangd", "--background-index"},
 		Exts:        []string{".c", ".h", ".cc", ".cpp", ".cxx", ".hpp", ".hh", ".m", ".mm"},
 		LangIDs:     map[string]string{".c": "c", ".h": "c"},
 		DefaultLang: "cpp",
+		Install: []lspInstall{
+			{OS: "darwin", Cmd: []string{"brew", "install", "llvm"}, Auto: true},
+			// System package managers want an administrator: shown, not run.
+			{OS: "linux", Cmd: []string{"sudo", "apt", "install", "clangd"}},
+			{OS: "windows", Cmd: []string{"winget", "install", "LLVM.LLVM"}},
+		},
 	},
 	{
-		Name: "zls", Cmd: []string{"zls"},
+		Name: "zls", Lang: "Zig", Cmd: []string{"zls"},
 		Exts: []string{".zig"}, DefaultLang: "zig",
+		Install: []lspInstall{
+			{OS: "darwin", Cmd: []string{"brew", "install", "zls"}, Auto: true},
+		},
 	},
 	{
-		Name: "lua", Cmd: []string{"lua-language-server"},
+		Name: "lua", Lang: "Lua", Cmd: []string{"lua-language-server"},
 		Exts: []string{".lua"}, DefaultLang: "lua",
+		Install: []lspInstall{
+			{OS: "darwin", Cmd: []string{"brew", "install", "lua-language-server"}, Auto: true},
+		},
 	},
 	{
-		Name: "solargraph", Cmd: []string{"solargraph", "stdio"},
+		Name: "solargraph", Lang: "Ruby", Cmd: []string{"solargraph", "stdio"},
 		Exts: []string{".rb"}, DefaultLang: "ruby",
+		Install: []lspInstall{
+			{Cmd: []string{"gem", "install", "solargraph"}, Auto: true},
+			{OS: "darwin", Cmd: []string{"brew", "install", "solargraph"}, Auto: true},
+		},
 	},
 	{
-		Name: "jdtls", Cmd: []string{"jdtls"},
+		Name: "jdtls", Lang: "Java", Cmd: []string{"jdtls"},
 		Exts: []string{".java"}, DefaultLang: "java",
+		Install: []lspInstall{
+			{OS: "darwin", Cmd: []string{"brew", "install", "jdtls"}, Auto: true},
+		},
 	},
 	{
-		Name: "omnisharp", Cmd: []string{"omnisharp", "-lsp"},
+		Name: "omnisharp", Lang: "C#", Cmd: []string{"omnisharp", "-lsp"},
 		Exts: []string{".cs"}, DefaultLang: "csharp",
 	},
 	{
-		Name: "texlab", Cmd: []string{"texlab"},
+		Name: "texlab", Lang: "LaTeX", Cmd: []string{"texlab"},
 		Exts: []string{".tex"}, DefaultLang: "latex",
+		Install: []lspInstall{
+			{OS: "darwin", Cmd: []string{"brew", "install", "texlab"}, Auto: true},
+		},
 	},
 }
 
@@ -110,12 +157,17 @@ type lspManager struct {
 	enabled bool
 
 	mu        sync.Mutex
-	byExt     map[string]*lspServerDef // resolved once at startup
+	byExt     map[string]*lspServerDef // resolved by discover(), again on Rescan
 	clients   map[string]*lspClient    // server name -> client
 	starting  map[string]chan struct{}
 	failed    map[string]string
 	available []string
 	restarts  map[string]int // crashes recovered from, per server name
+
+	discovered bool // the first discover() has finished
+
+	jobMu sync.Mutex
+	jobs  map[string]*lspJob // install runs, by server name
 
 	// external holds absolute paths outside the indexed tree that a language
 	// server pointed us at. Only these are openable beyond the root, so a
@@ -158,27 +210,95 @@ func newLSPManager(root string, enabled bool) *lspManager {
 	return m
 }
 
+// discover resolves which registry servers are installed. It can run again
+// (Rescan) after something is installed; the result replaces the previous one
+// in a single swap, so readers never see a half-built table.
 func (m *lspManager) discover() {
-	seen := map[string]bool{}
+	dirs := lspBinDirs()
+	byExt := map[string]*lspServerDef{}
+	var available []string
 	for i := range lspRegistry {
-		def := &lspRegistry[i]
-		if _, err := exec.LookPath(def.Cmd[0]); err != nil {
+		def := lspRegistry[i] // a copy: Cmd[0] becomes the resolved path
+		bin, ok := lookPathIn(def.Cmd[0], dirs)
+		if !ok {
 			continue
 		}
-		m.mu.Lock()
+		def.Cmd = append([]string{bin}, def.Cmd[1:]...)
 		claimed := false
 		for _, ext := range def.Exts {
-			if m.byExt[ext] == nil {
-				m.byExt[ext] = def
+			if byExt[ext] == nil {
+				byExt[ext] = &def
 				claimed = true
 			}
 		}
-		if claimed && !seen[def.Name] {
-			seen[def.Name] = true
-			m.available = append(m.available, def.Name)
+		if claimed {
+			available = append(available, def.Name)
 		}
-		m.mu.Unlock()
 	}
+	m.mu.Lock()
+	m.byExt, m.available, m.discovered = byExt, available, true
+	m.mu.Unlock()
+}
+
+func (m *lspManager) isDiscovered() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.discovered
+}
+
+// lspBinDirs lists folders installers put binaries in that are often missing
+// from PATH, so a server installed from px0, or by hand after px0 started, is
+// found without restarting the shell px0 was launched from.
+func lspBinDirs() []string {
+	var dirs []string
+	add := func(elem ...string) { dirs = append(dirs, filepath.Join(elem...)) }
+	if v := os.Getenv("GOBIN"); v != "" {
+		add(v)
+	}
+	for _, p := range filepath.SplitList(os.Getenv("GOPATH")) {
+		if p != "" {
+			add(p, "bin")
+		}
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		add(home, "go", "bin")     // go install, default GOPATH
+		add(home, ".cargo", "bin") // rustup, cargo install
+		add(home, ".local", "bin") // pipx
+	}
+	// npm puts global packages beside its own executable unless the prefix was moved.
+	if npm, err := exec.LookPath("npm"); err == nil {
+		add(filepath.Dir(npm))
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		add("/opt/homebrew/bin")
+		add("/usr/local/bin")
+		// Homebrew's llvm is keg-only: clangd is installed but never linked.
+		add("/opt/homebrew/opt/llvm/bin")
+		add("/usr/local/opt/llvm/bin")
+	case "windows":
+		if v := os.Getenv("APPDATA"); v != "" {
+			add(v, "npm")
+		}
+		if v := os.Getenv("ProgramFiles"); v != "" {
+			add(v, "LLVM", "bin")
+		}
+	}
+	return dirs
+}
+
+// lookPathIn finds a command on PATH, then in dirs. On Windows exec.LookPath
+// also tries PATHEXT extensions for a joined path, so "npm" finds npm.cmd.
+func lookPathIn(name string, dirs []string) (string, bool) {
+	if p, err := exec.LookPath(name); err == nil {
+		return p, true
+	}
+	for _, d := range dirs {
+		if p, err := exec.LookPath(filepath.Join(d, name)); err == nil {
+			return p, true
+		}
+	}
+	return "", false
 }
 
 func (m *lspManager) Available() []string {
@@ -206,6 +326,11 @@ func (m *lspManager) defFor(rel string) *lspServerDef {
 func (m *lspManager) State(rel string) (lspState, string) {
 	def := m.defFor(rel)
 	if def == nil {
+		// Discovery runs in the background at startup. Until it finishes, a
+		// file type px0 knows may still get a server, so keep the UI asking.
+		if m.enabled && !m.isDiscovered() && len(registryFor(rel)) > 0 {
+			return lspStarting, ""
+		}
 		return lspOff, ""
 	}
 	m.mu.Lock()

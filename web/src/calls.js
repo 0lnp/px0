@@ -1,9 +1,10 @@
 // web/src/calls.js
-import { $, $$, esc, S, doc_, api } from './state.js';
+import { $, $$, esc, S, doc_, api, keyLabel } from './state.js';
 import { updateStatus, setStatusNote, setLspState } from './status.js';
 import { openFile } from './tabs.js';
 import { showRightInspector } from './inspector.js';
 import { positionNow, flashFind } from './lsp.js';
+import { renderLspSetup, cancelLspSetup } from './lspsetup.js';
 
 /* Call trail: the language server's call hierarchy, grown one level at a time
    as the reader expands it. Callers walk up toward entry points, callees walk
@@ -42,12 +43,16 @@ export async function showCalls(arg) {
   const d = doc_();
   const at = (arg && arg.word) ? arg : positionNow(typeof arg === 'string' ? arg : S.lastWord);
   showRightInspector('calls');
+  cancelLspSetup();
   if (!d) return;
-  if (!at || at.imprecise) { hint('Click a function name in the editor, then press <b>Alt+Shift+H</b>.'); return; }
+  // Without a server there is nothing to trace: offer to install or start one, then come back here.
   if (S.lsp.state === 'off' || S.lsp.state === 'failed') {
-    hint('Call trails come from a language server, and none is running for this file type.');
+    T = null;
+    $('#right-calls-target').textContent = at ? at.word : '-';
+    renderLspSetup(listEl(), () => showCalls(arg));
     return;
   }
+  if (!at || at.imprecise) { hint('Click a function name in the editor, then press <b>' + esc(keyLabel('Alt+Shift+H')) + '</b>.'); return; }
 
   const my = ++seq;
   T = null;
@@ -127,6 +132,13 @@ function draw() {
   el.innerHTML = html;
 }
 
+// Opens the setup panel whatever the server's state, for the palette command.
+export function openLspSetup() {
+  showRightInspector('calls');
+  T = null;
+  renderLspSetup(listEl(), () => showCalls(S.at));
+}
+
 export function initCalls() {
   $('#calls-dir')?.addEventListener('click', e => {
     const b = e.target.closest('[data-dir]');
@@ -134,7 +146,12 @@ export function initCalls() {
   });
 
   $('.inspector-tab[data-itab="calls"]')?.addEventListener('click', () => {
-    if (!T && S.at) showCalls(S.at);
+    if (!T && (S.at || S.lsp.state === 'off' || S.lsp.state === 'failed')) showCalls(S.at);
+  });
+
+  // The status bar names a missing or failed server; clicking it goes to the fix.
+  $('#st-lsp')?.addEventListener('click', () => {
+    if (S.lsp.missing || S.lsp.state === 'failed') openLspSetup();
   });
 
   listEl()?.addEventListener('click', async e => {
