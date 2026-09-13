@@ -1,9 +1,23 @@
 import { $, S, doc_, api } from './state.js';
+import { previewing } from './markdown.js';
 
 export function updateStatus() {
   const d = doc_();
   const sizeEl = $('#st-size');
   if (sizeEl) sizeEl.textContent = d ? fmtBytes(d.size) : '';
+
+  const isMd = !!(d && d.markdown), shown = previewing(d);
+  const mdBtn = $('[data-action="md-preview"]');
+  if (mdBtn) {
+    mdBtn.hidden = !isMd;
+    mdBtn.classList.toggle('active', shown);
+  }
+  const sw = $('#md-switch');
+  if (sw) {
+    sw.hidden = !isMd;
+    document.body.classList.toggle('md-tab', isMd);
+    for (const b of sw.children) b.classList.toggle('on', isMd && (b.dataset.md === 'preview') === shown);
+  }
 
   const idxEl = $('#st-index');
   if (idxEl && S.meta) {

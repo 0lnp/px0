@@ -340,7 +340,13 @@ func (d *Doc) backgroundPass() {
 }
 
 // tokenise renders one contiguous run of source into exactly want lines of HTML.
-func (d *Doc) tokenise(src string, want int) (out []string) {
+func (d *Doc) tokenise(src string, want int) []string {
+	return highlightLines(d.lexer, src, want)
+}
+
+// highlightLines lexes src into exactly want lines of HTML, one <i class=...>
+// per token. A nil lexer gives escaped plain text.
+func highlightLines(lexer chroma.Lexer, src string, want int) (out []string) {
 	out = make([]string, 0, want)
 	var b strings.Builder
 	b.Grow(256)
@@ -360,11 +366,11 @@ func (d *Doc) tokenise(src string, want int) (out []string) {
 		b.WriteString(`</i>`)
 	}
 
-	if d.lexer == nil {
+	if lexer == nil {
 		return plainFallback(src, want)
 	}
 
-	it, err := d.lexer.Tokenise(nil, src)
+	it, err := lexer.Tokenise(nil, src)
 	if err != nil {
 		return plainFallback(src, want)
 	}

@@ -23,6 +23,7 @@ Whenever modifying, adding, or refactoring code in this repository, you must aud
 | Syntax Highlighting & Lexing | `highlight.go` | `ARCHITECTURE.md`, `README.md` |
 | Language Servers (LSP) | `lsp.go`, `lspnav.go`, `lspservers.go`, `lspsetup.go`, `calls.go` | `README.md`, `BENCHMARKS.md` |
 | Frontend UI / Virtualization | `web/app.js`, `web/index.html`, `web/style.css` | `ARCHITECTURE.md`, `README.md` |
+| Markdown Preview | `markdown.go`, `web/src/markdown.js` | `ARCHITECTURE.md`, `README.md`, `STYLING.md` |
 | Themes / Colour Tokens | `web/themes/*.css`, `web/style.css`, `web/src/theme.js` | `STYLING.md` |
 | CLI Flags / Configuration | `main.go` | `README.md` |
 | Performance Metrics / Scripts | `benchmark.sh` | `BENCHMARKS.md` |
@@ -48,6 +49,7 @@ To quickly locate and modify UI features, refer to this structured section index
 | `<div id="resizer">` | Draggable splitter between sidebar and main editor viewport |
 | `<div id="tabs">` & `#crumbs` | Open file tabs bar and current file path breadcrumb navigation |
 | `<div id="editor">` | Core editor container with `#viewport`, `#sizer`, and virtual rows container `#rows` |
+| `<div id="mdview">` | Markdown preview over `#viewport` for a Markdown tab, holding `<article id="md" class="md">`. Every id inside it is prefixed `md-`. The Preview / Source switch (`#md-switch`, pinned to the right of the tab bar inside `#main`) and the status bar's Preview button (`data-action="md-preview"`) show only on Markdown tabs; `body.md-tab` marks that state |
 | `<div id="empty">` | Welcome / splash screen shown when no files are open |
 | `<div id="hovercard">` | Floating LSP type signature, doc preview, and quick AI reference buttons |
 | `<div id="findbar">` | In-file search overlay (Ctrl+F) |
@@ -84,6 +86,7 @@ The frontend is modularized into clean ES modules under `web/src/` and bundled i
 | `web/src/calls.js` | `showCalls()`, `initCalls()`, `openLspSetup()`: call trail tree in the right inspector (callers / callees via `/api/lsp/calls`, expanded lazily) |
 | `web/src/lspsetup.js` | `renderLspSetup()`, `cancelLspSetup()`: install / detect-and-start panel shown when no language server is running (`/api/lsp/setup`, `/api/lsp/install`, `/api/lsp/start`) |
 | `web/src/find.js` | `openFind()`, `clearFind()`, `runFind()`, `jumpToHit()`, minimap hit dots (Ctrl+F) |
+| `web/src/markdown.js` | `syncPreview()`, `togglePreview()` (Alt+M), `previewing()`, `previewLine()`, `previewTopLine()`: Markdown preview from `/api/markdown`, allowlist sanitizer, workspace link and image resolution, GitHub alerts, code block copy buttons, find in the preview (`findInPreview()`), preview scroll keys |
 | `web/src/palette.js` | `openPalette()`, `refreshPalette()`, `COMMANDS`, fuzzy file/symbol/command finder |
 | `web/src/shortcuts.js` | `showHelp()`, Alt+Z word wrap toggle, keyboard shortcuts listener |
 | `web/src/theme.js` | `listThemes()`, `setTheme()`, `cycleTheme()`, `initTheme()`: theme discovery from loaded CSS and persistence |

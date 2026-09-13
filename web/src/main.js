@@ -15,6 +15,7 @@ import { initFind } from './find.js';
 import { initPalette } from './palette.js';
 import { initShortcuts } from './shortcuts.js';
 import { initTheme } from './theme.js';
+import { initMarkdown } from './markdown.js';
 import { updateStatus, initMetrics, initStatusFit, updateMetricsDisplay } from './status.js';
 
 // Initialize all subsystems
@@ -32,6 +33,7 @@ initCalls();
 initFind();
 initPalette();
 initShortcuts();
+initMarkdown();
 initMetrics();
 initStatusFit();
 
@@ -49,6 +51,10 @@ initStatusFit();
     const linesPref = localStorage.getItem('px0.lineNumbers');
     S.lineNumbers = linesPref !== null ? linesPref === 'true' : true;
     document.body.classList.toggle('hide-lines', !S.lineNumbers);
+
+    // Restore Markdown preview (default ON)
+    const mdPref = localStorage.getItem('px0.mdPreview');
+    S.mdPreview = mdPref !== null ? mdPref === 'true' : true;
 
     updateEditorOptionControls();
   } catch {}

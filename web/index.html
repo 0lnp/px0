@@ -50,6 +50,11 @@
   <main id="main">
     <!-- File Tabs -->
     <div id="tabs"></div>
+    <!-- Markdown tabs only: switch between the rendered file and its source -->
+    <div id="md-switch" role="group" aria-label="Markdown view" hidden>
+      <button data-md="preview" title="Rendered Markdown ({Alt+M})">Preview</button>
+      <button data-md="source" title="Markdown source ({Alt+M})">Source</button>
+    </div>
 
     <!-- Virtualized Code Editor Viewport -->
     <div id="editor">
@@ -57,6 +62,8 @@
       <div id="viewport">
         <div id="sizer"><div id="rows"></div><div id="caret" hidden></div></div>
       </div>
+      <!-- Markdown preview: covers the code view for a Markdown tab (Alt+M toggles) -->
+      <div id="mdview" hidden><article id="md" class="md"></article></div>
       <div id="minimap-hits"></div>
 
       <!-- Welcome / Empty State Screen -->
@@ -115,6 +122,7 @@
         <button class="footer-btn" data-action="symbols" title="Go to Symbol ({Mod+Shift+O})"><span class="footer-btn-label">Symbols</span><kbd class="footer-kbd" data-keys="Mod+Shift+O"></kbd></button>
         <button class="footer-btn" data-action="find" title="Find in File ({Mod+F})"><span class="footer-btn-label">Find</span><kbd class="footer-kbd" data-keys="Mod+F"></kbd></button>
         <button class="footer-btn" data-action="goto" title="Go to Line ({Mod+G})"><span class="footer-btn-label">Go to</span><kbd class="footer-kbd" data-keys="Mod+G"></kbd></button>
+        <button class="footer-btn" data-action="md-preview" title="Toggle Markdown Preview ({Alt+M})" hidden><span class="footer-btn-label">Preview</span><kbd class="footer-kbd" data-keys="Alt+M"></kbd></button>
         <button class="footer-btn" data-action="wrap" title="Toggle Word Wrap ({Alt+Z})"><span class="footer-btn-label">Wrap</span><kbd class="footer-kbd" data-keys="Alt+Z"></kbd></button>
         <button class="footer-btn" data-action="line-numbers" title="Toggle Line Numbers ({Alt+L})"><span class="footer-btn-label">Lines</span><kbd class="footer-kbd" data-keys="Alt+L"></kbd></button>
         <button class="footer-btn" data-action="help" title="Keyboard Shortcuts ({?})"><span class="footer-btn-label">Help</span><kbd class="footer-kbd" data-keys="?"></kbd></button>

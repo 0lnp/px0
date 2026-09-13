@@ -11,6 +11,7 @@ import { revealDir } from './tree.js';
 import { clearLink } from './hover.js';
 import { clearFind } from './find.js';
 import { clearSelectAll } from './selbar.js';
+import { syncPreview, previewing, previewLine } from './markdown.js';
 
 // Recently closed files, newest last, for Alt+Shift+T.
 const closedTabs = [];
@@ -36,7 +37,7 @@ export async function openFile(path, opts = {}) {
       path, name: path.split('/').pop(), lang: j.lang, total: j.total, maxCols: j.maxCols,
       size: j.size, lines: new Array(j.total), chunks: new Set([start / CHUNK]),
       pending: new Set(), refining: new Set(), scrollTop: 0, cur: line || 1,
-      outline: null, gen: 0,
+      outline: null, gen: 0, markdown: !!j.markdown,
     };
     for (let i = 0; i < j.lines.length; i++) d.lines[j.start + i] = j.lines[i];
     d.lsp = j.lsp || { state: 'off', server: '' };
@@ -52,6 +53,7 @@ export async function openFile(path, opts = {}) {
 
   $('#empty').hidden = true;
   hideImage();
+  syncPreview();
   if (!S.at || S.at.path !== d.path) S.at = null;
   S.lsp.state = (d.lsp && d.lsp.state) || 'off';
   S.lsp.server = (d.lsp && d.lsp.server) || '';
@@ -68,6 +70,7 @@ export async function openFile(path, opts = {}) {
 }
 
 export function centerLine(n) {
+  if (previewing()) { previewLine(n); return; }
   const y = (n - 1) * LH - Math.max(0, vp.clientHeight / 2 - LH * 2);
   vp.scrollTop = Math.max(0, y);
 }
@@ -94,6 +97,7 @@ export function closeTab(i) {
   }
   if (S.tabs.length === 0) {
     S.active = -1;
+    syncPreview();
     rowsEl.innerHTML = ''; sizer.style.height = '0px';
     $('#empty').hidden = false; drawCrumbs();
     drawTabs(); updateStatus();
@@ -101,6 +105,7 @@ export function closeTab(i) {
   }
   S.active = Math.min(i, S.tabs.length - 1);
   const d = doc_();
+  syncPreview();
   drawTabs(); drawCrumbs(); layout();
   vp.scrollTop = d.scrollTop; render(); updateStatus();
 }
@@ -132,6 +137,7 @@ export function switchTab(i) {
   const prev = doc_();
   if (prev) prev.scrollTop = vp.scrollTop;
   S.active = i;
+  syncPreview();
   clearFind();
   clearSelectAll();
   S.at = null;

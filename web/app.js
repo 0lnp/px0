@@ -69,7 +69,8 @@
     gen: 0,
     chW: 7.8,
     wrap: true,
-    lineNumbers: true
+    lineNumbers: true,
+    mdPreview: true
   };
   var doc_ = () => S2.active >= 0 ? S2.tabs[S2.active] : null;
 
@@ -453,107 +454,6 @@
     }).observe(editor);
   }
 
-  // web/src/status.js
-  function updateStatus() {
-    const d = doc_();
-    const sizeEl = $("#st-size");
-    if (sizeEl)
-      sizeEl.textContent = d ? fmtBytes(d.size) : "";
-    const idxEl = $("#st-index");
-    if (idxEl && S2.meta) {
-      idxEl.textContent = S2.meta.indexMs + "ms";
-      idxEl.title = `Workspace Indexing: took ${S2.meta.indexMs}ms to index ${S2.meta.files.toLocaleString()} files (${S2.meta.ready ? "ready" : "in progress"})`;
-    }
-    const verEl = $("#st-ver");
-    if (verEl && S2.meta?.version) {
-      verEl.textContent = "v" + S2.meta.version;
-      verEl.title = `px0 v${S2.meta.version} (Click for shortcuts & help)`;
-    }
-    drawLspStatus();
-  }
-  function setStatusNote(msg) {
-    const el = $("#st-pos");
-    if (el)
-      el.textContent = msg;
-  }
-  function fmtBytes(n) {
-    if (n < 1024)
-      return n + " B";
-    if (n < 1048576)
-      return (n / 1024).toFixed(1) + " KB";
-    return (n / 1048576).toFixed(1) + " MB";
-  }
-  function setLspState(j) {
-    if (!j || !j.state)
-      return;
-    S2.lsp.state = j.state;
-    S2.lsp.server = j.server || S2.lsp.server;
-    if ("missing" in j || j.state !== "off")
-      S2.lsp.missing = j.missing || "";
-    drawLspStatus();
-  }
-  function drawLspStatus() {
-    const el = $("#st-lsp");
-    const { state, server, missing } = S2.lsp;
-    el.title = "";
-    if (state === "off" && missing) {
-      el.dataset.state = "missing";
-      el.textContent = "LSP: set up";
-      el.title = "No language server for " + missing + ". Click to install or start one.";
-      return;
-    }
-    if (!server || state === "off") {
-      el.textContent = "";
-      el.removeAttribute("data-state");
-      return;
-    }
-    el.dataset.state = state;
-    el.textContent = state === "ready" ? server : server + " " + state;
-    if (state === "failed")
-      el.title = "The language server did not start. Click for details.";
-  }
-  function updateMetricsDisplay(m) {
-    if (!m)
-      return;
-    const cpuEl = $("#st-cpu");
-    const ramEl = $("#st-ram");
-    const contEl = $("#st-metrics");
-    if (cpuEl)
-      cpuEl.textContent = `${m.cpuUsage.toFixed(1)}%`;
-    if (ramEl)
-      ramEl.textContent = fmtBytes(m.rssBytes);
-    if (contEl) {
-      contEl.title = `Editor OS Process Usage:
-• Resident RAM (RSS): ${fmtBytes(m.rssBytes)}
-• CPU Usage: ${m.cpuUsage.toFixed(1)}%
-• Active Goroutines: ${m.goroutines || 0}`;
-    }
-  }
-  async function refreshMetrics() {
-    try {
-      const m = await api("/api/metrics");
-      updateMetricsDisplay(m);
-    } catch {}
-  }
-  function initMetrics() {
-    refreshMetrics();
-    setInterval(refreshMetrics, 2500);
-  }
-  var FIT_STEPS = 6;
-  var statusEl = $("#status");
-  function fitStatus() {
-    for (let i = 1;i <= FIT_STEPS; i++)
-      statusEl.classList.remove("fit-" + i);
-    for (let i = 1;i <= FIT_STEPS && statusEl.scrollWidth > statusEl.clientWidth; i++) {
-      statusEl.classList.add("fit-" + i);
-    }
-  }
-  function initStatusFit() {
-    new ResizeObserver(fitStatus).observe(statusEl);
-    new MutationObserver(fitStatus).observe(statusEl, { childList: true, subtree: true, characterData: true });
-    document.fonts?.ready.then(fitStatus);
-  }
-
   // web/src/history.js
   function pushHistory(path, line) {
     const top = S2.hist[S2.histIdx];
@@ -872,6 +772,144 @@
         }
       });
     })();
+  }
+
+  // web/src/find.js
+  var findbar = $("#findbar");
+  var findInput = $("#find-input");
+  function editorSelection() {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount)
+      return "";
+    const at = sel.getRangeAt(0).commonAncestorContainer;
+    if (!vp.contains(at) && !mdview.contains(at))
+      return "";
+    const line = sel.toString().split(/\r?\n/).find((l) => l.trim());
+    return line ? line.trim() : "";
+  }
+  function openFind(seed) {
+    if (!doc_())
+      return;
+    const sel = editorSelection();
+    if (sel)
+      findInput.value = sel;
+    else if (findbar.hidden && seed)
+      findInput.value = seed;
+    findbar.hidden = false;
+    findInput.focus();
+    findInput.select();
+    if (findInput.value)
+      runFind();
+  }
+  function clearFind() {
+    findbar.hidden = true;
+    S2.find = null;
+    $("#find-count").textContent = "0";
+    $("#minimap-hits").innerHTML = "";
+    clearPreviewMarks();
+    paint();
+  }
+  var runFind = debounce(async () => {
+    const d = doc_();
+    if (!d)
+      return;
+    const q = findInput.value;
+    if (previewing(d)) {
+      const n = findInPreview(q);
+      S2.find = q ? { q, ci: false, hits: new Array(n).fill(null), byLine: new Set, active: n ? 0 : -1, preview: true } : null;
+      $("#find-count").textContent = !q ? "0" : n ? "1 / " + n : "no results";
+      $("#minimap-hits").innerHTML = previewHitOffsets().map((p) => '<i style="top:' + p + '%"></i>').join("");
+      if (n)
+        jumpToHit(0);
+      return;
+    }
+    if (!q) {
+      S2.find = null;
+      $("#find-count").textContent = "0";
+      $("#minimap-hits").innerHTML = "";
+      paint();
+      return;
+    }
+    let j;
+    try {
+      j = await api("/api/search", { q, glob: d.path });
+    } catch {
+      return;
+    }
+    const f = (j.results || []).find((r) => r.path === d.path);
+    const hits = [];
+    if (f) {
+      let prevLine = -1, n = 0;
+      for (const m of f.matches) {
+        n = m.line === prevLine ? n + 1 : 0;
+        prevLine = m.line;
+        hits.push({ line: m.line, n });
+      }
+    }
+    S2.find = { q, ci: false, hits, byLine: new Set(hits.map((h) => h.line)), active: hits.length ? 0 : -1 };
+    $("#find-count").textContent = hits.length ? "1 / " + hits.length : "no results";
+    drawMinimap(hits, d.total);
+    if (hits.length)
+      jumpToHit(0);
+    else
+      paint();
+  }, 140);
+  function drawMinimap(hits, total) {
+    const mm = $("#minimap-hits");
+    if (!hits.length) {
+      mm.innerHTML = "";
+      return;
+    }
+    const seen = new Set;
+    mm.innerHTML = hits.filter((h) => !seen.has(h.line) && seen.add(h.line)).map((h) => '<i style="top:' + ((h.line - 1) / total * 100).toFixed(3) + '%"></i>').join("");
+  }
+  function jumpToHit(i) {
+    const d = doc_();
+    if (!d || !S2.find || !S2.find.hits.length)
+      return;
+    const n = S2.find.hits.length;
+    S2.find.active = (i % n + n) % n;
+    if (S2.find.preview) {
+      $("#find-count").textContent = S2.find.active + 1 + " / " + n;
+      showPreviewHit(S2.find.active);
+      return;
+    }
+    const h = S2.find.hits[S2.find.active];
+    d.cur = h.line;
+    const y = (h.line - 1) * LH;
+    if (y < vp.scrollTop + LH * 2 || y > vp.scrollTop + vp.clientHeight - LH * 3)
+      centerLine(h.line);
+    $("#find-count").textContent = S2.find.active + 1 + " / " + n;
+    render();
+    updateStatus();
+  }
+  function initFind() {
+    findInput.addEventListener("input", runFind);
+    findInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        jumpToHit(S2.find ? S2.find.active + (e.shiftKey ? -1 : 1) : 0);
+      }
+      if (e.key === "Escape") {
+        clearFind();
+        vp.focus();
+      }
+    });
+    $("#find-next").addEventListener("click", () => jumpToHit(S2.find ? S2.find.active + 1 : 0));
+    $("#find-prev").addEventListener("click", () => jumpToHit(S2.find ? S2.find.active - 1 : 0));
+    $("#find-close").addEventListener("click", clearFind);
+    $("#minimap-hits").addEventListener("click", (e) => {
+      const r = $("#minimap-hits").getBoundingClientRect();
+      const d = doc_();
+      if (!d)
+        return;
+      if (previewing(d)) {
+        scrollPreviewTo((e.clientY - r.top) / r.height);
+        return;
+      }
+      centerLine(Math.round((e.clientY - r.top) / r.height * d.total));
+      render();
+    });
   }
 
   // web/src/search.js
@@ -1919,122 +1957,548 @@
     });
   }
 
-  // web/src/find.js
-  var findbar = $("#findbar");
-  var findInput = $("#find-input");
-  function editorSelection() {
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || !sel.rangeCount)
-      return "";
-    if (!vp.contains(sel.getRangeAt(0).commonAncestorContainer))
-      return "";
-    const line = sel.toString().split(/\r?\n/).find((l) => l.trim());
-    return line ? line.trim() : "";
+  // web/src/markdown.js
+  var mdview = $("#mdview");
+  var mdArticle = $("#md");
+  var mdShown = null;
+  var mdDrawn = null;
+  var mdGen = 0;
+  function previewing(d = doc_()) {
+    return !!(d && d.markdown && S2.mdPreview && !d.mdError);
   }
-  function openFind(seed) {
-    if (!doc_())
+  function syncPreview() {
+    const d = doc_();
+    const want = previewing(d) ? d : null;
+    if (want === mdShown)
       return;
-    const sel = editorSelection();
-    if (sel)
-      findInput.value = sel;
-    else if (findbar.hidden && seed)
-      findInput.value = seed;
-    findbar.hidden = false;
-    findInput.focus();
-    findInput.select();
-    if (findInput.value)
+    if (mdShown && mdDrawn === mdShown)
+      mdShown.mdScroll = mdview.scrollTop;
+    mdShown = want;
+    mdDrawn = null;
+    mdview.hidden = !want;
+    mdArticle.replaceChildren();
+    if (want)
+      drawPreview(want);
+  }
+  async function drawPreview(d) {
+    const gen = ++mdGen;
+    if (d.mdHtml === undefined) {
+      try {
+        d.mdReq = d.mdReq || api("/api/markdown", { path: d.path });
+        d.mdHtml = (await d.mdReq).html;
+      } catch (e) {
+        d.mdError = e.message;
+        if (gen === mdGen && mdShown === d) {
+          showToast("!", "No preview for " + d.name + ": " + e.message);
+          syncPreview();
+          updateStatus();
+        }
+        return;
+      } finally {
+        d.mdReq = null;
+      }
+      if (gen !== mdGen || mdShown !== d)
+        return;
+    }
+    mdArticle.replaceChildren(mdSanitize(d.mdHtml, d.path));
+    mdEnhance();
+    mdDrawn = d;
+    const target2 = d.mdAnchor && mdFindAnchor(d.mdAnchor);
+    if (target2)
+      mdScrollTo(target2);
+    else if (d.mdLine)
+      previewLine(d.mdLine);
+    else
+      mdview.scrollTop = d.mdScroll || 0;
+    d.mdAnchor = "";
+    d.mdLine = 0;
+    if (!findbar.hidden)
       runFind();
   }
-  function clearFind() {
-    findbar.hidden = true;
-    S2.find = null;
-    $("#find-count").textContent = "0";
-    $("#minimap-hits").innerHTML = "";
-    paint();
-  }
-  var runFind = debounce(async () => {
+  function togglePreview() {
     const d = doc_();
-    if (!d)
-      return;
-    const q = findInput.value;
-    if (!q) {
-      S2.find = null;
-      $("#find-count").textContent = "0";
-      $("#minimap-hits").innerHTML = "";
-      paint();
+    if (!d || !d.markdown) {
+      showToast("!", "Preview works on Markdown files");
       return;
     }
-    let j;
-    try {
-      j = await api("/api/search", { q, glob: d.path });
-    } catch {
-      return;
+    hideHover();
+    if (previewing(d)) {
+      const line = mdDrawn === d ? previewTopLine() : 1;
+      mdSetPref(false);
+      syncPreview();
+      sourceToLine(line);
+    } else {
+      d.mdError = "";
+      d.mdLine = sourceTopLine();
+      mdSetPref(true);
+      syncPreview();
     }
-    const f = (j.results || []).find((r) => r.path === d.path);
-    const hits = [];
-    if (f) {
-      let prevLine = -1, n = 0;
-      for (const m of f.matches) {
-        n = m.line === prevLine ? n + 1 : 0;
-        prevLine = m.line;
-        hits.push({ line: m.line, n });
-      }
-    }
-    S2.find = { q, ci: false, hits, byLine: new Set(hits.map((h) => h.line)), active: hits.length ? 0 : -1 };
-    $("#find-count").textContent = hits.length ? "1 / " + hits.length : "no results";
-    drawMinimap(hits, d.total);
-    if (hits.length)
-      jumpToHit(0);
+    if (!findbar.hidden)
+      runFind();
     else
-      paint();
-  }, 140);
-  function drawMinimap(hits, total) {
-    const mm = $("#minimap-hits");
-    if (!hits.length) {
-      mm.innerHTML = "";
-      return;
-    }
-    const seen = new Set;
-    mm.innerHTML = hits.filter((h) => !seen.has(h.line) && seen.add(h.line)).map((h) => '<i style="top:' + ((h.line - 1) / total * 100).toFixed(3) + '%"></i>').join("");
-  }
-  function jumpToHit(i) {
-    const d = doc_();
-    if (!d || !S2.find || !S2.find.hits.length)
-      return;
-    const n = S2.find.hits.length;
-    S2.find.active = (i % n + n) % n;
-    const h = S2.find.hits[S2.find.active];
-    d.cur = h.line;
-    const y = (h.line - 1) * LH;
-    if (y < vp.scrollTop + LH * 2 || y > vp.scrollTop + vp.clientHeight - LH * 3)
-      centerLine(h.line);
-    $("#find-count").textContent = S2.find.active + 1 + " / " + n;
+      S2.find = null;
     render();
     updateStatus();
   }
-  function initFind() {
-    findInput.addEventListener("input", runFind);
-    findInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        jumpToHit(S2.find ? S2.find.active + (e.shiftKey ? -1 : 1) : 0);
+  function mdSetPref(on) {
+    S2.mdPreview = on;
+    try {
+      localStorage.setItem("px0.mdPreview", on ? "true" : "false");
+    } catch {}
+  }
+  var HTML_NS = "http://www.w3.org/1999/xhtml";
+  var MD_DROP = new Set(("script style iframe frame frameset object embed applet template noscript noembed " + "svg math form textarea select option button link meta base title audio video source track canvas dialog").split(" "));
+  var MD_KEEP = new Set(("a abbr b bdi bdo blockquote br caption center cite code col colgroup dd del details dfn div dl dt " + "em figcaption figure h1 h2 h3 h4 h5 h6 hr i img input ins kbd li mark ol p pre q rp rt ruby s samp section small span " + "strike strong sub summary sup table tbody td tfoot th thead tr tt u ul var wbr").split(" "));
+  var MD_ATTRS = new Set(("align valign alt title lang dir width height colspan rowspan start reversed open checked " + "disabled type data-line data-lang").split(" "));
+  var MD_TOKENS = new Set("k kt nf nc nb nv no na nt nd np s m o p c cp gi gd gh ge gs err g".split(" "));
+  var MD_SCHEME = /^([a-z][a-z0-9+.-]*):/i;
+  var MD_ORIGIN = "http://px0.invalid";
+  var mdURL = (ref) => ref.replace(/[\t\n\r]/g, "").replace(/^[\x00-\x20]+|[\x00-\x20]+$/g, "");
+  function mdSanitize(html, docPath) {
+    const body = new DOMParser().parseFromString(html, "text/html").body;
+    const dir = docPath.slice(0, docPath.lastIndexOf("/") + 1);
+    const base2 = MD_ORIGIN + "/" + dir.split("/").map(encodeURIComponent).join("/");
+    for (const el of [...body.querySelectorAll("*")]) {
+      if (!body.contains(el))
+        continue;
+      const tag = el.localName;
+      if (el.namespaceURI !== HTML_NS || MD_DROP.has(tag)) {
+        el.remove();
+        continue;
       }
-      if (e.key === "Escape") {
-        clearFind();
-        vp.focus();
+      if (!MD_KEEP.has(tag) || tag === "input" && el.getAttribute("type") !== "checkbox") {
+        el.replaceWith(...el.childNodes);
+        continue;
       }
-    });
-    $("#find-next").addEventListener("click", () => jumpToHit(S2.find ? S2.find.active + 1 : 0));
-    $("#find-prev").addEventListener("click", () => jumpToHit(S2.find ? S2.find.active - 1 : 0));
-    $("#find-close").addEventListener("click", clearFind);
-    $("#minimap-hits").addEventListener("click", (e) => {
-      const r = $("#minimap-hits").getBoundingClientRect();
-      const d = doc_();
-      if (!d)
+      const attrs = {};
+      for (const a of [...el.attributes]) {
+        attrs[a.name] = a.value;
+        el.removeAttribute(a.name);
+      }
+      for (const name in attrs)
+        if (MD_ATTRS.has(name))
+          el.setAttribute(name, attrs[name]);
+      const id = attrs.id || tag === "a" && attrs.name;
+      if (id)
+        el.id = "md-" + id;
+      if (attrs.class) {
+        const keep = attrs.class.split(/\s+/).filter((c) => c === "md-code" || c.startsWith("footnote") || tag === "i" && MD_TOKENS.has(c));
+        if (keep.length)
+          el.className = keep.join(" ");
+      }
+      if (tag === "input")
+        el.disabled = true;
+      if (tag === "img")
+        mdSetImage(el, mdURL(attrs.src || ""), base2);
+      if (tag === "a" && attrs.href)
+        mdSetLink(el, mdURL(attrs.href), base2);
+    }
+    const frag = document.createDocumentFragment();
+    while (body.firstChild)
+      frag.appendChild(document.adoptNode(body.firstChild));
+    return frag;
+  }
+  function mdLocal(ref, base2) {
+    let u;
+    try {
+      u = new URL(ref, base2);
+    } catch {
+      return null;
+    }
+    if (u.origin !== MD_ORIGIN)
+      return null;
+    let path = u.pathname;
+    try {
+      path = decodeURIComponent(path);
+    } catch {}
+    return { path: path.slice(1), hash: u.hash.slice(1) };
+  }
+  function mdSetImage(img, src, base2) {
+    const m = MD_SCHEME.exec(src);
+    if (m) {
+      if (/^https?$/i.test(m[1]) || /^data:image\//i.test(src))
+        img.setAttribute("src", src);
+    } else if (src.startsWith("//")) {
+      img.setAttribute("src", src);
+    } else if (src) {
+      const t = mdLocal(src, base2);
+      if (t)
+        img.setAttribute("src", "/api/raw?path=" + encodeURIComponent(t.path));
+    }
+  }
+  function mdSetLink(a, href, base2) {
+    if (href.startsWith("#")) {
+      a.setAttribute("href", href);
+      a.dataset.anchor = href.slice(1);
+      return;
+    }
+    const m = MD_SCHEME.exec(href);
+    if (m || href.startsWith("//")) {
+      if (m && !/^(https?|mailto)$/i.test(m[1]))
         return;
-      centerLine(Math.round((e.clientY - r.top) / r.height * d.total));
-      render();
+      a.setAttribute("href", href);
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      return;
+    }
+    const t = mdLocal(href, base2);
+    if (!t)
+      return;
+    a.setAttribute("href", "/api/raw?path=" + encodeURIComponent(t.path));
+    a.dataset.path = t.path;
+    if (t.hash)
+      a.dataset.anchor = t.hash;
+  }
+  var MD_ALERTS = { note: "Note", tip: "Tip", important: "Important", warning: "Warning", caution: "Caution" };
+  function mdEnhance() {
+    for (const q of $$("blockquote", mdArticle))
+      mdAlert(q);
+    for (const pre of $$("pre", mdArticle)) {
+      const wrap2 = document.createElement("div");
+      wrap2.className = "md-pre";
+      if (pre.dataset.lang)
+        wrap2.dataset.lang = pre.dataset.lang;
+      pre.replaceWith(wrap2);
+      const copy = document.createElement("button");
+      copy.className = "md-copy";
+      copy.title = "Copy code";
+      copy.setAttribute("aria-label", "Copy code");
+      copy.innerHTML = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5V3a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"/></svg>';
+      wrap2.append(pre, copy);
+    }
+  }
+  function mdAlert(q) {
+    const p = q.firstElementChild;
+    const t = p && p.localName === "p" && p.firstChild;
+    if (!t || t.nodeType !== 3)
+      return;
+    const m = /^\s*\[!(\w+)\][ \t]*\n?/.exec(t.nodeValue);
+    const kind = m && m[1].toLowerCase();
+    if (!kind || !MD_ALERTS[kind])
+      return;
+    t.nodeValue = t.nodeValue.slice(m[0].length);
+    if (!t.nodeValue)
+      t.remove();
+    if (p.firstChild && p.firstChild.localName === "br")
+      p.firstChild.remove();
+    if (!p.textContent.trim() && !p.children.length)
+      p.remove();
+    const title = document.createElement("p");
+    title.className = "md-alert-title";
+    title.textContent = MD_ALERTS[kind];
+    q.prepend(title);
+    q.classList.add("md-alert", "md-alert-" + kind);
+  }
+  var MD_GAP = 16;
+  function mdScrollTo(el) {
+    mdview.scrollTop += el.getBoundingClientRect().top - mdview.getBoundingClientRect().top - MD_GAP;
+  }
+  function mdFindAnchor(anchor) {
+    let id = anchor;
+    try {
+      id = decodeURIComponent(anchor);
+    } catch {}
+    for (const k of [id, id.toLowerCase()]) {
+      const el = document.getElementById("md-" + k);
+      if (el && mdArticle.contains(el))
+        return el;
+    }
+    return null;
+  }
+  function previewLine(n) {
+    const d = doc_();
+    if (!d || mdDrawn !== d) {
+      if (d)
+        d.mdLine = n;
+      return;
+    }
+    let best = null, at = 0;
+    for (const el of mdArticle.querySelectorAll("[data-line]")) {
+      const l = +el.dataset.line;
+      if (l <= n && l > at) {
+        best = el;
+        at = l;
+      }
+    }
+    if (best)
+      mdScrollTo(best);
+    else
+      mdview.scrollTop = 0;
+  }
+  function previewTopLine() {
+    const top = mdview.getBoundingClientRect().top + MD_GAP + 8;
+    let line = 1;
+    for (const el of mdArticle.querySelectorAll("[data-line]")) {
+      if (el.getBoundingClientRect().top > top)
+        break;
+      line = +el.dataset.line;
+    }
+    return line;
+  }
+  function sourceTopLine() {
+    const top = vp.getBoundingClientRect().top;
+    for (const r of rowsEl.children)
+      if (r.getBoundingClientRect().bottom > top + 1)
+        return +r.dataset.l;
+    return 1;
+  }
+  function sourceToLine(line) {
+    vp.scrollTop = (line - 1) * LH;
+    for (let i = 0;i < 3; i++) {
+      paint();
+      const r = rowFor(line);
+      const off = r ? r.getBoundingClientRect().top - vp.getBoundingClientRect().top : 0;
+      if (Math.abs(off) < 1)
+        break;
+      vp.scrollTop += off;
+    }
+  }
+  async function mdFollow(path, anchor) {
+    const d = doc_();
+    path = path.replace(/\/+$/, "");
+    if (d && path === d.path) {
+      mdJump(anchor);
+      return;
+    }
+    if (d)
+      pushHistory(d.path, previewing(d) && mdDrawn === d ? previewTopLine() : d.cur);
+    try {
+      await api("/api/tree", { dir: path });
+      showPanel("files");
+      revealDir(path);
+      return;
+    } catch {}
+    const line = /^L(\d+)/.exec(anchor);
+    await openFile(path, line ? { line: +line[1] } : {});
+    const nd = doc_();
+    if (!nd || nd.path !== path) {
+      showToast("!", "Cannot open " + path);
+      return;
+    }
+    if (anchor && !line) {
+      const el = mdDrawn === nd && mdFindAnchor(anchor);
+      if (el)
+        mdScrollTo(el);
+      else
+        nd.mdAnchor = anchor;
+    }
+  }
+  function mdJump(anchor) {
+    const d = doc_();
+    const el = anchor && mdFindAnchor(anchor);
+    if (!d || !el)
+      return;
+    pushHistory(d.path, previewTopLine());
+    mdScrollTo(el);
+    const block = el.closest("[data-line]");
+    if (block)
+      pushHistory(d.path, +block.dataset.line);
+  }
+  function previewKey(e) {
+    const mod = e[MOD];
+    if (e.key === "Home" || isMac && mod && e.key === "ArrowUp") {
+      mdview.scrollTop = 0;
+      return true;
+    }
+    if (e.key === "End" || isMac && mod && e.key === "ArrowDown") {
+      mdview.scrollTop = mdview.scrollHeight;
+      return true;
+    }
+    let by = 0;
+    if (e.key === "ArrowDown" || e.key === "j")
+      by = 48;
+    else if (e.key === "ArrowUp" || e.key === "k")
+      by = -48;
+    else if (e.key === "PageDown")
+      by = mdview.clientHeight * 0.9;
+    else if (e.key === "PageUp")
+      by = -mdview.clientHeight * 0.9;
+    if (!by)
+      return false;
+    mdview.scrollBy({ top: by });
+    return true;
+  }
+  function selectPreview() {
+    const r = document.createRange();
+    r.selectNodeContents(mdArticle);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+  }
+  function clearPreviewMarks() {
+    const marks = $$("mark.md-hit", mdArticle);
+    for (const m of marks)
+      m.replaceWith(...m.childNodes);
+    if (marks.length)
+      mdArticle.normalize();
+  }
+  function findInPreview(q) {
+    clearPreviewMarks();
+    if (!q)
+      return 0;
+    const marks = markNodes(mdArticle, q, false, "mark");
+    for (const m of marks)
+      m.classList.add("md-hit");
+    return marks.length;
+  }
+  function showPreviewHit(i) {
+    const marks = $$("mark.md-hit", mdArticle);
+    marks.forEach((m2, k) => m2.classList.toggle("on", k === i));
+    const m = marks[i];
+    if (!m)
+      return;
+    const box = mdview.getBoundingClientRect(), r = m.getBoundingClientRect();
+    if (r.top < box.top + 40 || r.bottom > box.bottom - 40) {
+      mdview.scrollTop += r.top - box.top - mdview.clientHeight / 2;
+    }
+  }
+  function previewHitOffsets() {
+    const h = mdview.scrollHeight || 1, top = mdview.getBoundingClientRect().top - mdview.scrollTop;
+    const seen = new Set;
+    return $$("mark.md-hit", mdArticle).map((m) => ((m.getBoundingClientRect().top - top) / h * 100).toFixed(2)).filter((p) => !seen.has(p) && seen.add(p));
+  }
+  function scrollPreviewTo(fraction) {
+    mdview.scrollTop = fraction * mdview.scrollHeight - mdview.clientHeight / 2;
+  }
+  function initMarkdown() {
+    const sw = $("#md-switch");
+    sw.addEventListener("mousedown", (e) => e.preventDefault());
+    sw.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-md]");
+      if (b && b.dataset.md === "preview" !== previewing())
+        togglePreview();
     });
+    mdArticle.addEventListener("click", (e) => {
+      const copy = e.target.closest(".md-copy");
+      if (copy) {
+        copyToClipboard($("pre", copy.parentElement).textContent, "Copied code block");
+        return;
+      }
+      const a = e.target.closest("a");
+      if (!a || e.button !== 0 || e[MOD] || e.shiftKey)
+        return;
+      if ("path" in a.dataset) {
+        e.preventDefault();
+        mdFollow(a.dataset.path, a.dataset.anchor || "");
+      } else if ("anchor" in a.dataset) {
+        e.preventDefault();
+        mdJump(a.dataset.anchor);
+      }
+    });
+  }
+
+  // web/src/status.js
+  function updateStatus() {
+    const d = doc_();
+    const sizeEl = $("#st-size");
+    if (sizeEl)
+      sizeEl.textContent = d ? fmtBytes(d.size) : "";
+    const isMd = !!(d && d.markdown), shown = previewing(d);
+    const mdBtn = $('[data-action="md-preview"]');
+    if (mdBtn) {
+      mdBtn.hidden = !isMd;
+      mdBtn.classList.toggle("active", shown);
+    }
+    const sw = $("#md-switch");
+    if (sw) {
+      sw.hidden = !isMd;
+      document.body.classList.toggle("md-tab", isMd);
+      for (const b of sw.children)
+        b.classList.toggle("on", isMd && b.dataset.md === "preview" === shown);
+    }
+    const idxEl = $("#st-index");
+    if (idxEl && S2.meta) {
+      idxEl.textContent = S2.meta.indexMs + "ms";
+      idxEl.title = `Workspace Indexing: took ${S2.meta.indexMs}ms to index ${S2.meta.files.toLocaleString()} files (${S2.meta.ready ? "ready" : "in progress"})`;
+    }
+    const verEl = $("#st-ver");
+    if (verEl && S2.meta?.version) {
+      verEl.textContent = "v" + S2.meta.version;
+      verEl.title = `px0 v${S2.meta.version} (Click for shortcuts & help)`;
+    }
+    drawLspStatus();
+  }
+  function setStatusNote(msg) {
+    const el = $("#st-pos");
+    if (el)
+      el.textContent = msg;
+  }
+  function fmtBytes(n) {
+    if (n < 1024)
+      return n + " B";
+    if (n < 1048576)
+      return (n / 1024).toFixed(1) + " KB";
+    return (n / 1048576).toFixed(1) + " MB";
+  }
+  function setLspState(j) {
+    if (!j || !j.state)
+      return;
+    S2.lsp.state = j.state;
+    S2.lsp.server = j.server || S2.lsp.server;
+    if ("missing" in j || j.state !== "off")
+      S2.lsp.missing = j.missing || "";
+    drawLspStatus();
+  }
+  function drawLspStatus() {
+    const el = $("#st-lsp");
+    const { state, server, missing } = S2.lsp;
+    el.title = "";
+    if (state === "off" && missing) {
+      el.dataset.state = "missing";
+      el.textContent = "LSP: set up";
+      el.title = "No language server for " + missing + ". Click to install or start one.";
+      return;
+    }
+    if (!server || state === "off") {
+      el.textContent = "";
+      el.removeAttribute("data-state");
+      return;
+    }
+    el.dataset.state = state;
+    el.textContent = state === "ready" ? server : server + " " + state;
+    if (state === "failed")
+      el.title = "The language server did not start. Click for details.";
+  }
+  function updateMetricsDisplay(m) {
+    if (!m)
+      return;
+    const cpuEl = $("#st-cpu");
+    const ramEl = $("#st-ram");
+    const contEl = $("#st-metrics");
+    if (cpuEl)
+      cpuEl.textContent = `${m.cpuUsage.toFixed(1)}%`;
+    if (ramEl)
+      ramEl.textContent = fmtBytes(m.rssBytes);
+    if (contEl) {
+      contEl.title = `Editor OS Process Usage:
+• Resident RAM (RSS): ${fmtBytes(m.rssBytes)}
+• CPU Usage: ${m.cpuUsage.toFixed(1)}%
+• Active Goroutines: ${m.goroutines || 0}`;
+    }
+  }
+  async function refreshMetrics() {
+    try {
+      const m = await api("/api/metrics");
+      updateMetricsDisplay(m);
+    } catch {}
+  }
+  function initMetrics() {
+    refreshMetrics();
+    setInterval(refreshMetrics, 2500);
+  }
+  var FIT_STEPS = 6;
+  var statusEl = $("#status");
+  function fitStatus() {
+    for (let i = 1;i <= FIT_STEPS; i++)
+      statusEl.classList.remove("fit-" + i);
+    for (let i = 1;i <= FIT_STEPS && statusEl.scrollWidth > statusEl.clientWidth; i++) {
+      statusEl.classList.add("fit-" + i);
+    }
+  }
+  function initStatusFit() {
+    new ResizeObserver(fitStatus).observe(statusEl);
+    new MutationObserver(fitStatus).observe(statusEl, { childList: true, subtree: true, characterData: true });
+    document.fonts?.ready.then(fitStatus);
   }
 
   // web/src/selbar.js
@@ -2221,7 +2685,8 @@
         scrollTop: 0,
         cur: line || 1,
         outline: null,
-        gen: 0
+        gen: 0,
+        markdown: !!j.markdown
       };
       for (let i = 0;i < j.lines.length; i++)
         d2.lines[j.start + i] = j.lines[i];
@@ -2240,6 +2705,7 @@
     const d = S2.tabs[idx];
     $("#empty").hidden = true;
     hideImage();
+    syncPreview();
     if (!S2.at || S2.at.path !== d.path)
       S2.at = null;
     S2.lsp.state = d.lsp && d.lsp.state || "off";
@@ -2262,6 +2728,10 @@
       pushHistory(path, line || d.cur, col);
   }
   function centerLine(n) {
+    if (previewing()) {
+      previewLine(n);
+      return;
+    }
     const y = (n - 1) * LH - Math.max(0, vp.clientHeight / 2 - LH * 2);
     vp.scrollTop = Math.max(0, y);
   }
@@ -2284,6 +2754,7 @@
     }
     if (S2.tabs.length === 0) {
       S2.active = -1;
+      syncPreview();
       rowsEl.innerHTML = "";
       sizer.style.height = "0px";
       $("#empty").hidden = false;
@@ -2294,6 +2765,7 @@
     }
     S2.active = Math.min(i, S2.tabs.length - 1);
     const d = doc_();
+    syncPreview();
     drawTabs();
     drawCrumbs();
     layout();
@@ -2329,6 +2801,7 @@
     if (prev)
       prev.scrollTop = vp.scrollTop;
     S2.active = i;
+    syncPreview();
     clearFind();
     clearSelectAll();
     S2.at = null;
@@ -2481,6 +2954,7 @@
     [["Mod+G"], "Go to line"],
     [["Alt+Z"], "Toggle word wrap"],
     [["Alt+L"], "Toggle line numbers"],
+    [["Alt+M"], "Toggle Markdown preview"],
     [["Enter", "Shift+Enter"], "Next / previous match"],
     [["F12", "Mod+Click"], "Go to definition"],
     [["Shift+F12"], "Find all references"],
@@ -2535,6 +3009,8 @@
         toggleWordWrap();
       else if (act === "line-numbers")
         toggleLineNumbers();
+      else if (act === "md-preview")
+        togglePreview();
       else if (act === "palette")
         openPalette("command");
       else if (act === "help")
@@ -2687,12 +3163,20 @@
         toggleLineNumbers();
         return;
       }
+      if (e.altKey && !mod && !e.shiftKey && e.code === "KeyM") {
+        e.preventDefault();
+        togglePreview();
+        return;
+      }
       if (inField(document.activeElement))
         return;
       const plainMod = mod && !e.shiftKey && !e.altKey;
       if (plainMod && (e.key === "a" || e.key === "A")) {
         e.preventDefault();
-        selectAll();
+        if (previewing())
+          selectPreview();
+        else
+          selectAll();
         return;
       }
       if (plainMod && (e.key === "c" || e.key === "C") && copySelectAll()) {
@@ -2707,6 +3191,11 @@
       const d = doc_();
       if (!d)
         return;
+      if (previewing(d)) {
+        if (previewKey(e))
+          e.preventDefault();
+        return;
+      }
       const toTop = () => {
         vp.scrollTop = 0;
         d.cur = 1;
@@ -2813,6 +3302,7 @@
     } },
     { name: withKeys("Toggle Word Wrap ({Alt+Z})"), run: () => toggleWordWrap() },
     { name: withKeys("Toggle Line Numbers ({Alt+L})"), run: () => toggleLineNumbers() },
+    { name: withKeys("Toggle Markdown Preview ({Alt+M})"), run: () => togglePreview() },
     { name: withKeys("Toggle Sidebar ({Mod+B})"), run: () => document.body.classList.toggle("side-hidden") },
     { name: "Select Theme…", run: () => openPalette("theme") },
     { name: "Next Theme", run: cycleTheme },
@@ -3022,6 +3512,7 @@
   initFind();
   initPalette();
   initShortcuts();
+  initMarkdown();
   initMetrics();
   initStatusFit();
   (async function boot() {
@@ -3033,6 +3524,8 @@
       const linesPref = localStorage.getItem("px0.lineNumbers");
       S2.lineNumbers = linesPref !== null ? linesPref === "true" : true;
       document.body.classList.toggle("hide-lines", !S2.lineNumbers);
+      const mdPref = localStorage.getItem("px0.mdPreview");
+      S2.mdPreview = mdPref !== null ? mdPref === "true" : true;
       updateEditorOptionControls();
     } catch {}
     applyKeyLabels();

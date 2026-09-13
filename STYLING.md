@@ -99,9 +99,9 @@ Four steps from the editor outward. Each step should read as slightly raised aga
 
 | Token   | Required | Controls                                                                                                                                                                        |
 | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--bg`  | Yes      | Editor, line-number gutter, active tab, empty screen, text inputs, hover card signature block, key hints in the status bar, scrollbar thumb border.                             |
-| `--bg2` | Yes      | File tree sidebar, tab bar, right inspector, status bar, hover card action row.                                                                                                 |
-| `--bg3` | Yes      | Floating surfaces (hover card, find bar, palette, shortcut sheet, toast), row hover, key caps, count badges, active search toggles, image preview checkerboard.                 |
+| `--bg`  | Yes      | Editor, line-number gutter, active tab, empty screen, text inputs, hover card signature block, key hints in the status bar, scrollbar thumb border, Markdown preview.                             |
+| `--bg2` | Yes      | File tree sidebar, tab bar, right inspector, status bar, hover card action row, Markdown code blocks and table headers.                                                                                                 |
+| `--bg3` | Yes      | Floating surfaces (hover card, find bar, palette, shortcut sheet, toast), row hover, key caps, count badges, active search toggles, image preview checkerboard, inline code and the code block copy button in the Markdown preview, the Markdown Preview / Source switch (its selected half uses `--bg` and `--accent-fg`).                 |
 | `--bg4` | Yes      | Hover on small buttons (tab close, find bar, status bar), active status bar buttons, double-click occurrence highlight, version badge, scrollbar thumb.                         |
 
 ### Text
@@ -109,16 +109,16 @@ Four steps from the editor outward. Each step should read as slightly raised aga
 | Token     | Required | Controls                                                                                                                                             |
 | --------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--fg`    | Yes      | Primary text, directory names, active tab, current line number, plain identifiers in code.                                                           |
-| `--dim`   | Yes      | Secondary text: inactive tabs, file names in the tree, hover card docs, panel headings. Also the badge fill for file extensions and untyped symbols. |
-| `--faint` | Yes      | Tertiary text: line numbers, hints, counters, tree chevrons, close buttons at rest, read-only badge in the sidebar header, LSP dot when off, scrollbar thumb on hover. |
+| `--dim`   | Yes      | Secondary text: inactive tabs, file names in the tree, hover card docs, panel headings, Markdown blockquotes and footnotes. Also the badge fill for file extensions and untyped symbols. |
+| `--faint` | Yes      | Tertiary text: line numbers, hints, counters, tree chevrons, close buttons at rest, read-only badge in the sidebar header, LSP dot when off, scrollbar thumb on hover, code block language label in the Markdown preview. |
 
 ### Borders and Accent
 
 | Token         | Required | Controls                                                                                                                                                                                          |
 | ------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--line`      | Yes      | Every border and divider, occurrence outline, empty screen logo.                                                                                                                                  |
-| `--accent`    | Yes      | Active tab indicator, input focus border, resizer drag handle, Ctrl-hover link underline, palette mode chip, button hover fill, toast border, active search toggle border, key hint hover border, status bar top edge and chip in selection mode. |
-| `--accent-fg` | Yes      | Accent-coloured text: active inspector tab, matched characters in the palette, Markdown headings, version labels, status bar button hover, active search toggles, search result source labels.    |
+| `--line`      | Yes      | Every border and divider, occurrence outline, empty screen logo, Markdown heading rules, tables, blockquotes and code blocks.                                                                                                                                  |
+| `--accent`    | Yes      | Active tab indicator, input focus border, resizer drag handle, Ctrl-hover link underline, palette mode chip, button hover fill, toast border, active search toggle border, key hint hover border, status bar top edge and chip in selection mode, Markdown task checkboxes. |
+| `--accent-fg` | Yes      | Accent-coloured text: active inspector tab, matched characters in the palette, Markdown headings in the code view, links in the Markdown preview, version labels, status bar button hover, active search toggles, search result source labels.    |
 
 ### Selection and Highlights
 
@@ -192,7 +192,9 @@ Markup tokens, used mostly by diff and Markdown lexers:
 | none      | `ge`  | `GenericEmph`                         | n/a      | n/a           | Italic, no colour.                         |
 | none      | `gs`  | `GenericStrong`                       | n/a      | n/a           | Bold, no colour.                           |
 
-The hover card signature uses the same tokens, so a theme colours both surfaces at once.
+The hover card signature and fenced code blocks in the Markdown preview use the same tokens, so a theme colours all three surfaces at once.
+
+GitHub alerts in the Markdown preview take their accent from existing tokens: Note `--accent`, Tip `--gi`, Important `--nc`, Warning `--mark-active`, Caution `--err`. Find in the preview marks matches with `--mark` and `--mark-active`, as in the code view.
 
 ## Structural Tokens
 
