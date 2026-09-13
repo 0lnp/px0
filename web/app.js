@@ -1426,11 +1426,11 @@
   }
 
   // web/src/lspsetup.js
-  var seq = 0;
+  var setupSeq = 0;
   var pollTimer = 0;
-  var hint = (html) => '<div class="hint">' + html + "</div>";
+  var hintHtml = (html) => '<div class="hint">' + html + "</div>";
   function cancelLspSetup() {
-    seq++;
+    setupSeq++;
     clearTimeout(pollTimer);
   }
   async function renderLspSetup(el, onReady) {
@@ -1438,25 +1438,25 @@
     if (!el || !d)
       return;
     cancelLspSetup();
-    const my = seq;
+    const my = setupSeq;
     let s;
     try {
       s = await api("/api/lsp/setup", { path: d.path });
     } catch (e) {
-      if (my === seq)
-        el.innerHTML = hint("Could not check language servers: " + esc(e.message));
+      if (my === setupSeq)
+        el.innerHTML = hintHtml("Could not check language servers: " + esc(e.message));
       return;
     }
-    if (my !== seq || doc_() !== d)
+    if (my !== setupSeq || doc_() !== d)
       return;
     const again = (ms) => {
       pollTimer = setTimeout(() => {
-        if (my === seq)
+        if (my === setupSeq)
           renderLspSetup(el, onReady);
       }, ms);
     };
     if (s.state === "starting" && !s.server) {
-      el.innerHTML = hint("Looking for language servers…");
+      el.innerHTML = hintHtml("Looking for language servers…");
       again(700);
       return;
     }
@@ -1464,19 +1464,19 @@
       start(el, d, onReady);
       return;
     }
-    el.innerHTML = draw(s, d);
+    el.innerHTML = drawSetup(s, d);
     wire(el, d, onReady);
     if (s.servers.some((v) => v.job && v.job.running))
       again(1000);
   }
   async function start(el, d, onReady) {
     cancelLspSetup();
-    el.innerHTML = hint("Starting the language server…");
+    el.innerHTML = hintHtml("Starting the language server…");
     let j;
     try {
       j = await apiPost("/api/lsp/start", { path: d.path });
     } catch (e) {
-      el.innerHTML = hint("Could not start the language server: " + esc(e.message));
+      el.innerHTML = hintHtml("Could not start the language server: " + esc(e.message));
       return;
     }
     if (doc_() !== d)
@@ -1496,13 +1496,13 @@
     if (onReady)
       onReady();
   }
-  function draw(s, d) {
+  function drawSetup(s, d) {
     const ext = (d.path.match(/\.[^./]+$/) || [d.name])[0];
     if (!s.enabled) {
-      return hint("Language servers are turned off: px0 was started with <b>-no-lsp</b>. " + "Restart it without that flag for call trails, hover and precise references.");
+      return hintHtml("Language servers are turned off: px0 was started with <b>-no-lsp</b>. " + "Restart it without that flag for call trails, hover and precise references.");
     }
     if (!s.servers.length) {
-      return hint("px0 knows no language server for <b>" + esc(ext) + "</b> files, so call trails are not available here.");
+      return hintHtml("px0 knows no language server for <b>" + esc(ext) + "</b> files, so call trails are not available here.");
     }
     const offer = s.servers.filter((v) => v.options.length || v.job);
     const running = s.servers.some((v) => v.job && v.job.running);
@@ -1568,10 +1568,10 @@
   // web/src/calls.js
   var T = null;
   var dirPref = "in";
-  var seq2 = 0;
+  var seq = 0;
   var flat = [];
   var listEl = () => $("#right-calls-list");
-  var hint2 = (html) => {
+  var hint = (html) => {
     const el = listEl();
     if (el)
       el.innerHTML = '<div class="hint">' + html + "</div>";
@@ -1608,30 +1608,30 @@
       return;
     }
     if (!at || at.imprecise) {
-      hint2("Click a function name in the editor, then press <b>" + esc(keyLabel("Alt+Shift+H")) + "</b>.");
+      hint("Click a function name in the editor, then press <b>" + esc(keyLabel("Alt+Shift+H")) + "</b>.");
       return;
     }
-    const my = ++seq2;
+    const my = ++seq;
     T = null;
     $("#right-calls-target").textContent = at.word;
-    hint2('Tracing calls for "' + esc(at.word) + '"…');
+    hint('Tracing calls for "' + esc(at.word) + '"…');
     setStatusNote("call trail for " + at.word + "…");
     let j;
     try {
       j = await api("/api/lsp/calls", { path: d.path, line: at.line, col: at.col, wait: S2.lsp.state === "ready" ? 1e4 : 30000 });
     } catch (e) {
-      if (my === seq2) {
+      if (my === seq) {
         updateStatus();
-        hint2('Could not trace "' + esc(at.word) + '": ' + esc(explain(e.message)));
+        hint('Could not trace "' + esc(at.word) + '": ' + esc(explain(e.message)));
       }
       return;
     }
-    if (my !== seq2)
+    if (my !== seq)
       return;
     setLspState(j);
     updateStatus();
     if (!j.nodes || !j.nodes.length) {
-      hint2('"' + esc(at.word) + '" is not a function ' + esc(j.server || "the language server") + " can trace.");
+      hint('"' + esc(at.word) + '" is not a function ' + esc(j.server || "the language server") + " can trace.");
       return;
     }
     T = { path: d.path, word: at.word, dir: dirPref, roots: j.nodes.map((n) => wrap(n, null)) };
@@ -1643,11 +1643,11 @@
       return;
     node.open = true;
     if (node.kids) {
-      draw2();
+      draw();
       return;
     }
     node.loading = true;
-    draw2();
+    draw();
     const t = T, dir = t.dir;
     try {
       const j = await api("/api/lsp/calls", { path: t.path, item: node.n.item, dir, wait: 30000 });
@@ -1661,7 +1661,7 @@
       node.kids = [];
     }
     node.loading = false;
-    draw2();
+    draw();
   }
   function setDir(dir) {
     dirPref = dir;
@@ -1674,7 +1674,7 @@
     for (const r of T.roots)
       expand(r);
   }
-  function draw2() {
+  function draw() {
     const el = listEl();
     if (!el || !T)
       return;
@@ -1732,7 +1732,7 @@
       if (e.target.closest(".car")) {
         if (node.open) {
           node.open = false;
-          draw2();
+          draw();
         } else
           expand(node);
         return;
@@ -1799,14 +1799,14 @@
     const d = doc_();
     if (!d || at.path !== d.path)
       return;
-    const seq3 = ++hoverSeq;
+    const seq2 = ++hoverSeq;
     let j;
     try {
       j = await api("/api/lsp/hover", { path: d.path, line: at.line, col: at.col, wait: 4000 });
     } catch {
       return;
     }
-    if (seq3 !== hoverSeq || doc_() !== d)
+    if (seq2 !== hoverSeq || doc_() !== d)
       return;
     setLspState(j);
     if (!j || j.empty || !j.signature && !j.doc)

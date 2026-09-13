@@ -77,9 +77,21 @@ function buildWithNode() {
   // Transform modules into an IIFE
   let combined = '// Bundled by scripts/build-web.js\n(() => {\n\'use strict\';\n\n';
 
+  // Every module shares one scope here, so a top-level name declared in two
+  // modules is a SyntaxError in the browser. Fail the build instead.
+  const declRegex = /^(?:export\s+)?(?:async\s+)?(?:function\*?|const|let|var|class)\s+([A-Za-z_$][\w$]*)/gm;
+  const declaredIn = new Map();
+  const collisions = [];
+
   for (const modPath of moduleOrder) {
     const rel = path.relative(rootDir, modPath);
     let src = fs.readFileSync(modPath, 'utf8');
+
+    for (const m of src.matchAll(declRegex)) {
+      const prev = declaredIn.get(m[1]);
+      if (prev && prev !== rel) collisions.push(`${m[1]} (${prev}, ${rel})`);
+      else declaredIn.set(m[1], rel);
+    }
 
     // Strip ES import declarations
     src = src.replace(/^\s*import\s+.*?;?\s*$/gm, '');
@@ -91,6 +103,12 @@ function buildWithNode() {
     src = src.replace(/^\s*export\s+default\s+.*?;?\s*$/gm, '');
 
     combined += `// --- File: ${rel} ---\n` + src.trim() + '\n\n';
+  }
+
+  if (collisions.length) {
+    console.error('[build-web] Top-level names declared in more than one module (rename them or install Bun):');
+    for (const c of collisions) console.error('  ' + c);
+    process.exit(1);
   }
 
   combined += '})();\n';

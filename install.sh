@@ -273,6 +273,7 @@ if [ "$OS" = "windows" ]; then
   printf "    ${DIM}Set-Alias -Name code -Value px0${RESET}\n"
   printf "    ${DIM}Set-Alias -Name cursor -Value px0${RESET}\n"
 else
+  WANT_ALIAS=""
   # Check if terminal is available for interactive prompt (either stdin or /dev/tty)
   CAN_PROMPT=0
   if [ "${PX0_NO_ALIAS:-0}" != "1" ] && [ -n "$SHELL_RC" ]; then

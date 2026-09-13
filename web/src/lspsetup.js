@@ -8,14 +8,14 @@ import { warmLSP } from './lsp.js';
    end. This panel says why and offers the fix in place: run a known installer,
    or pick up a server installed by hand, then start it and carry on. */
 
-let seq = 0;
+let setupSeq = 0;
 let pollTimer = 0;
 
-const hint = html => '<div class="hint">' + html + '</div>';
+const hintHtml = html => '<div class="hint">' + html + '</div>';
 
 // Stops a pending refresh, so it cannot draw over whatever replaced the panel.
 export function cancelLspSetup() {
-  seq++;
+  setupSeq++;
   clearTimeout(pollTimer);
 }
 
@@ -23,32 +23,32 @@ export async function renderLspSetup(el, onReady) {
   const d = doc_();
   if (!el || !d) return;
   cancelLspSetup();
-  const my = seq;
+  const my = setupSeq;
   let s;
   try { s = await api('/api/lsp/setup', { path: d.path }); }
-  catch (e) { if (my === seq) el.innerHTML = hint('Could not check language servers: ' + esc(e.message)); return; }
-  if (my !== seq || doc_() !== d) return;
+  catch (e) { if (my === setupSeq) el.innerHTML = hintHtml('Could not check language servers: ' + esc(e.message)); return; }
+  if (my !== setupSeq || doc_() !== d) return;
 
-  const again = ms => { pollTimer = setTimeout(() => { if (my === seq) renderLspSetup(el, onReady); }, ms); };
+  const again = ms => { pollTimer = setTimeout(() => { if (my === setupSeq) renderLspSetup(el, onReady); }, ms); };
   if (s.state === 'starting' && !s.server) {
-    el.innerHTML = hint('Looking for language servers…');
+    el.innerHTML = hintHtml('Looking for language servers…');
     again(700);
     return;
   }
   // Installed (just now, or all along) but this page has not caught up: start it.
   if (s.state !== 'off' && s.state !== 'failed') { start(el, d, onReady); return; }
 
-  el.innerHTML = draw(s, d);
+  el.innerHTML = drawSetup(s, d);
   wire(el, d, onReady);
   if (s.servers.some(v => v.job && v.job.running)) again(1000);
 }
 
 async function start(el, d, onReady) {
   cancelLspSetup();
-  el.innerHTML = hint('Starting the language server…');
+  el.innerHTML = hintHtml('Starting the language server…');
   let j;
   try { j = await apiPost('/api/lsp/start', { path: d.path }); }
-  catch (e) { el.innerHTML = hint('Could not start the language server: ' + esc(e.message)); return; }
+  catch (e) { el.innerHTML = hintHtml('Could not start the language server: ' + esc(e.message)); return; }
   if (doc_() !== d) return;
   // Other open files may have been waiting on the same server: let them ask again.
   for (const t of S.tabs) {
@@ -62,14 +62,14 @@ async function start(el, d, onReady) {
   if (onReady) onReady();
 }
 
-function draw(s, d) {
+function drawSetup(s, d) {
   const ext = (d.path.match(/\.[^./]+$/) || [d.name])[0];
   if (!s.enabled) {
-    return hint('Language servers are turned off: px0 was started with <b>-no-lsp</b>. ' +
+    return hintHtml('Language servers are turned off: px0 was started with <b>-no-lsp</b>. ' +
       'Restart it without that flag for call trails, hover and precise references.');
   }
   if (!s.servers.length) {
-    return hint('px0 knows no language server for <b>' + esc(ext) + '</b> files, so call trails are not available here.');
+    return hintHtml('px0 knows no language server for <b>' + esc(ext) + '</b> files, so call trails are not available here.');
   }
 
   const offer = s.servers.filter(v => v.options.length || v.job);
