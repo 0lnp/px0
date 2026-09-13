@@ -2,7 +2,7 @@
 # Universal installer script for px0 (https://px0.ai)
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/arpitbbhayani/px0/master/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/px0-ai/px0/master/install.sh | bash
 #
 # Environment variables:
 #   VERSION      - target version to install (e.g. "0.1.0" or "latest", default: "latest")
@@ -22,20 +22,21 @@ RED="\033[38;5;167m"
 DIM="\033[38;5;245m"
 RESET="\033[0m"
 
+# %b so color codes embedded in messages are interpreted
 log_info() {
-  printf " ${GREEN}✓${RESET} %s\n" "$1"
+  printf " ${GREEN}✓${RESET} %b\n" "$1"
 }
 
 log_step() {
-  printf " ${AMBER}›${RESET} %s\n" "$1"
+  printf " ${AMBER}›${RESET} %b\n" "$1"
 }
 
 log_warn() {
-  printf " ${AMBER}!${RESET} %s\n" "$1"
+  printf " ${AMBER}!${RESET} %b\n" "$1"
 }
 
 log_error() {
-  printf " ${RED}✗${RESET} %s\n" "$1" >&2
+  printf " ${RED}✗${RESET} %b\n" "$1" >&2
 }
 
 # 1. Detect OS
@@ -71,9 +72,9 @@ esac
 fetch() {
   url="$1"
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$url"
+    curl -fsSL --connect-timeout 10 --max-time 30 --retry 2 "$url"
   elif command -v wget >/dev/null 2>&1; then
-    wget -qO- "$url"
+    wget -qO- -T 15 -t 3 "$url"
   else
     log_error "Neither curl nor wget found in PATH. Please install one of them."
     exit 1
@@ -84,9 +85,9 @@ fetch_file() {
   url="$1"
   out="$2"
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL -o "$out" "$url"
+    curl -fsSL --connect-timeout 10 --max-time 300 --retry 2 -o "$out" "$url"
   elif command -v wget >/dev/null 2>&1; then
-    wget -q -O "$out" "$url"
+    wget -q -T 30 -t 3 -O "$out" "$url"
   fi
 }
 
@@ -171,5 +172,5 @@ case ":$PATH:" in
     ;;
 esac
 
-printf "\nRun %s to inspect any repository:\n" "${BOLD}px0${RESET}"
+printf "\nRun %b to inspect any repository:\n" "${BOLD}px0${RESET}"
 printf "  ${AMBER}px0 .${RESET}\n\n"
