@@ -481,9 +481,9 @@
     const ramEl = $("#st-ram");
     const contEl = $("#st-metrics");
     if (cpuEl)
-      cpuEl.textContent = `CPU ${m.cpuUsage.toFixed(1)}%`;
+      cpuEl.textContent = `${m.cpuUsage.toFixed(1)}%`;
     if (ramEl)
-      ramEl.textContent = `RAM ${fmtBytes(m.rssBytes)}`;
+      ramEl.textContent = fmtBytes(m.rssBytes);
     if (contEl) {
       contEl.title = `Editor OS Process Usage:
 • Resident RAM (RSS): ${fmtBytes(m.rssBytes)}
@@ -500,6 +500,20 @@
   function initMetrics() {
     refreshMetrics();
     setInterval(refreshMetrics, 2500);
+  }
+  var FIT_STEPS = 6;
+  var statusEl = $("#status");
+  function fitStatus() {
+    for (let i = 1;i <= FIT_STEPS; i++)
+      statusEl.classList.remove("fit-" + i);
+    for (let i = 1;i <= FIT_STEPS && statusEl.scrollWidth > statusEl.clientWidth; i++) {
+      statusEl.classList.add("fit-" + i);
+    }
+  }
+  function initStatusFit() {
+    new ResizeObserver(fitStatus).observe(statusEl);
+    new MutationObserver(fitStatus).observe(statusEl, { childList: true, subtree: true, characterData: true });
+    document.fonts?.ready.then(fitStatus);
   }
 
   // web/src/history.js
@@ -2060,12 +2074,14 @@
     refEl.title = ref;
     statsEl.textContent = (lines === 1 ? "1 line" : lines + " lines") + " · " + info.text.length.toLocaleString() + " chars";
     status.classList.add("selecting");
+    fitStatus();
   }
   function hideSelectionBar() {
     if (!current)
       return;
     current = null;
     status.classList.remove("selecting");
+    fitStatus();
   }
   function updateSelectionBar() {
     const info = getSelectedRangeInfo();
@@ -2695,6 +2711,7 @@
   initPalette();
   initShortcuts();
   initMetrics();
+  initStatusFit();
   (async function boot() {
     try {
       initTheme();

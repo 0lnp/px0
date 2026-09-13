@@ -15,7 +15,7 @@ import { initFind } from './find.js';
 import { initPalette } from './palette.js';
 import { initShortcuts } from './shortcuts.js';
 import { initTheme } from './theme.js';
-import { updateStatus, initMetrics, updateMetricsDisplay } from './status.js';
+import { updateStatus, initMetrics, initStatusFit, updateMetricsDisplay } from './status.js';
 
 // Initialize all subsystems
 initRenderer();
@@ -33,6 +33,7 @@ initFind();
 initPalette();
 initShortcuts();
 initMetrics();
+initStatusFit();
 
 // Bootstrap application lifecycle
 (async function boot() {

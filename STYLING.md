@@ -35,9 +35,9 @@ Each theme maps its source palette onto px0's tokens. UI surfaces and some synta
 
 ## Switching Themes
 
-The picker and the status bar button list themes sorted by display name.
+The picker and the sidebar button list themes sorted by display name.
 
-- Click the moon button at the right end of the status bar to cycle to the next theme.
+- Click the moon button at the bottom of the file sidebar to cycle to the next theme.
 - Run `Select Theme` from the command palette (`Ctrl+Shift+P`, `Cmd+Shift+P` on macOS) to pick from a list. Arrow keys preview each theme live, `Enter` keeps the highlighted one, and `Esc` restores the previous one.
 - Run `Next Theme` from the command palette to cycle without the list.
 

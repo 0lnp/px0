@@ -50,8 +50,8 @@ export function updateMetricsDisplay(m) {
   const cpuEl = $('#st-cpu');
   const ramEl = $('#st-ram');
   const contEl = $('#st-metrics');
-  if (cpuEl) cpuEl.textContent = `CPU ${m.cpuUsage.toFixed(1)}%`;
-  if (ramEl) ramEl.textContent = `RAM ${fmtBytes(m.rssBytes)}`;
+  if (cpuEl) cpuEl.textContent = `${m.cpuUsage.toFixed(1)}%`;
+  if (ramEl) ramEl.textContent = fmtBytes(m.rssBytes);
   if (contEl) {
     contEl.title = `Editor OS Process Usage:\n• Resident RAM (RSS): ${fmtBytes(m.rssBytes)}\n• CPU Usage: ${m.cpuUsage.toFixed(1)}%\n• Active Goroutines: ${m.goroutines || 0}`;
   }
@@ -67,4 +67,26 @@ export async function refreshMetrics() {
 export function initMetrics() {
   refreshMetrics();
   setInterval(refreshMetrics, 2500);
+}
+
+/* The status bar stays on one line. When its contents outgrow the width, it
+   sheds detail in steps (see the fit-N rules in style.css), least useful first,
+   stopping at the first step that fits. */
+const FIT_STEPS = 6;
+const statusEl = $('#status');
+
+export function fitStatus() {
+  for (let i = 1; i <= FIT_STEPS; i++) statusEl.classList.remove('fit-' + i);
+  for (let i = 1; i <= FIT_STEPS && statusEl.scrollWidth > statusEl.clientWidth; i++) {
+    statusEl.classList.add('fit-' + i);
+  }
+}
+
+export function initStatusFit() {
+  // Width changes come from the window and the sidebar resizers; content changes
+  // from metrics, LSP state and the selection bar. Class changes are not observed,
+  // so fitStatus() toggling them cannot re-trigger itself.
+  new ResizeObserver(fitStatus).observe(statusEl);
+  new MutationObserver(fitStatus).observe(statusEl, { childList: true, subtree: true, characterData: true });
+  document.fonts?.ready.then(fitStatus);
 }

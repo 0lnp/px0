@@ -44,7 +44,7 @@ To quickly locate and modify UI features, refer to this structured section index
 | Section / Element ID | Description |
 | -------------------- | ----------- |
 | `<nav id="rail">` | Left activity rail (switch between Explorer, Search, Outline, Theme, Shortcuts) |
-| `<aside id="side">` | Collapsible sidebar containing panels: `#panel-files` (tree), `#panel-search`, `#panel-outline` |
+| `<aside id="side">` | Collapsible sidebar containing panels: `#panel-files` (tree), `#panel-search`, `#panel-outline`. Its `.side-foot` holds the version (`#st-ver`) and theme button (`#btn-theme`) |
 | `<div id="resizer">` | Draggable splitter between sidebar and main editor viewport |
 | `<div id="tabs">` & `#crumbs` | Open file tabs bar and current file path breadcrumb navigation |
 | `<div id="editor">` | Core editor container with `#viewport`, `#sizer`, and virtual rows container `#rows` |
@@ -52,7 +52,7 @@ To quickly locate and modify UI features, refer to this structured section index
 | `<div id="hovercard">` | Floating LSP type signature, doc preview, and quick AI reference buttons |
 | `<div id="findbar">` | In-file search overlay (Ctrl+F) |
 | `<div id="toast">` | Floating bottom notification toast confirming clipboard copy actions |
-| `<footer id="status">` | Bottom status bar: language, lines, size, cursor pos, LSP status, and index time. While code is selected, `#footer-sel` (Copy Ref, Copy for Agent, Find Usages) replaces the left-side buttons |
+| `<footer id="status">` | Bottom status bar: language, lines, size, cursor pos, LSP status, and index time. While code is selected, `#footer-sel` (Copy Ref, Copy for Agent, Find Usages) replaces the left-side buttons. Never wraps: `fitStatus()` in `status.js` adds cumulative `fit-1`..`fit-6` classes to hide detail as width runs out |
 | `<div id="overlay">` | Modal overlay hosting Quick Open and Command Palette (`#palette`) |
 | `<div id="helpsheet">` | Keyboard shortcuts cheat-sheet modal overlay |
 
