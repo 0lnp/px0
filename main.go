@@ -208,6 +208,11 @@ func openBrowser(url string) {
 	default:
 		// On Linux/Unix, detect WSL to open the browser on the Windows host seamlessly
 		if isWSL() {
+			// WSL2's localhost port-forwarding relay needs a moment to notice a
+			// freshly bound listener before Windows can reach it. Without this,
+			// the browser can open before the relay catches up and shows a
+			// connection error until the next reload.
+			time.Sleep(500 * time.Millisecond)
 			cmds = append(cmds,
 				exec.Command("wslview", url),
 				exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Start-Process", fmt.Sprintf(`"%s"`, url)),
