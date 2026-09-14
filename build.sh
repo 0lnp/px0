@@ -4,6 +4,12 @@ set -eu
 
 VERSION=$(cat VERSION | tr -d ' \r\n')
 OUT=${OUT:-dist}
+POSTHOG_KEY="${POSTHOG_KEY:-${PX0_POSTHOG_KEY:-}}"
+
+LDFLAGS="-s -w"
+if [ -n "$POSTHOG_KEY" ]; then
+  LDFLAGS="$LDFLAGS -X main.posthogKey=$POSTHOG_KEY"
+fi
 
 # Bundle frontend web assets
 ./scripts/build-web.js
@@ -26,7 +32,7 @@ for t in $TARGETS; do
   name="px0-$VERSION-$os-$arch$ext"
   printf '  %-28s' "$name"
   CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
-    go build -trimpath -ldflags="-s -w" -o "$OUT/$name" .
+    go build -trimpath -ldflags="$LDFLAGS" -o "$OUT/$name" .
   printf '%s\n' "$(du -h "$OUT/$name" | cut -f1)"
 done
 

@@ -20,7 +20,7 @@ When you're reviewing code, you don't need a heavy editing environment, you need
 Install or upgrade to the latest release with a single command:
 
 ```bash
-curl -fsSL https://px0.ai/install.sh | bash
+curl -fsSL https://px0.ai/install.sh | sh
 ```
 
 ### Option 2: Build from Source
@@ -31,7 +31,7 @@ Requires Go 1.24 or newer. No npm, no node, no CGO, and no system libraries requ
 git clone https://github.com/px0-ai/px0.git
 cd px0
 make build
-sudo install px0 /usr/local/bin/
+install -d ~/.local/bin && install px0 ~/.local/bin/
 ```
 
 To cross-compile binaries for all 15 supported OS and architecture combinations:
@@ -191,9 +191,26 @@ px0 --update
 ## Philosophy and Design Principles
 
 - Read-Only by Design: px0 does not attempt to be a code editor. Code authoring belongs to AI agents, CLI tools, or dedicated editors. px0 focuses exclusively on the reader experience.
-- Snapshot Indexing: By omitting heavy filesystem watcher daemons (`inotify` leaks, perpetual background CPU spikes), indexing completes in milliseconds. Re-index whenever needed via `Cmd+Shift+P` -> `Re-index Workspace`.
-- Local and Private: Runs locally on `127.0.0.1` with zero telemetry, zero accounts, and zero cloud phone-homes.
+- Local and Private: Runs locally on `127.0.0.1` with zero accounts. Code, file paths, and symbol queries never leave your machine.
 - Ape Terminal & Web Aesthetics: Minimal, quiet, high information density, designed for pair-programming and flow state.
+
+### Telemetry & Privacy
+
+px0 collects lightweight, anonymous backend session metrics (via PostHog) strictly to calculate DAU/MAU and session duration (start time and stop time).
+
+**What is NEVER collected:**
+- No feature interactions, user actions, or command activity
+- No frontend events, browser fingerprinting, or client trackers
+- No code snippets, file contents, or diffs
+- No file names, directory paths, or repository names
+- No symbol names, function signatures, or search queries
+- No personal data or user accounts
+
+**How to opt out:**
+You can disable telemetry completely at any time through any of the following:
+- CLI flag: `px0 -no-telemetry`
+- Environment variable: `export DO_NOT_TRACK=1` or `export PX0_TELEMETRY=0`
+
 
 ## Reproducing Benchmarks
 
