@@ -53,19 +53,14 @@ body.side-hidden #side, body.side-hidden #resizer { display: none; }
   display: flex; align-items: center; gap: 6px; padding: 9px 12px 7px;
   font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--dim);
 }
-.panel-head span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-head #root-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-actions { margin-left: auto; flex: none; display: flex; align-items: center; gap: 2px; }
+.panel-actions .mini { margin-left: 0; display: inline-flex; align-items: center; justify-content: center; }
+.panel-actions .mini svg { display: block; }
 .mini { margin-left: auto; color: var(--faint); font-size: 14px; line-height: 1; padding: 2px 4px; border-radius: 4px; }
 .mini:hover { color: var(--fg); background: var(--bg3); }
 /* "Show changed files only" toggle: on while the tree is filtered to git changes. */
 #btn-changed.active { color: var(--accent-fg); background: var(--bg3); }
-/* px0 never writes files; the badge says so beside the workspace name. */
-.panel-head .ro-badge {
-  flex: none; margin-left: auto; display: flex; align-items: center; gap: 3px;
-  font-size: 9px; letter-spacing: .06em; color: var(--faint);
-  border: 1px solid var(--line); border-radius: 8px; padding: 1px 6px 1px 5px; cursor: default;
-}
-.ro-badge svg { width: 8px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.3; }
-.ro-badge + .mini { margin-left: 0; }
 .panel-body { flex: 1; overflow: auto; padding-bottom: 16px; }
 /* Version and theme, level with the status bar beside it. */
 .side-foot {
