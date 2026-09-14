@@ -454,6 +454,197 @@
     }).observe(editor);
   }
 
+  // web/src/mermaid.js
+  var MERMAID_VERSION = "11.17.2";
+  var MERMAID_URL = "/static/lib/mermaid/" + MERMAID_VERSION + "/mermaid.esm.min.mjs";
+  var MAX_BLOCKS = 50;
+  var MAX_CHARS = 2000;
+  var mermaidPromise = null;
+  var mermaidModule = null;
+  var renderQueue = Promise.resolve();
+  var svgSeq = 0;
+  var themeWatcher = null;
+  var rendered = new Set;
+  var snapshots = new WeakMap;
+  async function loadMermaid() {
+    if (!mermaidPromise) {
+      const u = MERMAID_URL;
+      mermaidPromise = import(u).then((mod) => {
+        const mermaid = mod.default || mod;
+        mermaid.initialize(mermaidConfig());
+        mermaidModule = mermaid;
+        return mermaid;
+      }).catch((err) => {
+        mermaidPromise = null;
+        throw err;
+      });
+    }
+    return mermaidPromise;
+  }
+  function isDark() {
+    const scheme = getComputedStyle(document.documentElement).getPropertyValue("color-scheme");
+    if (scheme.indexOf("dark") >= 0)
+      return true;
+    if (scheme.indexOf("light") >= 0)
+      return false;
+    const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+    const m = /^#([0-9a-f]{6})$/i.exec(bg);
+    if (!m)
+      return true;
+    const n = parseInt(m[1], 16);
+    return ((n >> 16 & 255) * 299 + (n >> 8 & 255) * 587 + (n & 255) * 114) / 1000 < 128;
+  }
+  function mermaidConfig() {
+    const g = getComputedStyle(document.documentElement);
+    const dark = isDark();
+    const text = (name) => g.getPropertyValue(name).trim();
+    return {
+      startOnLoad: false,
+      securityLevel: "strict",
+      suppressErrorRendering: true,
+      theme: dark ? "dark" : "default",
+      darkMode: dark,
+      themeVariables: {
+        darkMode: dark,
+        fontFamily: text("--ui") || "sans-serif",
+        fontSize: text("--fs") || "14px"
+      }
+    };
+  }
+  function enqueue(target) {
+    renderQueue = renderQueue.then(() => renderTarget(target)).catch(() => {});
+  }
+  function note(pre, text, isErr) {
+    let el = pre.nextElementSibling;
+    if (!el || !el.classList || !el.classList.contains("md-mermaid-note")) {
+      el = document.createElement("small");
+      el.className = "md-mermaid-note";
+      pre.after(el);
+    }
+    el.style.color = isErr ? "var(--err)" : "var(--faint)";
+    el.textContent = text;
+  }
+  async function parseDetail(mermaid, src) {
+    try {
+      await mermaid.parse(src);
+    } catch (err) {
+      const msg = String(err && err.message || err).split(`
+`).slice(0, 3).join(" ").trim();
+      if (msg)
+        return msg.slice(0, 140);
+    }
+    return "invalid diagram syntax";
+  }
+  function sourceBlock(src) {
+    const pre = document.createElement("pre");
+    pre.className = "md-code";
+    pre.dataset.lang = "mermaid";
+    const code = document.createElement("code");
+    code.textContent = src;
+    pre.appendChild(code);
+    return pre;
+  }
+  function fail(target, src, err) {
+    rendered.delete(target);
+    const original = snapshots.get(target) || sourceBlock(src);
+    target.replaceWith(original);
+    const at = original.dataset.line ? " (line " + original.dataset.line + ")" : "";
+    note(original, "Mermaid" + at + ": " + (err && err.message ? String(err.message).split(`
+`)[0] : "render failed").slice(0, 140), true);
+  }
+  async function renderTarget(target) {
+    if (!target.isConnected)
+      return;
+    const src = target.dataset.mermaidSource;
+    if (!src)
+      return;
+    let mermaid;
+    try {
+      mermaid = await loadMermaid();
+    } catch (err) {
+      fail(target, src, err);
+      return;
+    }
+    let svg;
+    try {
+      const parsed = await mermaid.parse(src, { suppressErrors: true });
+      if (!parsed)
+        throw new Error(await parseDetail(mermaid, src));
+      svg = (await mermaid.render("px0-mermaid-" + ++svgSeq, src)).svg;
+      if (!svg)
+        throw new Error("render produced no SVG");
+    } catch (err) {
+      fail(target, src, err);
+      return;
+    }
+    const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+    if (doc.documentElement.localName === "svg" && !doc.querySelector("parsererror")) {
+      for (const el of [...doc.querySelectorAll("*")]) {
+        if (el.localName === "script" || el.namespaceURI === "http://www.w3.org/2000/xhtml" && el.localName === "iframe") {
+          el.remove();
+          continue;
+        }
+        for (const a of [...el.attributes]) {
+          if (/^on/i.test(a.name) || /^javascript:/i.test(a.value.replace(/[\t\n\r ]/g, "")))
+            el.removeAttribute(a.name);
+        }
+      }
+      const holder = document.createElement("div");
+      holder.className = "md-mermaid-svg";
+      holder.appendChild(document.adoptNode(doc.documentElement));
+      target.replaceWith(holder);
+    } else {
+      fail(target, src, new Error("render produced no SVG"));
+      return;
+    }
+    rendered.add(target);
+  }
+  function watchTheme() {
+    if (themeWatcher)
+      return;
+    themeWatcher = new MutationObserver(() => {
+      if (!mermaidModule)
+        return;
+      mermaidModule.initialize(mermaidConfig());
+      for (const node of rendered) {
+        if (!node.isConnected) {
+          rendered.delete(node);
+          continue;
+        }
+        enqueue(node);
+      }
+    });
+    themeWatcher.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  }
+  function renderMermaidBlocks(root) {
+    if (!root || !root.querySelectorAll)
+      return;
+    const codes = root.querySelectorAll('pre[data-lang="mermaid"] > code');
+    if (!codes.length)
+      return;
+    watchTheme();
+    let seen = 0;
+    for (const code of codes) {
+      const pre = code.parentElement;
+      if (++seen > MAX_BLOCKS) {
+        note(pre, "Diagram not rendered: this preview has more than " + MAX_BLOCKS + " diagrams.");
+        continue;
+      }
+      if (code.textContent.length > MAX_CHARS) {
+        note(pre, "Diagram not rendered: source is longer than " + MAX_CHARS + " characters.");
+        continue;
+      }
+      const node = document.createElement("div");
+      node.className = "md-mermaid";
+      node.dataset.mermaidSource = code.textContent;
+      if (pre.dataset.line)
+        node.dataset.line = pre.dataset.line;
+      snapshots.set(node, pre);
+      pre.replaceWith(node);
+      enqueue(node);
+    }
+  }
+
   // web/src/history.js
   function pushHistory(path, line) {
     const top = S2.hist[S2.histIdx];
@@ -608,11 +799,11 @@
     container.innerHTML = j.children.map((c) => {
       const pad = 8 + depth * 12;
       const ig = c.ignored ? " ignored" : "";
-      const note = c.ignored ? " (ignored by .gitignore, not searched)" : "";
+      const note2 = c.ignored ? " (ignored by .gitignore, not searched)" : "";
       if (c.dir) {
-        return '<div class="tw"><div class="tr dir' + ig + '" data-dir="' + esc(c.path) + '" style="padding-left:' + pad + 'px" title="Folder: ' + esc(c.path) + note + '">' + '<span class="ar"></span><span class="nm">' + esc(c.name) + "</span></div>" + '<div class="kids" data-kids="' + esc(c.path) + '"></div></div>';
+        return '<div class="tw"><div class="tr dir' + ig + '" data-dir="' + esc(c.path) + '" style="padding-left:' + pad + 'px" title="Folder: ' + esc(c.path) + note2 + '">' + '<span class="ar"></span><span class="nm">' + esc(c.name) + "</span></div>" + '<div class="kids" data-kids="' + esc(c.path) + '"></div></div>';
       }
-      return '<div class="tr file' + ig + '" data-file="' + esc(c.path) + '" style="padding-left:' + (pad + 12) + 'px" title="Open ' + esc(c.path) + note + '">' + '<span class="ic" data-t="' + fileKind(c.name) + '"></span><span class="nm">' + esc(c.name) + "</span></div>";
+      return '<div class="tr file' + ig + '" data-file="' + esc(c.path) + '" style="padding-left:' + (pad + 12) + 'px" title="Open ' + esc(c.path) + note2 + '">' + '<span class="ic" data-t="' + fileKind(c.name) + '"></span><span class="nm">' + esc(c.name) + "</span></div>";
     }).join("");
   }
   var FILE_KIND = {
@@ -817,7 +1008,7 @@
     if (previewing(d)) {
       const n = findInPreview(q);
       S2.find = q ? { q, ci: false, hits: new Array(n).fill(null), byLine: new Set, active: n ? 0 : -1, preview: true } : null;
-      $("#find-count").textContent = !q ? "0" : n ? "1 / " + n : "no results";
+      $("#find-count").textContent = q ? n ? "1 / " + n : "no results" : "0";
       $("#minimap-hits").innerHTML = previewHitOffsets().map((p) => '<i style="top:' + p + '%"></i>').join("");
       if (n)
         jumpToHit(0);
@@ -1558,10 +1749,9 @@
         html += '<div class="lsp-opt"><code>' + esc(o.cmd) + '</code><span class="lsp-acts">';
         if (!o.auto)
           html += '<span class="lsp-need">run in a terminal</span>';
-        else if (!o.hasTool)
+        else if (o.hasTool)
+          html += '<button class="lsp-btn primary" data-install="' + esc(v.name) + '" data-option="' + i + '"' + (running ? " disabled" : "") + ">Install</button>"; else 
           html += '<span class="lsp-need">needs ' + esc(o.tool) + "</span>";
-        else
-          html += '<button class="lsp-btn primary" data-install="' + esc(v.name) + '" data-option="' + i + '"' + (running ? " disabled" : "") + ">Install</button>";
         html += '<button class="lsp-btn" data-copy="' + esc(o.cmd) + '">Copy</button></span></div>';
       });
       if (v.job)
@@ -2001,8 +2191,9 @@
         return;
     }
     mdArticle.replaceChildren(mdSanitize(d.mdHtml, d.path));
+    renderMermaidBlocks(mdArticle);
     mdEnhance();
-    mdDrawn = d;
+    renderMath(mdArticle);
     const target2 = d.mdAnchor && mdFindAnchor(d.mdAnchor);
     if (target2)
       mdScrollTo(target2);
@@ -2033,10 +2224,10 @@
       mdSetPref(true);
       syncPreview();
     }
-    if (!findbar.hidden)
-      runFind();
-    else
+    if (findbar.hidden)
       S2.find = null;
+    else
+      runFind();
     render();
     updateStatus();
   }
@@ -2082,7 +2273,7 @@
       if (id)
         el.id = "md-" + id;
       if (attrs.class) {
-        const keep = attrs.class.split(/\s+/).filter((c) => c === "md-code" || c.startsWith("footnote") || tag === "i" && MD_TOKENS.has(c));
+        const keep = attrs.class.split(/\s+/).filter((c) => c === "md-code" || c === "md-math" || c === "md-math-display" || c.startsWith("footnote") || tag === "i" && MD_TOKENS.has(c));
         if (keep.length)
           el.className = keep.join(" ");
       }
@@ -2148,6 +2339,46 @@
     a.dataset.path = t.path;
     if (t.hash)
       a.dataset.anchor = t.hash;
+  }
+  var KATEX_VERSION = "0.16.47";
+  var KATEX_URL = "/static/lib/katex/" + KATEX_VERSION + "/katex.mjs";
+  var KATEX_CSS = "/static/lib/katex/" + KATEX_VERSION + "/katex.min.css";
+  var katexPromise = null;
+  function loadKatex() {
+    if (!katexPromise) {
+      const u = KATEX_URL;
+      if (!document.querySelector('link[href="' + KATEX_CSS + '"]')) {
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = KATEX_CSS;
+        document.head.appendChild(link);
+      }
+      katexPromise = import(u).then((mod) => mod.default || mod).catch((err) => {
+        katexPromise = null;
+        throw err;
+      });
+    }
+    return katexPromise;
+  }
+  async function renderMath(root) {
+    const spans = $$("span.md-math", root);
+    if (!spans.length)
+      return;
+    let katex;
+    try {
+      katex = await loadKatex();
+    } catch {
+      for (const s of spans)
+        s.title = "KaTeX failed to load";
+      return;
+    }
+    for (const s of spans) {
+      if (!s.isConnected || !mdArticle.contains(s))
+        continue;
+      try {
+        katex.render(s.textContent, s, { displayMode: s.classList.contains("md-math-display"), throwOnError: false });
+      } catch {}
+    }
   }
   var MD_ALERTS = { note: "Note", tip: "Tip", important: "Important", warning: "Warning", caution: "Caution" };
   function mdEnhance() {
@@ -3328,7 +3559,7 @@
   function openPalette(mode, seed) {
     pal = { mode, items: [], sel: 0, restoreTheme: mode === "theme" ? currentTheme() : null };
     overlay.hidden = false;
-    palInput.value = seed !== undefined ? seed : { symbol: "@", line: ":", command: ">" }[mode] || "";
+    palInput.value = seed === undefined ? { symbol: "@", line: ":", command: ">" }[mode] || "" : seed;
     $("#pal-mode").textContent = PAL_MODES[mode].tag;
     $("#pal-hint").textContent = PAL_MODES[mode].hint;
     palInput.focus();
@@ -3519,13 +3750,13 @@
     try {
       initTheme();
       const wrapPref = localStorage.getItem("px0.wrap");
-      S2.wrap = wrapPref !== null ? wrapPref === "true" : true;
+      S2.wrap = wrapPref === null ? true : wrapPref === "true";
       document.body.classList.toggle("word-wrap", S2.wrap);
       const linesPref = localStorage.getItem("px0.lineNumbers");
-      S2.lineNumbers = linesPref !== null ? linesPref === "true" : true;
+      S2.lineNumbers = linesPref === null ? true : linesPref === "true";
       document.body.classList.toggle("hide-lines", !S2.lineNumbers);
       const mdPref = localStorage.getItem("px0.mdPreview");
-      S2.mdPreview = mdPref !== null ? mdPref === "true" : true;
+      S2.mdPreview = mdPref === null ? true : mdPref === "true";
       updateEditorOptionControls();
     } catch {}
     applyKeyLabels();

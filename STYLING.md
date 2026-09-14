@@ -196,6 +196,8 @@ The hover card signature and fenced code blocks in the Markdown preview use the 
 
 GitHub alerts in the Markdown preview take their accent from existing tokens: Note `--accent`, Tip `--gi`, Important `--nc`, Warning `--mark-active`, Caution `--err`. Find in the preview marks matches with `--mark` and `--mark-active`, as in the code view.
 
+Mermaid diagrams and KaTeX math in the preview need no theme work: Mermaid picks `dark` or `default` from the theme's `color-scheme` (falling back to `--bg` luminance) and inherits `--ui` and `--fs`, while KaTeX text is coloured with `--fg`. Both re-render on theme switch where a theme change matters (Mermaid) or inherit it directly (KaTeX).
+
 ## Structural Tokens
 
 `web/style.css` defines these in `:root`. They apply to every theme. Change them in `style.css`, not in a theme file: px0 measures character width once at boot, so a font or size that changes when the theme switches leaves the gutter and horizontal scroll width wrong until reload.

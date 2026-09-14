@@ -1,4 +1,4 @@
-# px0: Read Code. Fast.
+# px0: Read Code. Fast
 
 px0 is a fast, lightweight, read-only IDE designed for instant code navigation and review in your browser. Booting in under 1 ms and using ~16 MB of RAM, it turns your browser into a zero-latency inspection console with symbol-level navigation, deep search, and syntax highlighting across massive codebases.
 
@@ -62,6 +62,7 @@ make dist
 
 - **Blazing Fast Code Navigation**: Fuzzy search files (`Cmd/Ctrl+P`), document symbols (`Cmd/Ctrl+Shift+O`), and full project regex scan (`Cmd/Ctrl+Shift+F`) in milliseconds.
 - **Rich Syntax Highlighting**: Built-in native tokenization for ~280 languages via Chroma.
+- **Markdown Preview with Mermaid and Math**: `.md` files open rendered (GitHub alerts, tables, task lists) with a Preview / Source switch (`Alt+M`). ` ```mermaid ` fences draw as diagrams and `$...$`, `$$...$$` and ` ```math ` render with KaTeX. Both libraries ship inside the binary and load only when a document uses them.
 - **Custom Themes**: Ships 14 built-in themes, including Tokyo Night (default), Paper, Catppuccin, Dracula, GitHub Dark, Gruvbox, Monokai, Nord, One Dark, Rose Pine, and Solarized. Switch via the button at the bottom of the sidebar or `Select Theme` in the command palette. See [STYLING.md](STYLING.md) to write your own.
 - **Optional Language Server Protocol (LSP)**: Zero-config auto-detection of local LSPs (`gopls`, `rust-analyzer`, `pyright`, `typescript-language-server`, `clangd`, etc.) for precise Go-to-Definition (`F12`), Hover info, and cross-references. Falls back automatically to instant regex outlines when no LSP is installed.
 - **Virtual DOM / Zero Overhead**: Opening a 400,000-line file costs the same as a 10-line file; only visible lines render in the browser.
@@ -261,20 +262,20 @@ git clone https://github.com/px0-ai/px0.git
 cd px0
 ```
 
-2. Run tests:
+1. Run tests:
 
 ```bash
 make test
 # or go test ./...
 ```
 
-3. Live frontend development (serves `web/` assets from disk without rebuilding the binary):
+1. Live frontend development (serves `web/` assets from disk without rebuilding the binary):
 
 ```bash
 go run . -dev . .
 ```
 
-4. Verify CLI formatting and builds:
+1. Verify CLI formatting and builds:
 
 ```bash
 go vet ./...

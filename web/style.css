@@ -458,6 +458,15 @@ body.hide-lines .c { padding-left: 16px; }
 .md blockquote.md-alert { padding: 8px 16px; color: var(--fg); border-left-color: var(--alert); }
 .md .md-alert-title { margin: 0 0 4px; font-weight: 600; color: var(--alert); }
 
+/* Mermaid diagram: takes the block's place, bounded to the preview column. */
+.md .md-mermaid { margin: 0 0 16px; display: flex; justify-content: center; }
+.md .md-mermaid-svg { max-width: 100%; overflow: hidden; }
+.md .md-mermaid-svg svg { max-width: 100%; height: auto; display: block; }
+.md .md-mermaid-note { display: block; margin: -8px 0 16px; font-size: 12px; color: var(--faint); }
+/* Math: inline spans stay inline; display math takes the block's place. */
+.md .md-math-display { display: block; margin: 1em 0; text-align: center; overflow-x: auto; }
+.md .katex { font-size: 1.1em; color: var(--fg); }
+
 #imgview { position: absolute; inset: 0; display: grid; place-items: center; overflow: auto; padding: 32px; }
 #imgview img { max-width: 100%; image-rendering: pixelated; box-shadow: var(--shadow); background: repeating-conic-gradient(var(--bg3) 0 25%, transparent 0 50%) 0 0/16px 16px; }
 
