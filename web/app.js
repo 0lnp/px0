@@ -596,8 +596,9 @@
       fail(target, src, err);
       return;
     }
-    const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
-    if (doc.documentElement.localName === "svg" && !doc.querySelector("parsererror")) {
+    const doc = new DOMParser().parseFromString(svg, "text/html");
+    const root = doc.querySelector("svg");
+    if (root) {
       for (const el of [...doc.querySelectorAll("*")]) {
         if (el.localName === "script" || el.namespaceURI === "http://www.w3.org/2000/xhtml" && el.localName === "iframe") {
           el.remove();
@@ -610,7 +611,7 @@
       }
       const holder = document.createElement("div");
       holder.className = "md-mermaid-svg";
-      holder.appendChild(document.adoptNode(doc.documentElement));
+      holder.appendChild(document.adoptNode(root));
       target.replaceWith(holder);
     } else {
       fail(target, src, new Error("render produced no SVG"));
@@ -830,12 +831,12 @@
       const note2 = c.ignored ? " (ignored by .gitignore, not searched)" : "";
       if (c.dir) {
         const dc = c.dirty ? " dirty" : "";
-        return '<div class="tw"><div class="tr dir' + ig + dc + '" data-dir="' + esc(c.path) + '" style="padding-left:' + pad + 'px" title="Folder: ' + esc(c.path) + note + '">' + '<span class="ar"></span><span class="nm">' + esc(c.name) + "</span></div>" + '<div class="kids" data-kids="' + esc(c.path) + '"></div></div>';
+        return '<div class="tw"><div class="tr dir' + ig + dc + '" data-dir="' + esc(c.path) + '" style="padding-left:' + pad + 'px" title="Folder: ' + esc(c.path) + note2 + '">' + '<span class="ar"></span><span class="nm">' + esc(c.name) + "</span></div>" + '<div class="kids" data-kids="' + esc(c.path) + '"></div></div>';
       }
       const g = GIT_STATUS[c.status];
       const gc = g ? " dirty " + g[0] : "";
       const badge = g ? '<span class="gs" title="git: ' + g[1] + '">' + esc(c.status) + "</span>" : "";
-      return '<div class="tr file' + ig + gc + '" data-file="' + esc(c.path) + '" style="padding-left:' + (pad + 12) + 'px" title="Open ' + esc(c.path) + note + '">' + '<span class="ic" data-t="' + fileKind(c.name) + '"></span><span class="nm">' + esc(c.name) + "</span>" + badge + "</div>";
+      return '<div class="tr file' + ig + gc + '" data-file="' + esc(c.path) + '" style="padding-left:' + (pad + 12) + 'px" title="Open ' + esc(c.path) + note2 + '">' + '<span class="ic" data-t="' + fileKind(c.name) + '"></span><span class="nm">' + esc(c.name) + "</span>" + badge + "</div>";
     }).join("");
   }
   var FILE_KIND = {
@@ -1045,7 +1046,7 @@
     if (previewing(d)) {
       const n = findInPreview(q);
       S2.find = q ? { q, ci: false, hits: new Array(n).fill(null), byLine: new Set, active: n ? 0 : -1, preview: true } : null;
-      $("#find-count").textContent = q ? n ? "1 / " + n : "no results" : "0";
+      $("#find-count").textContent = !q ? "0" : n ? "1 / " + n : "no results";
       $("#minimap-hits").innerHTML = previewHitOffsets().map((p) => '<i style="top:' + p + '%"></i>').join("");
       if (n)
         jumpToHit(0);
@@ -1928,9 +1929,10 @@
         html += '<div class="lsp-opt"><code>' + esc(o.cmd) + '</code><span class="lsp-acts">';
         if (!o.auto)
           html += '<span class="lsp-need">run in a terminal</span>';
-        else if (o.hasTool)
-          html += '<button class="lsp-btn primary" data-install="' + esc(v.name) + '" data-option="' + i + '"' + (running ? " disabled" : "") + ">Install</button>"; else 
+        else if (!o.hasTool)
           html += '<span class="lsp-need">needs ' + esc(o.tool) + "</span>";
+        else
+          html += '<button class="lsp-btn primary" data-install="' + esc(v.name) + '" data-option="' + i + '"' + (running ? " disabled" : "") + ">Install</button>";
         html += '<button class="lsp-btn" data-copy="' + esc(o.cmd) + '">Copy</button></span></div>';
       });
       if (v.job)
@@ -2375,6 +2377,7 @@
     mdArticle.replaceChildren(mdSanitize(d.mdHtml, d.path));
     renderMermaidBlocks(mdArticle);
     mdEnhance();
+    mdDrawn = d;
     renderMath(mdArticle);
     const target2 = d.mdAnchor && mdFindAnchor(d.mdAnchor);
     if (target2)
@@ -2986,7 +2989,7 @@
         i++;
         continue;
       }
-      const dels = [], adds = [];
+      let dels = [], adds = [];
       while (i < rows.length && rows[i].type === "del")
         dels.push(rows[i++]);
       while (i < rows.length && rows[i].type === "add")
@@ -3331,13 +3334,7 @@
       if (!range.intersectsNode(el))
         continue;
       const code = el.querySelector(".diff-code");
-      if (el.dataset.l === undefined) {
-        const n = +el.dataset.at;
-        if (n < at1)
-          at1 = n;
-        if (n > at2)
-          at2 = n;
-      } else {
+      if (el.dataset.l !== undefined) {
         const n = +el.dataset.l;
         if (n < l1)
           l1 = n;
@@ -3346,6 +3343,12 @@
         if (seen.has(n))
           continue;
         seen.add(n);
+      } else {
+        const n = +el.dataset.at;
+        if (n < at1)
+          at1 = n;
+        if (n > at2)
+          at2 = n;
       }
       parts.push(code ? code.textContent : "");
     }
@@ -4368,7 +4371,7 @@
   function openPalette(mode, seed) {
     pal = { mode, items: [], sel: 0, restoreTheme: mode === "theme" ? currentTheme() : null };
     overlay.hidden = false;
-    palInput.value = seed === undefined ? { symbol: "@", line: ":", command: ">" }[mode] || "" : seed;
+    palInput.value = seed !== undefined ? seed : { symbol: "@", line: ":", command: ">" }[mode] || "";
     $("#pal-mode").textContent = PAL_MODES[mode].tag;
     $("#pal-hint").textContent = PAL_MODES[mode].hint;
     palInput.focus();
@@ -4982,7 +4985,7 @@
     }
     if (!await reloadWorkspace(editTarget, "Edited"))
       return;
-    showToast("✓", changed.length ? changed.length === 1 ? "Updated " + changed[0] : "Updated " + changed.length + " files" : "Reloaded the workspace");
+    showToast("✓", !changed.length ? "Reloaded the workspace" : changed.length === 1 ? "Updated " + changed[0] : "Updated " + changed.length + " files");
   }
   var reloadChain = Promise.resolve();
   function reloadWorkspace(focus, what = "Changed") {
@@ -5040,12 +5043,12 @@
     try {
       initTheme();
       const wrapPref = localStorage.getItem("px0.wrap");
-      S2.wrap = wrapPref === null ? true : wrapPref === "true";
+      S2.wrap = wrapPref !== null ? wrapPref === "true" : true;
       document.body.classList.toggle("word-wrap", S2.wrap);
       S2.lineNumbers = true;
       document.body.classList.remove("hide-lines");
       const mdPref = localStorage.getItem("px0.mdPreview");
-      S2.mdPreview = mdPref === null ? true : mdPref === "true";
+      S2.mdPreview = mdPref !== null ? mdPref === "true" : true;
       updateEditorOptionControls();
     } catch {}
     applyKeyLabels();
