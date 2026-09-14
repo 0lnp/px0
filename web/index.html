@@ -50,10 +50,18 @@
   <main id="main">
     <!-- File Tabs -->
     <div id="tabs"></div>
-    <!-- Markdown tabs only: switch between the rendered file and its source -->
-    <div id="md-switch" role="group" aria-label="Markdown view" hidden>
-      <button data-md="preview" title="Rendered Markdown ({Alt+M})">Preview</button>
-      <button data-md="source" title="Markdown source ({Alt+M})">Source</button>
+    <!-- View-mode switches, pinned to the right of the tab bar -->
+    <div id="view-switches">
+      <!-- Markdown tabs only: switch between the rendered file and its source -->
+      <div id="md-switch" class="view-switch" role="group" aria-label="Markdown view" hidden>
+        <button data-md="preview" title="Rendered Markdown ({Alt+M})">Preview</button>
+        <button data-md="source" title="Markdown source ({Alt+M})">Source</button>
+      </div>
+      <!-- Modified files in a git repo only: view the file's diff against HEAD -->
+      <div id="diff-switch" class="view-switch" role="group" aria-label="Diff view" hidden>
+        <button data-diff="split" title="Split diff ({Mod+D})">Split</button>
+        <button data-diff="unified" title="Unified diff ({Mod+D})">Unified</button>
+      </div>
     </div>
 
     <!-- Virtualized Code Editor Viewport -->
@@ -64,6 +72,8 @@
       </div>
       <!-- Markdown preview: covers the code view for a Markdown tab (Alt+M toggles) -->
       <div id="mdview" hidden><article id="md" class="md"></article></div>
+      <!-- Diff view: covers the code view while a diff layout is active (Mod+D toggles) -->
+      <div id="diffview" hidden><div id="diffcontent"></div></div>
       <div id="minimap-hits"></div>
 
       <!-- Welcome / Empty State Screen -->

@@ -181,7 +181,7 @@
     const last = Math.min(d.total, first + count);
     ensureChunks(d, first, last);
     let html = "";
-    const gut = d.gutter && !d.diffSaved ? d.gutter : null;
+    const gut = d.gutter || null;
     for (let i = first;i < last; i++) {
       const n = i + 1;
       const body = d.lines[i];
@@ -426,7 +426,7 @@
       d.refining.add(c);
     }
     setTimeout(async () => {
-      if (!S2.tabs.includes(d) || d.diffSaved || tries > 6) {
+      if (!S2.tabs.includes(d) || tries > 6) {
         d.refining.delete(c);
         return;
       }
@@ -1992,7 +1992,7 @@
   var mdDrawn = null;
   var mdGen = 0;
   function previewing(d = doc_()) {
-    return !!(d && d.markdown && S2.mdPreview && !d.mdError);
+    return !!(d && d.markdown && S2.mdPreview && !d.mdError && !d.diffMode);
   }
   function syncPreview() {
     const d = doc_();
@@ -2434,6 +2434,14 @@
       for (const b of sw.children)
         b.classList.toggle("on", isMd && b.dataset.md === "preview" === shown);
     }
+    const hasDiff = !!(d && d.diffAvailable), mode = d && d.diffMode || "source";
+    const dsw = $("#diff-switch");
+    if (dsw) {
+      dsw.hidden = !hasDiff;
+      document.body.classList.toggle("diff-tab", hasDiff);
+      for (const b of dsw.children)
+        b.classList.toggle("on", hasDiff && b.dataset.diff === mode);
+    }
     const idxEl = $("#st-index");
     if (idxEl && S2.meta) {
       idxEl.textContent = S2.meta.indexMs + "ms";
@@ -2680,6 +2688,223 @@
     });
   }
 
+  // web/src/diff.js
+  var diffview = $("#diffview");
+  var diffContent = $("#diffcontent");
+  var shown = null;
+  function setLayoutPref(mode) {
+    try {
+      localStorage.setItem("px0.diffLayout", mode);
+    } catch {}
+  }
+  function layoutPref() {
+    try {
+      return localStorage.getItem("px0.diffLayout") || "split";
+    } catch {
+      return "split";
+    }
+  }
+  function diffMode(d = doc_()) {
+    return d && d.diffMode || null;
+  }
+  function syncDiffView() {
+    const d = doc_();
+    const want = d && d.diffMode ? d : null;
+    if (want !== shown) {
+      shown = want;
+      diffview.hidden = !want;
+      if (want)
+        drawDiff(want);
+      else
+        diffContent.replaceChildren();
+    } else if (want && want.diffHunks !== undefined) {
+      render2(want);
+    }
+  }
+  async function toggleDiff() {
+    if (!S2.meta?.git)
+      return;
+    const d = doc_();
+    if (!d)
+      return;
+    if (!d.diffMode && !d.diffAvailable) {
+      setStatusNote("No diff — clean file or not a git repo");
+      return;
+    }
+    setDiffMode(d.diffMode ? "source" : layoutPref());
+  }
+  async function setDiffMode(mode) {
+    const d = doc_();
+    if (!d)
+      return;
+    if (mode !== "source" && !d.diffAvailable) {
+      setStatusNote("No diff — clean file or not a git repo");
+      return;
+    }
+    if (mode === "source") {
+      d.diffMode = null;
+    } else {
+      d.diffMode = mode;
+      setLayoutPref(mode);
+    }
+    syncPreview();
+    syncDiffView();
+    updateStatus();
+  }
+  async function drawDiff(d) {
+    if (d.diffText === undefined) {
+      diffContent.replaceChildren();
+      try {
+        d.diffReq = d.diffReq || api("/api/diff", { path: d.path });
+        const j = await d.diffReq;
+        d.diffText = j.diff || "";
+        d.diffHunks = parseDiff(d.diffText);
+      } catch (e) {
+        d.diffText = "";
+        d.diffHunks = [];
+        setStatusNote("No diff: " + e.message);
+      } finally {
+        d.diffReq = null;
+      }
+      if (shown !== d)
+        return;
+    }
+    render2(d);
+  }
+  function render2(d) {
+    diffContent.replaceChildren();
+    if (!d.diffHunks || !d.diffHunks.length) {
+      const p = document.createElement("div");
+      p.className = "diff-empty";
+      p.textContent = "No changes against HEAD.";
+      diffContent.append(p);
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    for (const hunk of d.diffHunks) {
+      frag.append(hunkHeader(hunk));
+      frag.append(d.diffMode === "unified" ? unifiedTable(hunk) : splitTable(hunk));
+    }
+    diffContent.append(frag);
+  }
+  function hunkHeader(hunk) {
+    const el = document.createElement("div");
+    el.className = "diff-hunk-head";
+    el.textContent = "@@ -" + hunk.oldStart + " +" + hunk.newStart + " @@" + (hunk.section ? " " + hunk.section : "");
+    return el;
+  }
+  var HUNK_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@[ \t]?(.*)$/;
+  function parseDiff(text) {
+    if (!text)
+      return [];
+    const hunks = [];
+    let cur = null, oldLine = 0, newLine = 0;
+    for (const line of text.split(`
+`)) {
+      const m = HUNK_RE.exec(line);
+      if (m) {
+        oldLine = +m[1];
+        newLine = +m[3];
+        cur = { oldStart: oldLine, newStart: newLine, section: m[5] || "", rows: [] };
+        hunks.push(cur);
+        continue;
+      }
+      if (!cur || line === "" || line.startsWith("\\"))
+        continue;
+      const c = line[0], body = line.slice(1);
+      if (c === "+")
+        cur.rows.push({ type: "add", newLine: newLine++, text: body });
+      else if (c === "-")
+        cur.rows.push({ type: "del", oldLine: oldLine++, text: body });
+      else
+        cur.rows.push({ type: "ctx", oldLine: oldLine++, newLine: newLine++, text: body });
+    }
+    return hunks;
+  }
+  function unifiedTable(hunk) {
+    const table = document.createElement("div");
+    table.className = "diff-table diff-unified";
+    for (const row of hunk.rows) {
+      const r = document.createElement("div");
+      r.className = "diff-row diff-" + row.type;
+      r.append(lineCell(row.type === "add" ? "" : row.oldLine), lineCell(row.type === "del" ? "" : row.newLine), markerCell(row.type), codeCell(row.text));
+      table.append(r);
+    }
+    return table;
+  }
+  function splitTable(hunk) {
+    const table = document.createElement("div");
+    table.className = "diff-table diff-split";
+    for (const pair of pairRows(hunk.rows)) {
+      const r = document.createElement("div");
+      r.className = "diff-row-pair";
+      r.append(splitSide(pair.left, "left"), splitSide(pair.right, "right"));
+      table.append(r);
+    }
+    return table;
+  }
+  function pairRows(rows) {
+    const pairs = [];
+    let i = 0;
+    while (i < rows.length) {
+      const row = rows[i];
+      if (row.type === "ctx") {
+        pairs.push({ left: row, right: row });
+        i++;
+        continue;
+      }
+      let dels = [], adds = [];
+      while (i < rows.length && rows[i].type === "del")
+        dels.push(rows[i++]);
+      while (i < rows.length && rows[i].type === "add")
+        adds.push(rows[i++]);
+      const n = Math.max(dels.length, adds.length);
+      for (let k = 0;k < n; k++)
+        pairs.push({ left: dels[k] || null, right: adds[k] || null });
+    }
+    return pairs;
+  }
+  function splitSide(row, side) {
+    const el = document.createElement("div");
+    el.className = "diff-side diff-side-" + side + (row ? " diff-" + row.type : " diff-blank");
+    if (!row) {
+      el.append(lineCell(""), markerCell(""), codeCell(""));
+      return el;
+    }
+    const ln = side === "left" ? row.oldLine : row.newLine;
+    el.append(lineCell(ln), markerCell(row.type), codeCell(row.text));
+    return el;
+  }
+  function lineCell(n) {
+    const el = document.createElement("div");
+    el.className = "diff-ln";
+    el.textContent = n === "" || n === undefined ? "" : String(n);
+    return el;
+  }
+  var MARKS = { add: "+", del: "-", ctx: "" };
+  function markerCell(type) {
+    const el = document.createElement("div");
+    el.className = "diff-mk";
+    el.textContent = MARKS[type] || "";
+    return el;
+  }
+  function codeCell(text) {
+    const el = document.createElement("div");
+    el.className = "diff-code";
+    el.innerHTML = esc(text || "") || "&nbsp;";
+    return el;
+  }
+  function initDiff() {
+    const sw = $("#diff-switch");
+    sw.addEventListener("mousedown", (e) => e.preventDefault());
+    sw.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-diff]");
+      if (!b)
+        return;
+      setDiffMode(b.dataset.diff === diffMode() ? "source" : b.dataset.diff);
+    });
+  }
+
   // web/src/tabs.js
   var closedTabs = [];
   var MAX_CLOSED = 20;
@@ -2715,7 +2940,9 @@
         outline: null,
         gen: 0,
         markdown: !!j.markdown,
-        gutter: null
+        gutter: null,
+        diffMode: null,
+        diffAvailable: false
       };
       for (let i = 0;i < j.lines.length; i++)
         d2.lines[j.start + i] = j.lines[i];
@@ -2736,6 +2963,7 @@
     $("#empty").hidden = true;
     hideImage();
     syncPreview();
+    syncDiffView();
     if (!S2.at || S2.at.path !== d.path)
       S2.at = null;
     S2.lsp.state = d.lsp && d.lsp.state || "off";
@@ -2761,6 +2989,9 @@
     if (!S2.meta?.git)
       return;
     api("/api/gutter", { path: d.path }).then((j) => {
+      d.diffAvailable = !!j.available;
+      if (doc_() === d)
+        updateStatus();
       if (!j.available)
         return;
       const marks = new Map;
@@ -2801,6 +3032,7 @@
     if (S2.tabs.length === 0) {
       S2.active = -1;
       syncPreview();
+      syncDiffView();
       rowsEl.innerHTML = "";
       sizer.style.height = "0px";
       $("#empty").hidden = false;
@@ -2812,6 +3044,7 @@
     S2.active = Math.min(i, S2.tabs.length - 1);
     const d = doc_();
     syncPreview();
+    syncDiffView();
     drawTabs();
     drawCrumbs();
     layout();
@@ -2848,6 +3081,7 @@
       prev.scrollTop = vp.scrollTop;
     S2.active = i;
     syncPreview();
+    syncDiffView();
     clearFind();
     clearSelectAll();
     S2.at = null;
@@ -2987,84 +3221,6 @@
     const all = listThemes();
     if (all.length && !all.some((t) => t.id === currentTheme()))
       setTheme(all[0].id, false);
-  }
-
-  // web/src/diff.js
-  function diffChunks(total) {
-    const s = new Set;
-    for (let c = 0;c <= Math.floor(total / CHUNK); c++)
-      s.add(c);
-    return s;
-  }
-  async function toggleDiff() {
-    if (!S2.meta?.git)
-      return;
-    const d = doc_();
-    if (!d)
-      return;
-    if (d.diffSaved) {
-      exitDiff(d);
-      return;
-    }
-    let j;
-    try {
-      j = await api("/api/diff", { path: d.path });
-    } catch {
-      setStatusNote("No diff");
-      return;
-    }
-    if (!j.available || !j.diff) {
-      setStatusNote("No diff — clean file or not a git repo");
-      return;
-    }
-    enterDiff(d, j.diff);
-  }
-  function enterDiff(d, diff) {
-    const raw = diff.split(`
-`);
-    const lines = raw.map((l) => {
-      const c = l[0];
-      const cls = c === "+" ? "diff-add" : c === "-" ? "diff-del" : c === "@" ? "diff-hunk" : "";
-      const body = esc(l);
-      return cls ? '<span class="' + cls + '">' + body + "</span>" : body;
-    });
-    d.diffSaved = {
-      lines: d.lines,
-      total: d.total,
-      maxCols: d.maxCols,
-      chunks: d.chunks,
-      pending: d.pending,
-      cur: d.cur,
-      scrollTop: vp.scrollTop
-    };
-    d.lines = lines;
-    d.total = lines.length;
-    d.maxCols = raw.reduce((m, l) => Math.max(m, l.length), 0);
-    d.chunks = diffChunks(lines.length);
-    d.pending = new Set;
-    d.cur = 1;
-    d.gen++;
-    document.body.classList.add("diff-view");
-    vp.scrollTop = 0;
-    layout();
-    render();
-    setStatusNote("diff view — " + d.name + " (press again to exit)");
-  }
-  function exitDiff(d) {
-    const s = d.diffSaved;
-    d.diffSaved = null;
-    d.lines = s.lines;
-    d.total = s.total;
-    d.maxCols = s.maxCols;
-    d.chunks = s.chunks;
-    d.pending = s.pending;
-    d.cur = s.cur;
-    d.gen++;
-    document.body.classList.remove("diff-view");
-    layout();
-    vp.scrollTop = s.scrollTop;
-    render();
-    setStatusNote("");
   }
 
   // web/src/shortcuts.js
@@ -3645,6 +3801,7 @@
   initPalette();
   initShortcuts();
   initMarkdown();
+  initDiff();
   initMetrics();
   initStatusFit();
   (async function boot() {

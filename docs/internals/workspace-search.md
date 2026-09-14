@@ -2,8 +2,6 @@
 
 This document explains px0's high-throughput parallel search engine ([`search.go`](../../search.go)) and fast regex symbol extractor ([`symbols.go`](../../symbols.go)).
 
----
-
 ## 1. Search Engine Architecture
 
 Full-text search in px0 is built to scan hundreds of megabytes of source code in milliseconds without spawning external processes (like `grep` or `ripgrep`) and without thrashing the Go heap.
@@ -37,8 +35,6 @@ flowchart TD
     Snip --> Merge["Merge Results into Capped Output Slice"]
 ```
 
----
-
 ## 2. Memory Optimization: `workBuf` Pooling
 
 Reading thousands of files off disk can overwhelm Go's memory allocator if buffers are created per file. px0 eliminates per-file allocations using a `sync.Pool` of reusable worker buffers:
@@ -60,18 +56,19 @@ var workPool = sync.Pool{
 ```
 
 ### In-Place ASCII Lowercasing
+
 For case-insensitive literal searches, converting full UTF-8 strings with `strings.ToLower()` allocates new heap memory for every line. Instead, `search.go` performs in-place byte lowercasing directly into `workBuf.asciiLower`:
-- ASCII characters `A`–`Z` are mapped to `a`–`z` via single-byte manipulation (`b + 32`).
+
+- ASCII characters A-Z are mapped to a-z via single-byte manipulation (`b + 32`).
 - UTF-8 multibyte characters are preserved untouched.
 - Literal matching executes via SIMD-accelerated `bytes.Contains()` and `bytes.Index()` with zero heap allocations.
-
----
 
 ## 3. Fast Rejection Fast Path
 
 The vast majority of files in any repository do not contain the search term. Splitting file contents into lines and iterating line-by-line is expensive.
 
 px0 applies an instant rejection test before doing any line parsing:
+
 ```go
 if !isRegex && !caseSensitive {
     if !bytes.Contains(lowerData, queryLower) {
@@ -79,9 +76,8 @@ if !isRegex && !caseSensitive {
     }
 }
 ```
-If `bytes.Contains()` returns `false`, the entire file is discarded in a few microseconds without examining a single newline.
 
----
+If `bytes.Contains()` returns `false`, the entire file is discarded in a few microseconds without examining a single newline.
 
 ## 4. Structured Snippet Elision (`{Pre, Mid, Post}`)
 
@@ -99,29 +95,32 @@ type Match struct {
 }
 ```
 
-### Snippet Constants:
+### Snippet Constants
+
 - `snipLead = 32`: Match offset threshold before leading text is elided.
-- `snipKeep = 16`: Number of leading runes retained when truncating (e.g., `…getComponent()`).
+- `snipKeep = 16`: Number of leading runes retained when truncating (e.g., `...getComponent()`).
 - `snipMax = 240`: Maximum total rune budget for the entire rendered snippet.
 
 ### Why Structured Slices?
-1. **Zero Client Discrepancies**: JavaScript uses UTF-16 code units, whereas Go uses UTF-8 byte sequences. Sending offsets requires complex client-side reconciliation. Sending pre-split strings completely eliminates boundary alignment bugs.
-2. **Bandwidth Savings**: Discarding massive leading and trailing line segments shrinks JSON payloads significantly.
 
----
+1. Zero Client Discrepancies: JavaScript uses UTF-16 code units, whereas Go uses UTF-8 byte sequences. Sending offsets requires complex client-side reconciliation. Sending pre-split strings completely eliminates boundary alignment bugs.
+1. Bandwidth Savings: Discarding massive leading and trailing line segments shrinks JSON payloads significantly.
 
 ## 5. Regex Symbol Extraction ([`symbols.go`](../../symbols.go))
 
 When language servers are disabled or unavailable, px0 provides instantaneous symbol outlines and declaration jump navigation via heuristic regular expressions.
 
 ### Parallel Symbol Flagging
+
 During full-text searches, lines that look like function, class, struct, or type declarations are automatically flagged (`Match.Def = true`). This allows the frontend to visually highlight definition matches in search results without running a secondary query.
 
 ### Supported Language Grammars
+
 `symbols.go` maintains high-performance compiled regular expressions for:
-- **Go**: `func (r *Receiver) Name(...)`, `type Name struct/interface`
-- **TypeScript / JavaScript**: `function name()`, `class Name`, `const name = () =>`, `interface Name`
-- **Python**: `def name(...)`, `class Name(...)`
-- **Rust**: `fn name(...)`, `struct Name`, `enum Name`, `trait Name`, `impl Name`
-- **C / C++**: Return types, class declarations, structs, functions
-- **Java / C# / PHP / Ruby**: Methods, properties, classes, modules
+
+- Go: `func (r *Receiver) Name(...)`, `type Name struct/interface`
+- TypeScript / JavaScript: `function name()`, `class Name`, `const name = () =>`, `interface Name`
+- Python: `def name(...)`, `class Name(...)`
+- Rust: `fn name(...)`, `struct Name`, `enum Name`, `trait Name`, `impl Name`
+- C / C++: Return types, class declarations, structs, functions
+- Java / C# / PHP / Ruby: Methods, properties, classes, modules

@@ -2,19 +2,15 @@
 
 This document describes the high-level architecture, startup pipeline, HTTP server, memory scavenging, and security model of `px0`.
 
----
-
 ## 1. High-Level Design Principles
 
 px0 is engineered as an ultra-fast, zero-overhead code exploration console. Its architecture is guided by five foundational tenets:
 
-1. **Read-Only by Contract**: px0 navigates, searches, and inspects code without mutating project files on disk. There are no save buttons, file modification endpoints, or disk-write hooks.
-2. **Single Static Binary Footprint**: All frontend assets (HTML, CSS, JavaScript, icons, themes) are embedded directly into the Go binary at compile time via `go:embed`. px0 requires no Node.js, Python, or Ruby runtime, no external database, and no CGO dependencies.
-3. **Sub-Millisecond Responsiveness**: The HTTP listener binds, serves the web UI, and opens the default browser in under 1 millisecond. Heavy operations (full directory indexing, git status checks, language server binary discovery) run asynchronously off the critical path.
-4. **Stateless on Disk**: px0 never writes configuration directories, temporary caches, or metadata files (e.g., `.px0/` or `.cache/`) to the user's filesystem. Everything exists purely in volatile memory.
-5. **Strict Memory Reclamation**: Long-lived background processes should not hold idle RAM. When the user finishes a burst of queries, unused pages are proactively returned to the operating system.
-
----
+1. Read-Only by Contract: px0 navigates, searches, and inspects code without mutating project files on disk. There are no save buttons, file modification endpoints, or disk-write hooks.
+1. Single Static Binary Footprint: All frontend assets (HTML, CSS, JavaScript, icons, themes) are embedded directly into the Go binary at compile time via `go:embed`. px0 requires no Node.js, Python, or Ruby runtime, no external database, and no CGO dependencies.
+1. Sub-Millisecond Responsiveness: The HTTP listener binds, serves the web UI, and opens the default browser in under 1 millisecond. Heavy operations (full directory indexing, git status checks, language server binary discovery) run asynchronously off the critical path.
+1. Stateless on Disk: px0 never writes configuration directories, temporary caches, or metadata files (e.g., `.px0/` or `.cache/`) to the user's filesystem. Everything exists purely in volatile memory.
+1. Strict Memory Reclamation: Long-lived background processes should not hold idle RAM. When the user finishes a burst of queries, unused pages are proactively returned to the operating system.
 
 ## 2. Startup Pipeline (<1 ms Critical Path)
 
@@ -43,15 +39,13 @@ sequenceDiagram
     Index-->>Srv: ReadyCh closed, full index available
 ```
 
-### Key Stages in [`main.go`](../../main.go):
+### Key Stages in [`main.go`](../../main.go)
 
-1. **Socket Binding**: `listen(*host, *port)` binds an ephemeral or user-specified TCP socket immediately.
-2. **Instant Root Tree Extraction**: Before descending into subdirectories, `ix.Build()` extracts and populates the root directory entries (`dir=""`), publishing them directly to `ix.children[""]`. When the browser makes its initial request to `/api/tree`, it immediately renders the root tree nodes without waiting for the deep repository scan to finish.
-3. **Non-Blocking Browser Launch**: `go openBrowser(url)` spawns the platform-specific browser opener (`xdg-open` on Linux, `open` on macOS, `rundll32` on Windows) in a separate goroutine.
-4. **Concurrent Tree Walk & Git Status**: Indexing runs inside a background goroutine. A dedicated goroutine runs `gitStatus(ix.root)` in parallel with the file walk so that subprocess overhead overlaps the walk rather than adding to it.
-5. **Background Language Server Discovery**: `lsp.Available()` checks `$PATH` using `exec.LookPath` across standard binary locations asynchronously.
-
----
+1. Socket Binding: `listen(*host, *port)` binds an ephemeral or user-specified TCP socket immediately.
+1. Instant Root Tree Extraction: Before descending into subdirectories, `ix.Build()` extracts and populates the root directory entries (`dir=""`), publishing them directly to `ix.children[""]`. When the browser makes its initial request to `/api/tree`, it immediately renders the root tree nodes without waiting for the deep repository scan to finish.
+1. Non-Blocking Browser Launch: `go openBrowser(url)` spawns the platform-specific browser opener (`xdg-open` on Linux, `open` on macOS, `rundll32` on Windows) in a separate goroutine.
+1. Concurrent Tree Walk & Git Status: Indexing runs inside a background goroutine. A dedicated goroutine runs `gitStatus(ix.root)` in parallel with the file walk so that subprocess overhead overlaps the walk rather than adding to it.
+1. Background Language Server Discovery: `lsp.Available()` checks `$PATH` using `exec.LookPath` across standard binary locations asynchronously.
 
 ## 3. HTTP Server & API Catalog
 
@@ -59,41 +53,39 @@ The server is implemented in [`server.go`](../../server.go) using Go's standard 
 
 ### Endpoints Reference
 
-| Endpoint | Method | Purpose | Response Format |
-| -------- | ------ | ------- | --------------- |
-| `/` | `GET` | Serves `web/index.html` (embedded or `-dev` disk copy) | `text/html; charset=utf-8` |
-| `/static/*` | `GET` | Serves bundled JavaScript, CSS, and static assets | Asset MIME type |
-| `/static/themes.css` | `GET` | Concatenates all `web/themes/*.css` files in alphanumeric order | `text/css; charset=utf-8` |
-| `/api/meta` | `GET` | Workspace metadata (root path, file count, index duration, git status) | JSON (`{root, name, files, build_ms, git}`) |
-| `/api/metrics` | `GET` | Runtime memory and GC stats (`Alloc`, `Sys`, `NumGC`, etc.) | JSON |
-| `/api/tree` | `GET` | Directory contents for the sidebar file explorer (`?dir=path`) | JSON array of `Node` objects |
-| `/api/file` | `GET` | Windowed, highlighted source file lines (`?path=...&start=0&count=500`) | JSON (`{lines, total, refine, markdown}`) |
-| `/api/raw` | `GET` | Raw, unhighlighted file content for whole-file copies and preview assets | `text/plain` or binary |
-| `/api/markdown` | `GET` | Converted HTML preview of `.md` / `.markdown` files via goldmark | JSON (`{path, html}`) |
-| `/api/find` | `GET` | Fast fuzzy match against all indexed workspace paths (`?q=...`) | JSON array of `FuzzyResult` objects |
-| `/api/search` | `GET` | Full-text project grep with snippet elision (`?q=...&case=...&regex=...`) | JSON array of file hits and matches |
-| `/api/outline` | `GET` | Regex-extracted symbol outline for a given file (`?path=...`) | JSON array of symbol declarations |
-| `/api/def` | `GET` | Quick definition lookup fallback | JSON array of matching definition locations |
-| `/api/diff` | `GET` | Unified diff of working tree vs. `HEAD` (`?path=...`) | JSON (`{path, diff, available}`) |
-| `/api/gutter` | `GET` | Per-line change markers for code view gutter | JSON (`{added, modified, deleted}`) |
-| `/api/reindex` | `POST` | Re-runs index walk and git status on demand | JSON (`{ok: true, files: ...}`) |
-| `/api/lsp/def` | `GET` | Go-to-Definition via LSP (`?path=...&line=...&col=...`) | JSON array of target locations |
-| `/api/lsp/refs` | `GET` | Find References via LSP | JSON array of reference locations |
-| `/api/lsp/calls` | `POST` | Incoming/outgoing call hierarchy tree expansion | JSON array of `CallNode` objects |
-| `/api/lsp/symbols` | `GET` | Document symbols extracted via LSP | JSON array of LSP symbols |
-| `/api/lsp/hover` | `GET` | Type signature and markdown doc hovercard info | JSON (`{contents: ...}`) |
-| `/api/lsp/warm` | `POST` | Pre-warms or spawns language server for given file extension | JSON (`{ok: true}`) |
-| `/api/lsp/setup` | `GET` | Reports install status and commands for current file language | JSON (`{installed, recipes, ...}`) |
-| `/api/lsp/install` | `POST` | Executes user-level installer in background | JSON (`{ok: true}`) |
-| `/api/lsp/start` | `POST` | Rescans and starts language server after installation | JSON (`{ok: true}`) |
-
----
+| Endpoint              | Method | Purpose                                                                 | Response Format                            |
+| --------------------- | ------ | ----------------------------------------------------------------------- | ------------------------------------------ |
+| `/`                   | `GET`  | Serves `web/index.html` (embedded or `-dev` disk copy)                  | `text/html; charset=utf-8`                 |
+| `/static/*`           | `GET`  | Serves bundled JavaScript, CSS, and static assets                       | Asset MIME type                            |
+| `/static/themes.css`  | `GET`  | Concatenates all `web/themes/*.css` files in alphanumeric order         | `text/css; charset=utf-8`                  |
+| `/api/meta`           | `GET`  | Workspace metadata (root path, file count, index duration, git status)  | JSON (`{root, name, files, build_ms, git}`)|
+| `/api/metrics`        | `GET`  | Runtime memory and GC stats (`Alloc`, `Sys`, `NumGC`, etc.)             | JSON                                       |
+| `/api/tree`           | `GET`  | Directory contents for the sidebar file explorer (`?dir=path`)          | JSON array of `Node` objects               |
+| `/api/file`           | `GET`  | Windowed, highlighted source file lines (`?path=...&start=0&count=500`) | JSON (`{lines, total, refine, markdown}`)  |
+| `/api/raw`            | `GET`  | Raw, unhighlighted file content for whole-file copies and preview assets| `text/plain` or binary                     |
+| `/api/markdown`       | `GET`  | Converted HTML preview of `.md` / `.markdown` files via goldmark        | JSON (`{path, html}`)                      |
+| `/api/find`           | `GET`  | Fast fuzzy match against all indexed workspace paths (`?q=...`)         | JSON array of `FuzzyResult` objects        |
+| `/api/search`         | `GET`  | Full-text project grep with snippet elision (`?q=...&case=...&regex=...`)| JSON array of file hits and matches        |
+| `/api/outline`        | `GET`  | Regex-extracted symbol outline for a given file (`?path=...`)          | JSON array of symbol declarations          |
+| `/api/def`            | `GET`  | Quick definition lookup fallback                                        | JSON array of matching definition locations|
+| `/api/diff`           | `GET`  | Unified diff of working tree vs. `HEAD` (`?path=...`)                   | JSON (`{path, diff, available}`)           |
+| `/api/gutter`         | `GET`  | Per-line change markers for code view gutter                            | JSON (`{added, modified, deleted}`)        |
+| `/api/reindex`        | `POST` | Re-runs index walk and git status on demand                             | JSON (`{ok: true, files: ...}`)            |
+| `/api/lsp/def`        | `GET`  | Go-to-Definition via LSP (`?path=...&line=...&col=...`)                 | JSON array of target locations             |
+| `/api/lsp/refs`       | `GET`  | Find References via LSP                                                 | JSON array of reference locations          |
+| `/api/lsp/calls`      | `POST` | Incoming/outgoing call hierarchy tree expansion                         | JSON array of `CallNode` objects           |
+| `/api/lsp/symbols`    | `GET`  | Document symbols extracted via LSP                                      | JSON array of LSP symbols                  |
+| `/api/lsp/hover`      | `GET`  | Type signature and markdown doc hovercard info                          | JSON (`{contents: ...}`)                   |
+| `/api/lsp/warm`       | `POST` | Pre-warms or spawns language server for given file extension            | JSON (`{ok: true}`)                        |
+| `/api/lsp/setup`      | `GET`  | Reports install status and commands for current file language           | JSON (`{installed, recipes, ...}`)         |
+| `/api/lsp/install`    | `POST` | Executes user-level installer in background                             | JSON (`{ok: true}`)                        |
+| `/api/lsp/start`      | `POST` | Rescans and starts language server after installation                   | JSON (`{ok: true}`)                        |
 
 ## 4. Memory Management & Proactive Scavenging
 
 Even though Go's garbage collector frees unreferenced heap objects rapidly, the Go runtime does not immediately release physical memory pages back to the host operating system. In high-churn CLI sessions (such as searching a 50,000-file repository), the process resident set size (RSS) could appear inflated long after the search completes.
 
-To maintain a lean footprint (~16–20 MB RSS), `server.go` implements an automatic scavenger:
+To maintain a lean footprint (~16-20 MB RSS), `server.go` implements an automatic scavenger:
 
 ```go
 func (s *Server) scavenge() {
@@ -116,12 +108,14 @@ func (s *Server) scavenge() {
 }
 ```
 
-### Scavenging Mechanism:
+### Scavenging Mechanism
+
 - `s.lastReq`: An atomic 64-bit integer tracks the Unix timestamp (in nanoseconds) of the most recent incoming HTTP request.
 - When no HTTP traffic has arrived for 15 seconds after an active period, `debug.FreeOSMemory()` is invoked.
 - Physical memory pages freed by the GC are surrendered back to the operating system kernel immediately, preventing background memory bloat.
 
 ### Gzip Buffer Pooling
+
 To avoid heap allocations on every JSON endpoint response, `gzip.Writer` instances are pooled via `sync.Pool` using `gzip.BestSpeed`:
 
 ```go
@@ -131,28 +125,32 @@ var gzipPool = sync.Pool{New: func() any {
 }}
 ```
 
----
-
 ## 5. Security Model & Path Sandboxing
 
 Because px0 exposes a local HTTP server that can display source files and interact with local tools, strict boundary constraints are enforced.
 
 ### Path Resolution (`safePath` & `resolvePath`)
+
 Paths supplied by client queries are rigorously sanitized:
+
 1. Leading slashes and spaces are trimmed.
-2. The path is cleaned via `filepath.Clean()`.
-3. Paths attempting directory traversal (`..`, `../`, or containing `..` path segments) are rejected with HTTP 400.
-4. Any path that resolves outside the indexed workspace root is rejected, **unless** it has been explicitly admitted into the external path allowlist (`extAllowed`).
+1. The path is cleaned via `filepath.Clean()`.
+1. Paths attempting directory traversal (`..`, `../`, or containing `..` path segments) are rejected with HTTP 400.
+1. Any path that resolves outside the indexed workspace root is rejected, unless it has been explicitly admitted into the external path allowlist (`extAllowed`).
 
 ### External Path Allowlist (`extAllowed`)
+
 When navigating code via LSP Go-to-Definition, targets often reside outside the workspace directory (e.g., standard library packages in `/usr/local/go/src` or cached crates in `~/.cargo/registry`).
+
 - Rather than opening up arbitrary filesystem reads, targets returned by the trusted LSP server are admitted into an in-memory allowlist: `extAllowed[canonicalPath] = true`.
-- `/api/file` and `/api/raw` permit reading external files *only* if the exact path exists in `extAllowed`.
+- `/api/file` and `/api/raw` permit reading external files only if the exact path exists in `extAllowed`.
 - External paths can never be enumerated via `/api/tree` or searched via `/api/search`.
 
 ### Origin Verification for Installers
+
 The `/api/lsp/install` and `/api/lsp/start` endpoints execute shell commands (e.g., `go install ...` or `npm install -g ...`). To guard against cross-origin attacks (such as a malicious website triggering command execution via JavaScript fetch while px0 is running in the background):
+
 1. The request method must be `POST`.
-2. The request `Origin` header must match the request `Host` header.
-3. The `Host` header is validated to ensure it is strictly an IP address (`127.0.0.1`, `[::1]`) or `localhost`. This prevents DNS-rebinding attacks.
-4. The executed command is never supplied by the client; it is looked up exclusively from the hard-coded internal `lspRegistry`.
+1. The request `Origin` header must match the request `Host` header.
+1. The `Host` header is validated to ensure it is strictly an IP address (`127.0.0.1`, `[::1]`) or `localhost`. This prevents DNS-rebinding attacks.
+1. The executed command is never supplied by the client; it is looked up exclusively from the hard-coded internal `lspRegistry`.

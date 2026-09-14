@@ -61,8 +61,7 @@ export function paint() {
   ensureChunks(d, first, last);
 
   let html = '';
-  // Git gutter: suppressed in diff view, which colours its own lines. O(1)/row.
-  const gut = (d.gutter && !d.diffSaved) ? d.gutter : null;
+  const gut = d.gutter || null;
   for (let i = first; i < last; i++) {
     const n = i + 1;
     const body = d.lines[i];
@@ -301,7 +300,7 @@ export function refineChunk(d, c, delay = 800, tries = 0) {
     d.refining.add(c);
   }
   setTimeout(async () => {
-    if (!S.tabs.includes(d) || d.diffSaved || tries > 6) { d.refining.delete(c); return; }
+    if (!S.tabs.includes(d) || tries > 6) { d.refining.delete(c); return; }
     let j;
     try { j = await api('/api/file', { path: d.path, start: c * CHUNK, count: CHUNK }); }
     catch { d.refining.delete(c); return; }
