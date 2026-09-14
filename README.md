@@ -23,22 +23,10 @@ When you're reviewing code, you don't need a heavy editing environment—you nee
 Install or upgrade to the latest release with a single command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/px0-ai/px0/master/install.sh | bash
+curl -fsSL https://px0.ai/install.sh | bash
 ```
 
-### Option 2: Prebuilt Binaries
-
-Download the binary for your operating system and architecture directly from GitHub Releases or `dist/`, make it executable, and move it to your `PATH`:
-
-```bash
-# macOS (Apple Silicon)
-sudo install dist/px0-0.1.0-darwin-arm64 /usr/local/bin/px0
-
-# Linux (x86_64)
-sudo install dist/px0-0.1.0-linux-amd64 /usr/local/bin/px0
-```
-
-### Option 3: Build from Source
+### Option 2: Build from Source
 
 Requires Go 1.24 or newer. No npm, no node, no CGO, and no system libraries required:
 
@@ -62,7 +50,7 @@ make dist
 
 - **Blazing Fast Code Navigation**: Fuzzy search files (`Cmd/Ctrl+P`), document symbols (`Cmd/Ctrl+Shift+O`), and full project regex scan (`Cmd/Ctrl+Shift+F`) in milliseconds.
 - **Rich Syntax Highlighting**: Built-in native tokenization for ~280 languages via Chroma.
-- **Custom Themes**: Ships 14 built-in themes, including Tokyo Night (default), Paper, Catppuccin, Dracula, GitHub Dark, Gruvbox, Monokai, Nord, One Dark, Rose Pine, and Solarized. Switch via the button at the bottom of the sidebar or `Select Theme` in the command palette. See [STYLING.md](STYLING.md) to write your own.
+- **Custom Themes**: Ships 14 built-in themes, including Tokyo Night (default), Paper, Catppuccin, Dracula, GitHub Dark, Gruvbox, Monokai, Nord, One Dark, Rose Pine, and Solarized. Switch via the button at the bottom of the sidebar or `Select Theme` in the command palette. See [Styling & Themes](docs/internals/styling-and-themes.md) to write your own.
 - **Optional Language Server Protocol (LSP)**: Zero-config auto-detection of local LSPs (`gopls`, `rust-analyzer`, `pyright`, `typescript-language-server`, `clangd`, etc.) for precise Go-to-Definition (`F12`), Hover info, and cross-references. Falls back automatically to instant regex outlines when no LSP is installed.
 - **Git Awareness**: In a git repository, the file tree badges each file by its status (`M` modified, `A` added, `D` deleted, `U` untracked, `R` renamed), colouring changes green (added) or red (deleted/modified) and marking folders that contain changes. A **changed only** filter hides clean files, and `Cmd/Ctrl+D` toggles a unified diff of the active file against `HEAD`. Read-only like everything else, and disabled with `-no-git` or when no git is present.
 - **Virtual DOM / Zero Overhead**: Opening a 400,000-line file costs the same as a 10-line file; only visible lines render in the browser.
@@ -247,7 +235,7 @@ All benchmark figures can be measured directly on your own system:
 ./benchmark.sh --lsp .
 ```
 
-See [BENCHMARKS.md](BENCHMARKS.md) for full methodology and detailed charts.
+See [Performance Benchmarks](BENCHMARKS.md) for full methodology and detailed charts.
 
 ---
 
@@ -284,7 +272,9 @@ go vet ./...
 make dist
 ```
 
-### Architecture Overview
+### Architecture & Internals
+
+For comprehensive technical deep-dives into the architecture, indexing, virtualized rendering, syntax highlighting, and LSP subsystems, see the **[Internals Documentation](docs/internals/README.md)**.
 
 - `main.go` / `ui.go`: CLI entrypoint, flag parsing, signal management, Ape terminal experience.
 - `update.go`: Self-updater and asynchronous daily version check.
@@ -294,7 +284,7 @@ make dist
 - `lsp.go` / `lspnav.go` / `calls.go`: Lightweight JSON-RPC client communicating with local language servers over stdio, plus definitions, references and call trails.
 - `lspservers.go` / `lspsetup.go`: Language server registry, discovery, and install on request.
 - `web/`: Native zero-dependency ES module frontend (custom virtual scroll, syntax highlight rendering, tab manager).
-- `web/themes/`: One CSS file per colour theme, joined by the server into `/static/themes.css`. Token reference in [STYLING.md](STYLING.md).
+- `web/themes/`: One CSS file per colour theme, joined by the server into `/static/themes.css`. Token reference in [Styling & Themes](docs/internals/styling-and-themes.md).
 
 ---
 

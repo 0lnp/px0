@@ -267,11 +267,11 @@
   }
   function toPos(node, off) {
     if (node === rowsEl) {
-      const row = rowsEl.children[off] || rowsEl.lastElementChild;
-      if (!row)
+      const row2 = rowsEl.children[off] || rowsEl.lastElementChild;
+      if (!row2)
         return null;
       const atEnd = !rowsEl.children[off];
-      return { line: +row.dataset.l, col: atEnd ? $(".c", row).textContent.length : 0 };
+      return { line: +row2.dataset.l, col: atEnd ? $(".c", row2).textContent.length : 0 };
     }
     const el = node.nodeType === 1 ? node : node.parentElement;
     const row = el && el.closest(".row");
@@ -1377,11 +1377,11 @@
       node = p.offsetNode;
       off = p.offset;
     } else if (document.caretRangeFromPoint) {
-      const r = document.caretRangeFromPoint(x, y);
-      if (!r)
+      const r2 = document.caretRangeFromPoint(x, y);
+      if (!r2)
         return null;
-      node = r.startContainer;
-      off = r.startOffset;
+      node = r2.startContainer;
+      off = r2.startOffset;
     } else
       return null;
     const el = node && (node.nodeType === 1 ? node : node.parentElement);
@@ -1865,14 +1865,14 @@
     const d = doc_();
     if (!d || at.path !== d.path)
       return;
-    const seq = ++hoverSeq;
+    const seq2 = ++hoverSeq;
     let j;
     try {
       j = await api("/api/lsp/hover", { path: d.path, line: at.line, col: at.col, wait: 4000 });
     } catch {
       return;
     }
-    if (seq !== hoverSeq || doc_() !== d)
+    if (seq2 !== hoverSeq || doc_() !== d)
       return;
     setLspState(j);
     if (!j || j.empty || !j.signature && !j.doc)
@@ -2031,9 +2031,9 @@
     mdArticle.replaceChildren(mdSanitize(d.mdHtml, d.path));
     mdEnhance();
     mdDrawn = d;
-    const target = d.mdAnchor && mdFindAnchor(d.mdAnchor);
-    if (target)
-      mdScrollTo(target);
+    const target2 = d.mdAnchor && mdFindAnchor(d.mdAnchor);
+    if (target2)
+      mdScrollTo(target2);
     else if (d.mdLine)
       previewLine(d.mdLine);
     else
@@ -2085,7 +2085,7 @@
   function mdSanitize(html, docPath) {
     const body = new DOMParser().parseFromString(html, "text/html").body;
     const dir = docPath.slice(0, docPath.lastIndexOf("/") + 1);
-    const base = MD_ORIGIN + "/" + dir.split("/").map(encodeURIComponent).join("/");
+    const base2 = MD_ORIGIN + "/" + dir.split("/").map(encodeURIComponent).join("/");
     for (const el of [...body.querySelectorAll("*")]) {
       if (!body.contains(el))
         continue;
@@ -2117,19 +2117,19 @@
       if (tag === "input")
         el.disabled = true;
       if (tag === "img")
-        mdSetImage(el, mdURL(attrs.src || ""), base);
+        mdSetImage(el, mdURL(attrs.src || ""), base2);
       if (tag === "a" && attrs.href)
-        mdSetLink(el, mdURL(attrs.href), base);
+        mdSetLink(el, mdURL(attrs.href), base2);
     }
     const frag = document.createDocumentFragment();
     while (body.firstChild)
       frag.appendChild(document.adoptNode(body.firstChild));
     return frag;
   }
-  function mdLocal(ref, base) {
+  function mdLocal(ref, base2) {
     let u;
     try {
-      u = new URL(ref, base);
+      u = new URL(ref, base2);
     } catch {
       return null;
     }
@@ -2141,7 +2141,7 @@
     } catch {}
     return { path: path.slice(1), hash: u.hash.slice(1) };
   }
-  function mdSetImage(img, src, base) {
+  function mdSetImage(img, src, base2) {
     const m = MD_SCHEME.exec(src);
     if (m) {
       if (/^https?$/i.test(m[1]) || /^data:image\//i.test(src))
@@ -2149,12 +2149,12 @@
     } else if (src.startsWith("//")) {
       img.setAttribute("src", src);
     } else if (src) {
-      const t = mdLocal(src, base);
+      const t = mdLocal(src, base2);
       if (t)
         img.setAttribute("src", "/api/raw?path=" + encodeURIComponent(t.path));
     }
   }
-  function mdSetLink(a, href, base) {
+  function mdSetLink(a, href, base2) {
     if (href.startsWith("#")) {
       a.setAttribute("href", href);
       a.dataset.anchor = href.slice(1);
@@ -2169,7 +2169,7 @@
       a.rel = "noopener noreferrer";
       return;
     }
-    const t = mdLocal(href, base);
+    const t = mdLocal(href, base2);
     if (!t)
       return;
     a.setAttribute("href", "/api/raw?path=" + encodeURIComponent(t.path));
@@ -2182,17 +2182,17 @@
     for (const q of $$("blockquote", mdArticle))
       mdAlert(q);
     for (const pre of $$("pre", mdArticle)) {
-      const wrap = document.createElement("div");
-      wrap.className = "md-pre";
+      const wrap2 = document.createElement("div");
+      wrap2.className = "md-pre";
       if (pre.dataset.lang)
-        wrap.dataset.lang = pre.dataset.lang;
-      pre.replaceWith(wrap);
+        wrap2.dataset.lang = pre.dataset.lang;
+      pre.replaceWith(wrap2);
       const copy = document.createElement("button");
       copy.className = "md-copy";
       copy.title = "Copy code";
       copy.setAttribute("aria-label", "Copy code");
       copy.innerHTML = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5V3a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"/></svg>';
-      wrap.append(pre, copy);
+      wrap2.append(pre, copy);
     }
   }
   function mdAlert(q) {
@@ -2371,7 +2371,7 @@
   }
   function showPreviewHit(i) {
     const marks = $$("mark.md-hit", mdArticle);
-    marks.forEach((m, k) => m.classList.toggle("on", k === i));
+    marks.forEach((m2, k) => m2.classList.toggle("on", k === i));
     const m = marks[i];
     if (!m)
       return;
@@ -2688,9 +2688,9 @@
     let idx = S2.tabs.findIndex((t) => t.path === path);
     if (idx < 0) {
       let j;
-      const start = line ? Math.max(0, Math.floor((line - 1) / CHUNK) * CHUNK) : 0;
+      const start2 = line ? Math.max(0, Math.floor((line - 1) / CHUNK) * CHUNK) : 0;
       try {
-        j = await api("/api/file", { path, start, count: CHUNK });
+        j = await api("/api/file", { path, start: start2, count: CHUNK });
       } catch (e) {
         setStatusNote(path + ": " + e.message);
         return;
@@ -2699,7 +2699,7 @@
         showImage(path);
         return;
       }
-      const d = {
+      const d2 = {
         path,
         name: path.split("/").pop(),
         lang: j.lang,
@@ -2707,7 +2707,7 @@
         maxCols: j.maxCols,
         size: j.size,
         lines: new Array(j.total),
-        chunks: new Set([start / CHUNK]),
+        chunks: new Set([start2 / CHUNK]),
         pending: new Set,
         refining: new Set,
         scrollTop: 0,
@@ -2718,13 +2718,13 @@
         gutter: null
       };
       for (let i = 0;i < j.lines.length; i++)
-        d.lines[j.start + i] = j.lines[i];
-      d.lsp = j.lsp || { state: "off", server: "" };
-      S2.tabs.push(d);
+        d2.lines[j.start + i] = j.lines[i];
+      d2.lsp = j.lsp || { state: "off", server: "" };
+      S2.tabs.push(d2);
       idx = S2.tabs.length - 1;
       if (j.refine)
-        refineChunk(d, start / CHUNK);
-      loadGutter(d);
+        refineChunk(d2, start2 / CHUNK);
+      loadGutter(d2);
     }
     const prev = doc_();
     if (prev && prev !== S2.tabs[idx])

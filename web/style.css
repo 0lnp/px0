@@ -2,7 +2,7 @@
    Themes live in web/themes/<id>.css and are served joined as /static/themes.css.
    This block holds the structural tokens and fallbacks for the optional colour
    tokens, derived from the required ones. Theme rules use :root[data-theme]
-   so they outrank these defaults regardless of load order. See STYLING.md. */
+   so they outrank these defaults regardless of load order. See docs/internals/styling-and-themes.md. */
 :root {
   --lh: 21px;
   --mono: "JetBrains Mono", "Fira Code", "Cascadia Code", "SF Mono", Menlo, Consolas, ui-monospace, monospace;
