@@ -485,12 +485,17 @@ func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
 	}
 	lines, exact := d.Lines(start, start+count)
 	_, coming := d.Exact()
+	diffAvail := false
+	if gitAvailable(s.ix.Root()) {
+		diffAvail = gitDiff(s.ix.Root(), rel) != ""
+	}
 	writeJSON(w, map[string]any{
 		"path": rel, "lang": d.Lang, "total": d.Total, "maxCols": d.MaxCols,
 		"start": start, "lines": lines, "size": st.Size(),
 		"exact": exact, "refine": !exact && coming,
-		"markdown": isMarkdown(rel),
-		"lsp":      s.lspBrief(rel),
+		"markdown":      isMarkdown(rel),
+		"diffAvailable": diffAvail,
+		"lsp":           s.lspBrief(rel),
 	})
 }
 

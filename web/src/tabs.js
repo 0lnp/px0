@@ -12,7 +12,7 @@ import { clearLink } from './hover.js';
 import { clearFind } from './find.js';
 import { clearSelectAll } from './selbar.js';
 import { syncPreview, previewing, previewLine } from './markdown.js';
-import { syncDiffView } from './diff.js';
+import { syncDiffView, layoutPref } from './diff.js';
 
 // Recently closed files, newest last, for Alt+Shift+T.
 const closedTabs = [];
@@ -34,12 +34,15 @@ export async function openFile(path, opts = {}) {
       showImage(path);
       return;
     }
+    const hasDiff = !!j.diffAvailable;
     const d = {
       path, name: path.split('/').pop(), lang: j.lang, total: j.total, maxCols: j.maxCols,
       size: j.size, lines: new Array(j.total), chunks: new Set([start / CHUNK]),
       pending: new Set(), refining: new Set(), scrollTop: 0, cur: line || 1,
       outline: null, gen: 0, markdown: !!j.markdown, gutter: null,
-      diffMode: null, diffAvailable: false,
+      diffMode: hasDiff ? (layoutPref() || 'split') : null,
+      diffAvailable: hasDiff,
+      diffDismissed: false,
     };
     for (let i = 0; i < j.lines.length; i++) d.lines[j.start + i] = j.lines[i];
     d.lsp = j.lsp || { state: 'off', server: '' };
@@ -82,6 +85,13 @@ function loadGutter(d) {
   if (!S.meta?.git) return;
   api('/api/gutter', { path: d.path }).then(j => {
     d.diffAvailable = !!j.available;
+    if (j.available && d.diffMode === null && !d.diffDismissed) {
+      d.diffMode = layoutPref() || 'split';
+      if (doc_() === d) {
+        syncDiffView();
+        syncPreview();
+      }
+    }
     if (doc_() === d) updateStatus();
     if (!j.available) return;
     const marks = new Map();
