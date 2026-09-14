@@ -64,6 +64,7 @@ initStatusFit();
   measure();
   S.meta = await api('/api/meta');
   if (S.meta.metrics) updateMetricsDisplay(S.meta.metrics);
+  if (S.meta.git) { const b = $('#btn-changed'); if (b) b.hidden = false; }
   document.title = S.meta.name + ' - px0';
   $('#root-name').textContent = S.meta.name;
   $('#root-name').title = S.meta.root;

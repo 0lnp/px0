@@ -227,6 +227,7 @@ CORPUS=/mnt/big/repos ./benchmark.sh --clone       # put the corpus elsewhere
 - The corpus is cloned shallow, so `.git` is small, and it is excluded from the source size anyway.
 - `Index` is measured once per process and includes reading every `.gitignore` in the tree.
 - Small timings move by a factor of two between runs on a loaded machine. Raise `RUNS` and close other work before quoting them.
+- Git status is a `git` subprocess (~34 ms/op, `BenchmarkGitStatus`) that runs in the async `Build()` lane alongside indexing, off the boot path, so the sub-millisecond startup figure is unchanged. Disable it with `-no-git`.
 - `Full scan` deliberately searches for a string that matches nothing. A query with hits stops early once it reaches the result cap, which would measure less work, not more.
 
 ## Adding a repository

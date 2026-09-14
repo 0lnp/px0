@@ -110,6 +110,22 @@ body.side-hidden #side, body.side-hidden #resizer { display: none; }
 .kids { display: none; }
 .kids.open { display: block; }
 
+/* ---------- git status (tree) ---------- */
+/* One-letter badge on dirty files; colour by status, no literal colours. */
+.tr .gs { margin-left: auto; flex: none; font: 600 10px/1 var(--mono); padding: 0 4px; }
+.tr.git-M .nm, .tr.git-M .gs, .tr.git-R .nm, .tr.git-R .gs { color: var(--accent-fg); }
+.tr.git-A .nm, .tr.git-A .gs, .tr.git-untracked .nm, .tr.git-untracked .gs { color: var(--gi); }
+.tr.git-D .nm, .tr.git-D .gs { color: var(--gd); }
+/* Dirty folder: subtle dot after its name. */
+.tr.dir.dirty > .nm::after {
+  content: ""; display: inline-block; width: 5px; height: 5px; margin-left: 5px;
+  border-radius: 50%; background: var(--accent); vertical-align: middle;
+}
+/* "Changed only" filter: hide clean files and folders (dir rows carry an
+   authoritative dirty flag from the backend, so even collapsed ones are known). */
+#tree.changed-only .tr.file:not(.dirty) { display: none; }
+#tree.changed-only .tw:not(:has(.dirty)) { display: none; }
+
 /* ---------- search panel ---------- */
 .search-form { padding: 2px 12px 8px; display: flex; flex-direction: column; gap: 6px; }
 .search-form input, #outline-filter, #right-symbols-filter {
@@ -294,10 +310,26 @@ body.word-wrap .c { white-space: pre-wrap; word-break: break-word; overflow-wrap
 body.hide-lines .g { display: none; }
 body.hide-lines .c { padding-left: 16px; }
 
+/* Git gutter (normal file view): a thin bar on the line-number cell, VS Code
+   style. Deletions get a small wedge straddling the row's bottom edge. */
+.g.gut-add { box-shadow: inset 2px 0 0 var(--gi); }
+.g.gut-mod { box-shadow: inset 2px 0 0 var(--accent); }
+.row.gut-del .g::after {
+  content: ""; position: absolute; left: 0; bottom: -3px; z-index: 3;
+  border-left: 4px solid var(--gd);
+  border-top: 3px solid transparent; border-bottom: 3px solid transparent;
+}
+
 .row mark { background: var(--mark); color: inherit; border-radius: 2px; padding: 1px 0; }
 /* The current match is a solid fill, so syntax colours on it are unreadable. */
 .row mark.on, .row mark.on * { background: var(--mark-active); color: var(--on-mark-active); }
 .row .occ { background: var(--bg4); border-radius: 2px; outline: 1px solid var(--line); }
+
+/* ---------- diff view (Mod+D) ---------- */
+.diff-add, .diff-del { display: inline-block; min-width: 100%; }
+.diff-add { color: var(--gi); background: var(--gi-bg); }
+.diff-del { color: var(--gd); background: var(--gd-bg); }
+.diff-hunk { color: var(--accent-fg); opacity: .85; }
 
 /* Ctrl/Cmd-hover turns an identifier into a link, the way an editor does. */
 .row .link {

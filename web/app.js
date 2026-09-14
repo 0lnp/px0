@@ -181,10 +181,21 @@
     const last = Math.min(d.total, first + count);
     ensureChunks(d, first, last);
     let html = "";
+    const gut = d.gutter && !d.diffSaved ? d.gutter : null;
     for (let i = first;i < last; i++) {
       const n = i + 1;
       const body = d.lines[i];
-      html += '<div class="row' + (n === d.cur ? " cur" : "") + '" data-l="' + n + '">' + '<div class="g">' + n + '</div><div class="c">' + (body === undefined ? "" : body) + "</div></div>";
+      let rc = "row", gc = "g";
+      if (n === d.cur)
+        rc += " cur";
+      if (gut) {
+        const m = gut.marks.get(n);
+        if (m)
+          gc += m === "add" ? " gut-add" : " gut-mod";
+        if (gut.dels.has(n))
+          rc += " gut-del";
+      }
+      html += '<div class="' + rc + '" data-l="' + n + '">' + '<div class="' + gc + '">' + n + '</div><div class="c">' + (body === undefined ? "" : body) + "</div></div>";
     }
     const sel = saveSelection();
     rowsEl.style.transform = "translateY(" + first * LH + "px)";
@@ -256,11 +267,11 @@
   }
   function toPos(node, off) {
     if (node === rowsEl) {
-      const row2 = rowsEl.children[off] || rowsEl.lastElementChild;
-      if (!row2)
+      const row = rowsEl.children[off] || rowsEl.lastElementChild;
+      if (!row)
         return null;
       const atEnd = !rowsEl.children[off];
-      return { line: +row2.dataset.l, col: atEnd ? $(".c", row2).textContent.length : 0 };
+      return { line: +row.dataset.l, col: atEnd ? $(".c", row).textContent.length : 0 };
     }
     const el = node.nodeType === 1 ? node : node.parentElement;
     const row = el && el.closest(".row");
@@ -415,7 +426,7 @@
       d.refining.add(c);
     }
     setTimeout(async () => {
-      if (!S2.tabs.includes(d) || tries > 6) {
+      if (!S2.tabs.includes(d) || d.diffSaved || tries > 6) {
         d.refining.delete(c);
         return;
       }
@@ -598,6 +609,15 @@
   // web/src/tree.js
   var treeEl = $("#tree");
   var openDirs = new Set;
+  var GIT_STATUS = {
+    M: ["git-M", "modified"],
+    A: ["git-A", "added"],
+    D: ["git-D", "deleted"],
+    U: ["git-untracked", "untracked"],
+    R: ["git-R", "renamed"],
+    C: ["git-A", "copied"],
+    "!": ["git-M", "unmerged"]
+  };
   async function drawTree(dir, container, depth) {
     let j;
     try {
@@ -610,9 +630,13 @@
       const ig = c.ignored ? " ignored" : "";
       const note = c.ignored ? " (ignored by .gitignore, not searched)" : "";
       if (c.dir) {
-        return '<div class="tw"><div class="tr dir' + ig + '" data-dir="' + esc(c.path) + '" style="padding-left:' + pad + 'px" title="Folder: ' + esc(c.path) + note + '">' + '<span class="ar"></span><span class="nm">' + esc(c.name) + "</span></div>" + '<div class="kids" data-kids="' + esc(c.path) + '"></div></div>';
+        const dc = c.dirty ? " dirty" : "";
+        return '<div class="tw"><div class="tr dir' + ig + dc + '" data-dir="' + esc(c.path) + '" style="padding-left:' + pad + 'px" title="Folder: ' + esc(c.path) + note + '">' + '<span class="ar"></span><span class="nm">' + esc(c.name) + "</span></div>" + '<div class="kids" data-kids="' + esc(c.path) + '"></div></div>';
       }
-      return '<div class="tr file' + ig + '" data-file="' + esc(c.path) + '" style="padding-left:' + (pad + 12) + 'px" title="Open ' + esc(c.path) + note + '">' + '<span class="ic" data-t="' + fileKind(c.name) + '"></span><span class="nm">' + esc(c.name) + "</span></div>";
+      const g = GIT_STATUS[c.status];
+      const gc = g ? " dirty " + g[0] : "";
+      const badge = g ? '<span class="gs" title="git: ' + g[1] + '">' + esc(c.status) + "</span>" : "";
+      return '<div class="tr file' + ig + gc + '" data-file="' + esc(c.path) + '" style="padding-left:' + (pad + 12) + 'px" title="Open ' + esc(c.path) + note + '">' + '<span class="ic" data-t="' + fileKind(c.name) + '"></span><span class="nm">' + esc(c.name) + "</span>" + badge + "</div>";
     }).join("");
   }
   var FILE_KIND = {
@@ -707,6 +731,10 @@
     }
   }
   function initTree() {
+    $("#btn-changed")?.addEventListener("click", (e) => {
+      const on = treeEl.classList.toggle("changed-only");
+      e.currentTarget.classList.toggle("active", on);
+    });
     treeEl.addEventListener("click", async (e) => {
       const dirRow = e.target.closest("[data-dir]");
       if (dirRow) {
@@ -1349,11 +1377,11 @@
       node = p.offsetNode;
       off = p.offset;
     } else if (document.caretRangeFromPoint) {
-      const r2 = document.caretRangeFromPoint(x, y);
-      if (!r2)
+      const r = document.caretRangeFromPoint(x, y);
+      if (!r)
         return null;
-      node = r2.startContainer;
-      off = r2.startOffset;
+      node = r.startContainer;
+      off = r.startOffset;
     } else
       return null;
     const el = node && (node.nodeType === 1 ? node : node.parentElement);
@@ -1837,14 +1865,14 @@
     const d = doc_();
     if (!d || at.path !== d.path)
       return;
-    const seq2 = ++hoverSeq;
+    const seq = ++hoverSeq;
     let j;
     try {
       j = await api("/api/lsp/hover", { path: d.path, line: at.line, col: at.col, wait: 4000 });
     } catch {
       return;
     }
-    if (seq2 !== hoverSeq || doc_() !== d)
+    if (seq !== hoverSeq || doc_() !== d)
       return;
     setLspState(j);
     if (!j || j.empty || !j.signature && !j.doc)
@@ -2003,9 +2031,9 @@
     mdArticle.replaceChildren(mdSanitize(d.mdHtml, d.path));
     mdEnhance();
     mdDrawn = d;
-    const target2 = d.mdAnchor && mdFindAnchor(d.mdAnchor);
-    if (target2)
-      mdScrollTo(target2);
+    const target = d.mdAnchor && mdFindAnchor(d.mdAnchor);
+    if (target)
+      mdScrollTo(target);
     else if (d.mdLine)
       previewLine(d.mdLine);
     else
@@ -2057,7 +2085,7 @@
   function mdSanitize(html, docPath) {
     const body = new DOMParser().parseFromString(html, "text/html").body;
     const dir = docPath.slice(0, docPath.lastIndexOf("/") + 1);
-    const base2 = MD_ORIGIN + "/" + dir.split("/").map(encodeURIComponent).join("/");
+    const base = MD_ORIGIN + "/" + dir.split("/").map(encodeURIComponent).join("/");
     for (const el of [...body.querySelectorAll("*")]) {
       if (!body.contains(el))
         continue;
@@ -2089,19 +2117,19 @@
       if (tag === "input")
         el.disabled = true;
       if (tag === "img")
-        mdSetImage(el, mdURL(attrs.src || ""), base2);
+        mdSetImage(el, mdURL(attrs.src || ""), base);
       if (tag === "a" && attrs.href)
-        mdSetLink(el, mdURL(attrs.href), base2);
+        mdSetLink(el, mdURL(attrs.href), base);
     }
     const frag = document.createDocumentFragment();
     while (body.firstChild)
       frag.appendChild(document.adoptNode(body.firstChild));
     return frag;
   }
-  function mdLocal(ref, base2) {
+  function mdLocal(ref, base) {
     let u;
     try {
-      u = new URL(ref, base2);
+      u = new URL(ref, base);
     } catch {
       return null;
     }
@@ -2113,7 +2141,7 @@
     } catch {}
     return { path: path.slice(1), hash: u.hash.slice(1) };
   }
-  function mdSetImage(img, src, base2) {
+  function mdSetImage(img, src, base) {
     const m = MD_SCHEME.exec(src);
     if (m) {
       if (/^https?$/i.test(m[1]) || /^data:image\//i.test(src))
@@ -2121,12 +2149,12 @@
     } else if (src.startsWith("//")) {
       img.setAttribute("src", src);
     } else if (src) {
-      const t = mdLocal(src, base2);
+      const t = mdLocal(src, base);
       if (t)
         img.setAttribute("src", "/api/raw?path=" + encodeURIComponent(t.path));
     }
   }
-  function mdSetLink(a, href, base2) {
+  function mdSetLink(a, href, base) {
     if (href.startsWith("#")) {
       a.setAttribute("href", href);
       a.dataset.anchor = href.slice(1);
@@ -2141,7 +2169,7 @@
       a.rel = "noopener noreferrer";
       return;
     }
-    const t = mdLocal(href, base2);
+    const t = mdLocal(href, base);
     if (!t)
       return;
     a.setAttribute("href", "/api/raw?path=" + encodeURIComponent(t.path));
@@ -2154,17 +2182,17 @@
     for (const q of $$("blockquote", mdArticle))
       mdAlert(q);
     for (const pre of $$("pre", mdArticle)) {
-      const wrap2 = document.createElement("div");
-      wrap2.className = "md-pre";
+      const wrap = document.createElement("div");
+      wrap.className = "md-pre";
       if (pre.dataset.lang)
-        wrap2.dataset.lang = pre.dataset.lang;
-      pre.replaceWith(wrap2);
+        wrap.dataset.lang = pre.dataset.lang;
+      pre.replaceWith(wrap);
       const copy = document.createElement("button");
       copy.className = "md-copy";
       copy.title = "Copy code";
       copy.setAttribute("aria-label", "Copy code");
       copy.innerHTML = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5V3a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"/></svg>';
-      wrap2.append(pre, copy);
+      wrap.append(pre, copy);
     }
   }
   function mdAlert(q) {
@@ -2343,7 +2371,7 @@
   }
   function showPreviewHit(i) {
     const marks = $$("mark.md-hit", mdArticle);
-    marks.forEach((m2, k) => m2.classList.toggle("on", k === i));
+    marks.forEach((m, k) => m.classList.toggle("on", k === i));
     const m = marks[i];
     if (!m)
       return;
@@ -2660,9 +2688,9 @@
     let idx = S2.tabs.findIndex((t) => t.path === path);
     if (idx < 0) {
       let j;
-      const start2 = line ? Math.max(0, Math.floor((line - 1) / CHUNK) * CHUNK) : 0;
+      const start = line ? Math.max(0, Math.floor((line - 1) / CHUNK) * CHUNK) : 0;
       try {
-        j = await api("/api/file", { path, start: start2, count: CHUNK });
+        j = await api("/api/file", { path, start, count: CHUNK });
       } catch (e) {
         setStatusNote(path + ": " + e.message);
         return;
@@ -2671,7 +2699,7 @@
         showImage(path);
         return;
       }
-      const d2 = {
+      const d = {
         path,
         name: path.split("/").pop(),
         lang: j.lang,
@@ -2679,22 +2707,24 @@
         maxCols: j.maxCols,
         size: j.size,
         lines: new Array(j.total),
-        chunks: new Set([start2 / CHUNK]),
+        chunks: new Set([start / CHUNK]),
         pending: new Set,
         refining: new Set,
         scrollTop: 0,
         cur: line || 1,
         outline: null,
         gen: 0,
-        markdown: !!j.markdown
+        markdown: !!j.markdown,
+        gutter: null
       };
       for (let i = 0;i < j.lines.length; i++)
-        d2.lines[j.start + i] = j.lines[i];
-      d2.lsp = j.lsp || { state: "off", server: "" };
-      S2.tabs.push(d2);
+        d.lines[j.start + i] = j.lines[i];
+      d.lsp = j.lsp || { state: "off", server: "" };
+      S2.tabs.push(d);
       idx = S2.tabs.length - 1;
       if (j.refine)
-        refineChunk(d2, start2 / CHUNK);
+        refineChunk(d, start / CHUNK);
+      loadGutter(d);
     }
     const prev = doc_();
     if (prev && prev !== S2.tabs[idx])
@@ -2726,6 +2756,22 @@
       loadOutline();
     if (push)
       pushHistory(path, line || d.cur, col);
+  }
+  function loadGutter(d) {
+    if (!S2.meta?.git)
+      return;
+    api("/api/gutter", { path: d.path }).then((j) => {
+      if (!j.available)
+        return;
+      const marks = new Map;
+      for (const n of j.modified)
+        marks.set(n, "mod");
+      for (const n of j.added)
+        marks.set(n, "add");
+      d.gutter = { marks, dels: new Set(j.deleted) };
+      if (doc_() === d)
+        render();
+    }).catch(() => {});
   }
   function centerLine(n) {
     if (previewing()) {
@@ -2943,6 +2989,84 @@
       setTheme(all[0].id, false);
   }
 
+  // web/src/diff.js
+  function diffChunks(total) {
+    const s = new Set;
+    for (let c = 0;c <= Math.floor(total / CHUNK); c++)
+      s.add(c);
+    return s;
+  }
+  async function toggleDiff() {
+    if (!S2.meta?.git)
+      return;
+    const d = doc_();
+    if (!d)
+      return;
+    if (d.diffSaved) {
+      exitDiff(d);
+      return;
+    }
+    let j;
+    try {
+      j = await api("/api/diff", { path: d.path });
+    } catch {
+      setStatusNote("No diff");
+      return;
+    }
+    if (!j.available || !j.diff) {
+      setStatusNote("No diff — clean file or not a git repo");
+      return;
+    }
+    enterDiff(d, j.diff);
+  }
+  function enterDiff(d, diff) {
+    const raw = diff.split(`
+`);
+    const lines = raw.map((l) => {
+      const c = l[0];
+      const cls = c === "+" ? "diff-add" : c === "-" ? "diff-del" : c === "@" ? "diff-hunk" : "";
+      const body = esc(l);
+      return cls ? '<span class="' + cls + '">' + body + "</span>" : body;
+    });
+    d.diffSaved = {
+      lines: d.lines,
+      total: d.total,
+      maxCols: d.maxCols,
+      chunks: d.chunks,
+      pending: d.pending,
+      cur: d.cur,
+      scrollTop: vp.scrollTop
+    };
+    d.lines = lines;
+    d.total = lines.length;
+    d.maxCols = raw.reduce((m, l) => Math.max(m, l.length), 0);
+    d.chunks = diffChunks(lines.length);
+    d.pending = new Set;
+    d.cur = 1;
+    d.gen++;
+    document.body.classList.add("diff-view");
+    vp.scrollTop = 0;
+    layout();
+    render();
+    setStatusNote("diff view — " + d.name + " (press again to exit)");
+  }
+  function exitDiff(d) {
+    const s = d.diffSaved;
+    d.diffSaved = null;
+    d.lines = s.lines;
+    d.total = s.total;
+    d.maxCols = s.maxCols;
+    d.chunks = s.chunks;
+    d.pending = s.pending;
+    d.cur = s.cur;
+    d.gen++;
+    document.body.classList.remove("diff-view");
+    layout();
+    vp.scrollTop = s.scrollTop;
+    render();
+    setStatusNote("");
+  }
+
   // web/src/shortcuts.js
   var SHORTCUTS = [
     [["Mod+K"], "Quick search / palette"],
@@ -2952,6 +3076,7 @@
     [["Mod+Shift+F"], "Search in files"],
     [["Mod+F"], "Find in file"],
     [["Mod+G"], "Go to line"],
+    [["Mod+D"], "Toggle diff view (git)"],
     [["Alt+Z"], "Toggle word wrap"],
     [["Alt+L"], "Toggle line numbers"],
     [["Alt+M"], "Toggle Markdown preview"],
@@ -3101,6 +3226,13 @@
         document.body.classList.toggle("side-hidden");
         layout();
         render();
+        return;
+      }
+      if (mod && !e.shiftKey && (e.key === "d" || e.key === "D")) {
+        if (S2.meta?.git) {
+          e.preventDefault();
+          toggleDiff();
+        }
         return;
       }
       if (mod && (e.key === "w" || e.key === "W") || e.altKey && e.code === "KeyW") {
@@ -3533,6 +3665,11 @@
     S2.meta = await api("/api/meta");
     if (S2.meta.metrics)
       updateMetricsDisplay(S2.meta.metrics);
+    if (S2.meta.git) {
+      const b = $("#btn-changed");
+      if (b)
+        b.hidden = false;
+    }
     document.title = S2.meta.name + " - px0";
     $("#root-name").textContent = S2.meta.name;
     $("#root-name").title = S2.meta.root;

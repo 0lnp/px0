@@ -64,6 +64,7 @@ make dist
 - **Rich Syntax Highlighting**: Built-in native tokenization for ~280 languages via Chroma.
 - **Custom Themes**: Ships 14 built-in themes, including Tokyo Night (default), Paper, Catppuccin, Dracula, GitHub Dark, Gruvbox, Monokai, Nord, One Dark, Rose Pine, and Solarized. Switch via the button at the bottom of the sidebar or `Select Theme` in the command palette. See [STYLING.md](STYLING.md) to write your own.
 - **Optional Language Server Protocol (LSP)**: Zero-config auto-detection of local LSPs (`gopls`, `rust-analyzer`, `pyright`, `typescript-language-server`, `clangd`, etc.) for precise Go-to-Definition (`F12`), Hover info, and cross-references. Falls back automatically to instant regex outlines when no LSP is installed.
+- **Git Awareness**: In a git repository, the file tree badges each file by its status (`M` modified, `A` added, `D` deleted, `U` untracked, `R` renamed), colouring changes green (added) or red (deleted/modified) and marking folders that contain changes. A **changed only** filter hides clean files, and `Cmd/Ctrl+D` toggles a unified diff of the active file against `HEAD`. Read-only like everything else, and disabled with `-no-git` or when no git is present.
 - **Virtual DOM / Zero Overhead**: Opening a 400,000-line file costs the same as a 10-line file; only visible lines render in the browser.
 - **Clean Terminal Experience**: CLI adheres to the Ape design spec with a subtle 256-color palette, Unix pipe detection, and quiet automation modes.
 - **Completely Self-Contained**: Single static binary embedding HTML, CSS, and JS. Zero runtime dependencies, no electron, and no cloud phone-homes.
@@ -176,6 +177,7 @@ px0 --update
 | `-host H` | `127.0.0.1` | Local address to bind |
 | `-no-open` | `false` | Do not launch the web browser automatically |
 | `-no-lsp` | `false` | Disable language server discovery and use regex-based outline |
+| `-no-git` | `false` | Disable git awareness (tree status badges and the diff view) |
 | `-no-color` | `false` | Strip ANSI escape sequences from terminal output |
 | `-quiet` | `false` | Suppress CLI narration (errors still print to stderr) |
 | `-update` | `false` | Check for updates and install the latest version |
@@ -196,6 +198,7 @@ px0 --update
 | `Cmd/Ctrl+Shift+F` | Full workspace search |
 | `Cmd/Ctrl+F` | Find in active file (seeded with the current editor selection) |
 | `Cmd/Ctrl+G` | Jump to line |
+| `Cmd/Ctrl+D` | Toggle unified git diff of the active file |
 | `F12`, `Cmd/Ctrl+Click` | Go to definition |
 | `Shift+F12` | Find all references |
 | `←` / `→`, `Home` / `End` (`Cmd+←` / `Cmd+→` on macOS) | Move the (read-only) caret along the line; click places it |

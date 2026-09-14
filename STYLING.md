@@ -184,9 +184,9 @@ Markup tokens, used mostly by diff and Markdown lexers:
 
 | Token     | Class | Chroma token types                    | Required | Fallback      | Notes                                      |
 | --------- | ----- | ------------------------------------- | -------- | ------------- | ------------------------------------------ |
-| `--gi`    | `gi`  | `GenericInserted`                     | No       | `var(--s)`    | Also the LSP dot when the server is ready. |
+| `--gi`    | `gi`  | `GenericInserted`                     | No       | `var(--s)`    | Also the LSP dot when the server is ready, added/untracked file badges in the tree, and `+` lines in the diff view. |
 | `--gi-bg` | `gi`  | `GenericInserted`                     | No       | `transparent` | Background of inserted tokens.             |
-| `--gd`    | `gd`  | `GenericDeleted`                      | No       | `var(--err)`  | Also the LSP dot when the server failed.   |
+| `--gd`    | `gd`  | `GenericDeleted`                      | No       | `var(--err)`  | Also the LSP dot when the server failed, modified/deleted file badges in the tree, and `-` lines in the diff view. |
 | `--gd-bg` | `gd`  | `GenericDeleted`                      | No       | `transparent` | Background of deleted lines.               |
 | none      | `gh`  | `GenericHeading`, `GenericSubheading` | n/a      | n/a           | Uses `--accent-fg`, bold.                  |
 | none      | `ge`  | `GenericEmph`                         | n/a      | n/a           | Italic, no colour.                         |

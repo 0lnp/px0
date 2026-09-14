@@ -37,13 +37,14 @@ export async function openFile(path, opts = {}) {
       path, name: path.split('/').pop(), lang: j.lang, total: j.total, maxCols: j.maxCols,
       size: j.size, lines: new Array(j.total), chunks: new Set([start / CHUNK]),
       pending: new Set(), refining: new Set(), scrollTop: 0, cur: line || 1,
-      outline: null, gen: 0, markdown: !!j.markdown,
+      outline: null, gen: 0, markdown: !!j.markdown, gutter: null,
     };
     for (let i = 0; i < j.lines.length; i++) d.lines[j.start + i] = j.lines[i];
     d.lsp = j.lsp || { state: 'off', server: '' };
     S.tabs.push(d);
     idx = S.tabs.length - 1;
     if (j.refine) refineChunk(d, start / CHUNK);
+    loadGutter(d);
   }
   const prev = doc_();
   if (prev && prev !== S.tabs[idx]) prev.scrollTop = vp.scrollTop;
@@ -67,6 +68,23 @@ export async function openFile(path, opts = {}) {
   updateStatus();
   if ($('#panel-outline')?.classList.contains('active')) loadOutline();
   if (push) pushHistory(path, line || d.cur, col);
+}
+
+// VS Code-style diff gutter for the normal file view. Fetches once per opened
+// doc and caches on it (each tab keeps its own; switching tabs needs no clear).
+// Fetches on any open in a git repo rather than threading per-file status
+// through every open path — the backend returns available:false for
+// clean/untracked files, so the extra request is cheap and self-limiting.
+function loadGutter(d) {
+  if (!S.meta?.git) return;
+  api('/api/gutter', { path: d.path }).then(j => {
+    if (!j.available) return;
+    const marks = new Map();
+    for (const n of j.modified) marks.set(n, 'mod');
+    for (const n of j.added) marks.set(n, 'add');
+    d.gutter = { marks, dels: new Set(j.deleted) };
+    if (doc_() === d) render();
+  }).catch(() => {});
 }
 
 export function centerLine(n) {
