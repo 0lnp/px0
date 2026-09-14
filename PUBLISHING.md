@@ -82,7 +82,7 @@ git push origin v0.2.0
 1. Confirm artifacts on the [Releases](https://github.com/px0-ai/px0/releases) page (cross-platform binaries and `checksums.txt`).
 1. Verify the installer script:
   ```bash
-  curl -fsSL https://raw.githubusercontent.com/px0-ai/px0/master/install.sh | bash
+  curl -fsSL https://px0.ai/install.sh | sh
   ```
 1. Verify self-update functionality:
   ```bash
