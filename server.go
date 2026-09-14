@@ -51,6 +51,13 @@ func NewServer(ix *Index, lsp *lspManager) *Server {
 	s := &Server{ix: ix, lsp: lsp, mux: http.NewServeMux()}
 	sub, _ := fs.Sub(assets, "web")
 	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(sub))))
+	// Vendored libraries (web/lib/) are content-addressed by version directory
+	// and never change under a version, so browsers may cache them forever.
+	s.mux.Handle("/static/lib/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Strip only "/static": the files live at lib/ inside the FS root.
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		http.StripPrefix("/static", http.FileServer(http.FS(sub))).ServeHTTP(w, r)
+	}))
 	s.mux.HandleFunc("/static/themes.css", s.handleThemes)
 	s.mux.HandleFunc("/", s.handleIndex)
 	s.mux.HandleFunc("/api/meta", s.handleMeta)
