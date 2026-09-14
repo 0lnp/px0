@@ -27,7 +27,7 @@ flowchart TD
         Files["Source Files / .gitignore"]
     end
 
-    Browser <-->|HTTP / JSON (Gzip)| Server
+    Browser <-->|"HTTP / JSON (Gzip)"| Server
     Server --> IndexEngine
     Server --> SearchEngine
     Server --> HLEngine
