@@ -38,12 +38,18 @@ func gitProbe(root string) gitInfo {
 	}
 	var info gitInfo
 	if _, err := exec.LookPath("git"); err == nil {
-		if out, err := exec.Command("git", "-C", root, "rev-parse", "--show-toplevel").Output(); err == nil {
+		if out, err := gitRead(root, "rev-parse", "--show-toplevel"); err == nil {
 			info = gitInfo{ok: true, toplevel: strings.TrimSpace(string(out))}
 		}
 	}
 	gitCache[root] = info
 	return info
+}
+
+func gitRead(root string, args ...string) ([]byte, error) {
+	base := []string{"-C", root, "-c", "core.fsmonitor=false"}
+	cmd := exec.Command("git", append(base, args...)...)
+	return cmd.Output()
 }
 
 // gitStatus maps repo-relative-to-served-root path -> single-letter status for
@@ -54,7 +60,7 @@ func gitStatus(root string) map[string]string {
 	if !info.ok {
 		return nil
 	}
-	out, err := exec.Command("git", "-C", root, "status", "--porcelain=v2", "-z").Output()
+	out, err := gitRead(root, "status", "--porcelain=v2", "--untracked-files=all", "-z")
 	if err != nil {
 		return nil
 	}
@@ -148,11 +154,20 @@ func gitDiff(root, relpath string) string {
 	if !gitAvailable(root) {
 		return ""
 	}
-	out, err := exec.Command("git", "-C", root, "diff", "--no-color", "HEAD", "--", relpath).Output()
-	if err != nil {
+	diffArgs := []string{"diff", "--no-color", "--no-ext-diff", "--no-textconv"}
+	if _, err := gitRead(root, "rev-parse", "--verify", "HEAD"); err == nil {
+		out, err := gitRead(root, append(diffArgs, "HEAD", "--", relpath)...)
+		if err != nil {
+			return ""
+		}
+		return string(out)
+	}
+	staged, errStaged := gitRead(root, append(diffArgs, "--cached", "--", relpath)...)
+	unstaged, errUnstaged := gitRead(root, append(diffArgs, "--", relpath)...)
+	if errStaged != nil && errUnstaged != nil {
 		return ""
 	}
-	return string(out)
+	return string(staged) + string(unstaged)
 }
 
 // gitHunks parses the unified diff of relpath against HEAD into 1-based
@@ -162,6 +177,10 @@ func gitDiff(root, relpath string) string {
 // empty when git is off/unavailable or the file has no diff (clean/untracked).
 func gitHunks(root, relpath string) (added, modified, deleted []int) {
 	diff := gitDiff(root, relpath)
+	return parseUnifiedHunks(diff)
+}
+
+func parseUnifiedHunks(diff string) (added, modified, deleted []int) {
 	if diff == "" {
 		return nil, nil, nil
 	}
@@ -178,7 +197,11 @@ func gitHunks(root, relpath string) (added, modified, deleted []int) {
 		case len(adds) > 0:
 			added = append(added, adds...) // pure insertion
 		case dels > 0:
-			deleted = append(deleted, blockStart-1) // pure deletion
+			marker := blockStart - 1 // pure deletion
+			if marker < 1 {
+				marker = 1 // map "before first row" to the first rendered row
+			}
+			deleted = append(deleted, marker)
 		}
 		dels, adds = 0, nil
 	}

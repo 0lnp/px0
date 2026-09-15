@@ -42,13 +42,16 @@ type Server struct {
 	mux *http.ServeMux
 
 	lastReq atomic.Int64 // unix nanos of the most recent request
+
+	diffMu    sync.RWMutex
+	diffCache map[string]string // repo-relative file path -> unified diff against HEAD ("" = no diff)
 }
 
 func NewServer(ix *Index, lsp *lspManager) *Server {
 	if lsp == nil {
 		lsp = newLSPManager(ix.Root(), false)
 	}
-	s := &Server{ix: ix, lsp: lsp, mux: http.NewServeMux()}
+	s := &Server{ix: ix, lsp: lsp, mux: http.NewServeMux(), diffCache: map[string]string{}}
 	sub, _ := fs.Sub(assets, "web")
 	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(sub))))
 	// Vendored libraries (web/lib/) are content-addressed by version directory
@@ -492,10 +495,7 @@ func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
 	}
 	lines, exact := d.Lines(start, start+count)
 	_, coming := d.Exact()
-	diffAvail := false
-	if gitAvailable(s.ix.Root()) {
-		diffAvail = gitDiff(s.ix.Root(), rel) != ""
-	}
+	_, diffAvail := s.diffFor(rel)
 	writeJSON(w, map[string]any{
 		"path": rel, "lang": d.Lang, "total": d.Total, "maxCols": d.MaxCols,
 		"start": start, "lines": lines, "size": st.Size(),
@@ -539,8 +539,8 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "bad path")
 		return
 	}
-	diff := gitDiff(s.ix.Root(), rel)
-	writeJSON(w, map[string]any{"path": rel, "diff": diff, "available": diff != ""})
+	diff, ok := s.diffFor(rel)
+	writeJSON(w, map[string]any{"path": rel, "diff": diff, "available": ok})
 }
 
 // handleGutter returns per-file changed-line ranges (new-file line numbers) for
@@ -552,7 +552,8 @@ func (s *Server) handleGutter(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "bad path")
 		return
 	}
-	added, modified, deleted := gitHunks(s.ix.Root(), rel)
+	diff, ok := s.diffFor(rel)
+	added, modified, deleted := parseUnifiedHunks(diff)
 	nz := func(v []int) []int { // marshal as [] not null
 		if v == nil {
 			return []int{}
@@ -561,7 +562,7 @@ func (s *Server) handleGutter(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]any{
 		"path":      rel,
-		"available": added != nil || modified != nil || deleted != nil,
+		"available": ok,
 		"added":     nz(added),
 		"modified":  nz(modified),
 		"deleted":   nz(deleted),
@@ -666,6 +667,26 @@ func (s *Server) handleDef(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleReindex(w http.ResponseWriter, r *http.Request) {
 	s.ix.Build()
+	s.diffMu.Lock()
+	s.diffCache = map[string]string{}
+	s.diffMu.Unlock()
 	n, _, ms := s.ix.Stats()
 	writeJSON(w, map[string]any{"files": n, "indexMs": ms})
+}
+
+func (s *Server) diffFor(rel string) (string, bool) {
+	if !gitAvailable(s.ix.Root()) {
+		return "", false
+	}
+	s.diffMu.RLock()
+	diff, ok := s.diffCache[rel]
+	s.diffMu.RUnlock()
+	if ok {
+		return diff, diff != ""
+	}
+	diff = gitDiff(s.ix.Root(), rel)
+	s.diffMu.Lock()
+	s.diffCache[rel] = diff
+	s.diffMu.Unlock()
+	return diff, diff != ""
 }

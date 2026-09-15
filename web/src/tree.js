@@ -84,6 +84,7 @@ export function initTree() {
   $('#btn-changed')?.addEventListener('click', e => {
     const on = treeEl.classList.toggle('changed-only');
     e.currentTarget.classList.toggle('active', on);
+    e.currentTarget.setAttribute('aria-pressed', on ? 'true' : 'false');
   });
 
   treeEl.addEventListener('click', async e => {

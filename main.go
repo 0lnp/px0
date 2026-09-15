@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -128,12 +129,12 @@ func main() {
 
 	// Language servers are children that can hold gigabytes. Shut them down on
 	// the way out rather than leaving them for the OS to reap.
-	interrupted := false
+	var interrupted atomic.Bool
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-stop
-		interrupted = true
+		interrupted.Store(true)
 		fmt.Print("\r")
 		uiStatus("warn", "interrupted", "", 0, os.Stderr)
 		go func() {
@@ -148,7 +149,7 @@ func main() {
 	err = srv.Serve(ln)
 	lsp.Close()
 
-	if interrupted {
+	if interrupted.Load() {
 		tel.Close("interrupted")
 		os.Exit(130)
 	}
@@ -179,6 +180,9 @@ func resolveTarget(target string) (root, initialFile string, initialLine int, er
 		return "", "", 0, fmt.Errorf("invalid target %s: %w", abs, err)
 	}
 	if st.IsDir() {
+		if info := gitProbe(resolved); info.ok && info.toplevel != "" {
+			return info.toplevel, "", 0, nil
+		}
 		return resolved, "", 0, nil
 	}
 	if !st.Mode().IsRegular() {

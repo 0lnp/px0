@@ -154,8 +154,7 @@ func sortNodes(kids []Node) {
 
 // Build walks the tree once, honouring .gitignore at every level, and
 // materialises both the flat file list (for fuzzy find and search) and the
-// directory map (for the tree view). Root entries are published immediately so
-// the frontend can display the file tree without waiting for the full repo scan.
+// directory map (for the tree view).
 func (ix *Index) Build() {
 	start := time.Now()
 	root := newIgnoreSet(nil)
@@ -231,17 +230,6 @@ func (ix *Index) Build() {
 		mu.Lock()
 		children[rel] = kids
 		mu.Unlock()
-
-		// If this is the root directory, make it available to ix.Children("")
-		// immediately so the browser UI can render the sidebar tree without delay.
-		if rel == "" {
-			ix.mu.Lock()
-			if ix.children == nil {
-				ix.children = map[string][]Node{}
-			}
-			ix.children[""] = kids
-			ix.mu.Unlock()
-		}
 
 		for _, sd := range subdirs {
 			wg.Add(1)

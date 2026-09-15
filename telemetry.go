@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -137,12 +138,16 @@ func NewTelemetryService(flagNoTelemetry bool) *TelemetryService {
 	}
 
 	enabled := key != "" && !isOptedOut(flagNoTelemetry)
+	distinctID := generateUUID()
+	if enabled {
+		distinctID = getOrGenerateDistinctID()
+	}
 
 	t := &TelemetryService{
 		enabled:    enabled,
 		apiKey:     key,
 		host:       host,
-		distinctID: getOrGenerateDistinctID(),
+		distinctID: distinctID,
 		sessionID:  generateUUID(),
 		startTime:  time.Now(),
 		queue:      make(chan telemetryEvent, telemetryQueueSize),
@@ -219,11 +224,13 @@ func (t *TelemetryService) Close(reason string) {
 			"exit_reason":      reason,
 		}
 
-		t.send(telemetryEvent{
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+		defer cancel()
+		t.sendWithContext(ctx, telemetryEvent{
 			Event:      "session_ended",
 			Properties: props,
 		})
-		t.send(telemetryEvent{
+		t.sendWithContext(ctx, telemetryEvent{
 			Event:      "session_stopped",
 			Properties: props,
 		})
@@ -252,6 +259,10 @@ func (t *TelemetryService) worker() {
 }
 
 func (t *TelemetryService) send(evt telemetryEvent) {
+	t.sendWithContext(context.Background(), evt)
+}
+
+func (t *TelemetryService) sendWithContext(ctx context.Context, evt telemetryEvent) {
 	debug := os.Getenv("PX0_TELEMETRY_DEBUG") == "1"
 
 	payload := map[string]any{
@@ -269,7 +280,7 @@ func (t *TelemetryService) send(evt telemetryEvent) {
 		return
 	}
 
-	req, err := http.NewRequest("POST", t.host+"/capture/", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", t.host+"/capture/", bytes.NewReader(body))
 	if err != nil {
 		if debug {
 			fmt.Fprintf(os.Stderr, "[telemetry] request error: %v\n", err)

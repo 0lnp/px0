@@ -17,6 +17,7 @@ import { syncDiffView, layoutPref } from './diff.js';
 // Recently closed files, newest last, for Alt+Shift+T.
 const closedTabs = [];
 const MAX_CLOSED = 20;
+const symbolsPaneActive = () => $('#pane-right-symbols')?.classList.contains('active');
 
 export async function openFile(path, opts = {}) {
   const { line, push = true, col } = opts;
@@ -72,7 +73,7 @@ export async function openFile(path, opts = {}) {
   else vp.scrollTop = d.scrollTop;
   render();
   updateStatus();
-  if ($('#panel-outline')?.classList.contains('active')) loadOutline();
+  if (symbolsPaneActive()) loadOutline();
   if (push) pushHistory(path, line || d.cur, col);
 }
 
@@ -203,7 +204,7 @@ export async function reloadOpenTabs() {
     layout();
     vp.scrollTop = d.scrollTop;
     render();
-    if ($('#panel-outline')?.classList.contains('active')) loadOutline();
+    if (symbolsPaneActive()) loadOutline();
   }
 
   drawTabs();
@@ -293,7 +294,7 @@ export function switchTab(i) {
   drawTabs(); drawCrumbs(); layout();
   vp.scrollTop = S.tabs[i].scrollTop;
   render(); updateStatus();
-  if ($('#panel-outline')?.classList.contains('active')) loadOutline();
+  if (symbolsPaneActive()) loadOutline();
   pushHistory(S.tabs[i].path, S.tabs[i].cur);
 }
 
