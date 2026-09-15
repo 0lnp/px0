@@ -1048,10 +1048,13 @@
     $("#pane-right-refs")?.classList.toggle("active", tab === "refs");
     $("#pane-right-symbols")?.classList.toggle("active", tab === "symbols");
     $("#pane-right-calls")?.classList.toggle("active", tab === "calls");
+    $("#pane-right-search")?.classList.toggle("active", tab === "search");
     if (tab === "symbols") {
       loadOutline();
       $("#right-symbols-filter")?.focus();
     }
+    if (tab === "search")
+      $("#q")?.focus();
   }
   function renderRightResults(word, hits, server, isExact) {
     const targetEl = $("#right-ref-target");
@@ -1271,7 +1274,7 @@
     if (rx.lsp)
       setLspState(rx.lsp);
     if (!rx.defs || !rx.defs.length) {
-      showPanel("search");
+      showRightInspector("search");
       const q = $("#q");
       if (q) {
         q.value = at.word;
@@ -1306,7 +1309,7 @@
     if (refCount)
       head += "  ·  " + refCount + " other references";
     renderResults({ results: groupHits(hits), files: 0, total: n, header: head, exact: !!server });
-    showPanel("search");
+    showRightInspector("search");
   }
   function groupHits(hits) {
     const byPath = new Map;
@@ -2984,8 +2987,10 @@
     const prev = doc_();
     if (prev && prev !== S2.tabs[idx])
       prev.scrollTop = vp.scrollTop;
-    if (prev !== S2.tabs[idx])
+    if (prev !== S2.tabs[idx]) {
       clearSelectAll();
+      clearFind();
+    }
     S2.active = idx;
     const d = S2.tabs[idx];
     $("#empty").hidden = true;
@@ -3410,7 +3415,7 @@
       if (act === "quick-open")
         openPalette("file");
       else if (act === "search") {
-        showPanel("search");
+        showRightInspector("search");
         $("#q")?.select();
       } else if (act === "symbols")
         openPalette("symbol");
@@ -3490,7 +3495,7 @@
       }
       if (mod && e.shiftKey && (e.key === "F" || e.key === "f")) {
         e.preventDefault();
-        showPanel("search");
+        showRightInspector("search");
         $("#q")?.select();
         return;
       }
@@ -3700,7 +3705,7 @@
     { name: "Go to File…", run: () => openPalette("file") },
     { name: "Go to Symbol in File…", run: () => openPalette("symbol") },
     { name: "Go to Line…", run: () => openPalette("line") },
-    { name: "Search in Files", run: () => showPanel("search") },
+    { name: "Search in Files", run: () => showRightInspector("search") },
     { name: "Find in Current File", run: () => openFind(S2.lastWord) },
     { name: "Go to Definition", run: () => gotoDefinition() },
     { name: "Find All References (Right Panel)", run: () => findReferences() },

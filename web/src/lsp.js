@@ -3,9 +3,8 @@ import { $, S, doc_, api } from './state.js';
 import { paint } from './renderer.js';
 import { updateStatus, setStatusNote, setLspState } from './status.js';
 import { openFile } from './tabs.js';
-import { showPanel } from './panels.js';
 import { renderResults, runSearch } from './search.js';
-import { inspectReferences } from './inspector.js';
+import { inspectReferences, showRightInspector } from './inspector.js';
 
 /* Language servers answer precisely but can take a long time to wake up, while
    the regex index answers in milliseconds and is always there. So: use the
@@ -80,7 +79,7 @@ export async function gotoDefinition(arg) {
   if (rx.lsp) setLspState(rx.lsp);
 
   if (!rx.defs || !rx.defs.length) {
-    showPanel('search');
+    showRightInspector('search');
     const q = $('#q');
     if (q) { q.value = at.word; $('#o-word')?.classList.add('on'); runSearch(); }
     return;
@@ -112,7 +111,7 @@ export function showHits(word, hits, server, noun, refCount) {
   head += server ? '  ·  ' + server : '  ·  text match, no language server';
   if (refCount) head += '  ·  ' + refCount + ' other references';
   renderResults({ results: groupHits(hits), files: 0, total: n, header: head, exact: !!server });
-  showPanel('search');
+  showRightInspector('search');
 }
 
 export function groupHits(hits) {

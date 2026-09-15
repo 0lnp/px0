@@ -53,7 +53,7 @@ export async function openFile(path, opts = {}) {
   }
   const prev = doc_();
   if (prev && prev !== S.tabs[idx]) prev.scrollTop = vp.scrollTop;
-  if (prev !== S.tabs[idx]) clearSelectAll();
+  if (prev !== S.tabs[idx]) { clearSelectAll(); clearFind(); }
   S.active = idx;
   const d = S.tabs[idx];
 
