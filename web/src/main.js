@@ -1,11 +1,11 @@
 // web/src/main.js
 import { $, S, api, applyKeyLabels } from './state.js';
 import { measure, layout, render, initRenderer, updateEditorOptionControls } from './renderer.js';
-import { initTabs } from './tabs.js';
+import { initTabs, openFile } from './tabs.js';
 import { initCursor } from './cursor.js';
 import { initHover } from './hover.js';
 import { initSelectionBar } from './selbar.js';
-import { drawTree, treeEl, initTree } from './tree.js';
+import { drawTree, treeEl, initTree, revealFile } from './tree.js';
 import { initSearch } from './search.js';
 import { initOutline } from './outline.js';
 import { initPanels } from './panels.js';
@@ -16,6 +16,7 @@ import { initPalette } from './palette.js';
 import { initShortcuts } from './shortcuts.js';
 import { initTheme } from './theme.js';
 import { initMarkdown } from './markdown.js';
+import { initDiff } from './diff.js';
 import { updateStatus, initMetrics, initStatusFit, updateMetricsDisplay } from './status.js';
 
 // Initialize all subsystems
@@ -34,6 +35,7 @@ initFind();
 initPalette();
 initShortcuts();
 initMarkdown();
+initDiff();
 initMetrics();
 initStatusFit();
 
@@ -64,6 +66,7 @@ initStatusFit();
   measure();
   S.meta = await api('/api/meta');
   if (S.meta.metrics) updateMetricsDisplay(S.meta.metrics);
+  if (S.meta.git) { const b = $('#btn-changed'); if (b) b.hidden = false; }
   document.title = S.meta.name + ' - px0';
   $('#root-name').textContent = S.meta.name;
   $('#root-name').title = S.meta.root;
@@ -73,6 +76,22 @@ initStatusFit();
   }
   updateStatus();
   await drawTree('', treeEl, 0);
+
+  const params = new URLSearchParams(window.location.search);
+  const initialPath = params.get('path');
+  const initialLine = parseInt(params.get('line'), 10) || undefined;
+  if (initialPath) {
+    await openFile(initialPath, { line: initialLine });
+    await revealFile(initialPath);
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.delete('path');
+      u.searchParams.delete('line');
+      const cleanSearch = u.searchParams.toString();
+      const cleanUrl = u.pathname + (cleanSearch ? '?' + cleanSearch : '') + u.hash;
+      window.history.replaceState({}, '', cleanUrl);
+    } catch {}
+  }
 
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(() => { measure(); layout(); render(); });

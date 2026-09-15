@@ -12,6 +12,7 @@ import { clearLink } from './hover.js';
 import { clearFind } from './find.js';
 import { clearSelectAll } from './selbar.js';
 import { syncPreview, previewing, previewLine } from './markdown.js';
+import { syncDiffView, layoutPref } from './diff.js';
 
 // Recently closed files, newest last, for Alt+Shift+T.
 const closedTabs = [];
@@ -33,27 +34,33 @@ export async function openFile(path, opts = {}) {
       showImage(path);
       return;
     }
+    const hasDiff = !!j.diffAvailable;
     const d = {
       path, name: path.split('/').pop(), lang: j.lang, total: j.total, maxCols: j.maxCols,
       size: j.size, lines: new Array(j.total), chunks: new Set([start / CHUNK]),
       pending: new Set(), refining: new Set(), scrollTop: 0, cur: line || 1,
-      outline: null, gen: 0, markdown: !!j.markdown,
+      outline: null, gen: 0, markdown: !!j.markdown, gutter: null,
+      diffMode: hasDiff ? (layoutPref() || 'split') : null,
+      diffAvailable: hasDiff,
+      diffDismissed: false,
     };
     for (let i = 0; i < j.lines.length; i++) d.lines[j.start + i] = j.lines[i];
     d.lsp = j.lsp || { state: 'off', server: '' };
     S.tabs.push(d);
     idx = S.tabs.length - 1;
     if (j.refine) refineChunk(d, start / CHUNK);
+    loadGutter(d);
   }
   const prev = doc_();
   if (prev && prev !== S.tabs[idx]) prev.scrollTop = vp.scrollTop;
-  if (prev !== S.tabs[idx]) clearSelectAll();
+  if (prev !== S.tabs[idx]) { clearSelectAll(); clearFind(); }
   S.active = idx;
   const d = S.tabs[idx];
 
   $('#empty').hidden = true;
   hideImage();
   syncPreview();
+  syncDiffView();
   if (!S.at || S.at.path !== d.path) S.at = null;
   S.lsp.state = (d.lsp && d.lsp.state) || 'off';
   S.lsp.server = (d.lsp && d.lsp.server) || '';
@@ -67,6 +74,141 @@ export async function openFile(path, opts = {}) {
   updateStatus();
   if ($('#panel-outline')?.classList.contains('active')) loadOutline();
   if (push) pushHistory(path, line || d.cur, col);
+}
+
+// VS Code-style diff gutter for the normal file view. Fetches once per opened
+// doc and caches on it (each tab keeps its own; switching tabs needs no clear).
+// Fetches on any open in a git repo rather than threading per-file status
+// through every open path — the backend returns available:false for
+// clean/untracked files, so the extra request is cheap and self-limiting.
+function loadGutter(d) {
+  if (!S.meta?.git) return;
+  api('/api/gutter', { path: d.path }).then(j => {
+    d.diffAvailable = !!j.available;
+    if (j.available && d.diffMode === null && !d.diffDismissed) {
+      d.diffMode = layoutPref() || 'split';
+      if (doc_() === d) {
+        syncDiffView();
+        syncPreview();
+      }
+    }
+    if (doc_() === d) updateStatus();
+    if (!j.available) return;
+    const marks = new Map();
+    for (const n of j.modified) marks.set(n, 'mod');
+    for (const n of j.added) marks.set(n, 'add');
+    d.gutter = { marks, dels: new Set(j.deleted) };
+    if (doc_() === d) render();
+  }).catch(() => {});
+}
+
+// Quietly re-fetches all open tabs on workspace reindex without tab-switching thrash.
+// Preserves live scroll position, cursor column/line (clamped), diff settings, and markdown scroll.
+export async function reloadOpenTabs() {
+  if (S.tabs.length === 0) return;
+
+  const activeDoc = doc_();
+  if (activeDoc) {
+    activeDoc.scrollTop = vp.scrollTop;
+    if (previewing(activeDoc)) {
+      const mv = $('#mdview');
+      if (mv) activeDoc.mdScroll = mv.scrollTop;
+    }
+  }
+
+  const targets = S.tabs.map(t => ({
+    oldDoc: t,
+    path: t.path,
+    anchor: t.cur || 1,
+    start: t.cur ? Math.max(0, Math.floor((t.cur - 1) / CHUNK) * CHUNK) : 0,
+  }));
+
+  const results = await Promise.allSettled(
+    targets.map(tgt => api('/api/file', { path: tgt.path, start: tgt.start, count: CHUNK }))
+  );
+
+  for (let i = 0; i < targets.length; i++) {
+    const res = results[i];
+    const tgt = targets[i];
+    const idx = S.tabs.indexOf(tgt.oldDoc);
+    if (idx < 0) continue; // tab closed while reloading
+
+    if (res.status !== 'fulfilled') {
+      if (idx === S.active) {
+        setStatusNote(tgt.path + ': ' + (res.reason?.message || 'failed to load'));
+      }
+      continue;
+    }
+
+    const j = res.value;
+    if (j.image) continue;
+
+    const keep = tgt.oldDoc;
+    const hasDiff = !!j.diffAvailable;
+    const newCur = Math.max(1, Math.min(keep.cur || 1, j.total));
+
+    let diffMode = null;
+    if (hasDiff) {
+      if (keep.diffDismissed) {
+        diffMode = null;
+      } else if (keep.diffMode) {
+        diffMode = keep.diffMode;
+      } else {
+        diffMode = layoutPref() || 'split';
+      }
+    }
+
+    const d = {
+      path: tgt.path,
+      name: tgt.path.split('/').pop(),
+      lang: j.lang,
+      total: j.total,
+      maxCols: j.maxCols,
+      size: j.size,
+      lines: new Array(j.total),
+      chunks: new Set([tgt.start / CHUNK]),
+      pending: new Set(),
+      refining: new Set(),
+      scrollTop: keep.scrollTop || 0,
+      cur: newCur,
+      col: keep.col || 0,
+      outline: null,
+      gen: 0,
+      markdown: !!j.markdown,
+      mdScroll: keep.mdScroll || 0,
+      gutter: null,
+      diffMode,
+      diffAvailable: hasDiff,
+      diffDismissed: !!keep.diffDismissed,
+    };
+
+    for (let k = 0; k < j.lines.length; k++) {
+      d.lines[j.start + k] = j.lines[k];
+    }
+    d.lsp = j.lsp || { state: 'off', server: '' };
+
+    S.tabs[idx] = d;
+    if (j.refine) refineChunk(d, tgt.start / CHUNK);
+    loadGutter(d);
+  }
+
+  const d = doc_();
+  if (d) {
+    S.lsp.state = (d.lsp && d.lsp.state) || 'off';
+    S.lsp.server = (d.lsp && d.lsp.server) || '';
+    S.lsp.missing = (d.lsp && d.lsp.missing) || '';
+    warmLSP(d);
+    syncPreview();
+    syncDiffView();
+    layout();
+    vp.scrollTop = d.scrollTop;
+    render();
+    if ($('#panel-outline')?.classList.contains('active')) loadOutline();
+  }
+
+  drawTabs();
+  drawCrumbs();
+  updateStatus();
 }
 
 export function centerLine(n) {
@@ -98,6 +240,7 @@ export function closeTab(i) {
   if (S.tabs.length === 0) {
     S.active = -1;
     syncPreview();
+    syncDiffView();
     rowsEl.innerHTML = ''; sizer.style.height = '0px';
     $('#empty').hidden = false; drawCrumbs();
     drawTabs(); updateStatus();
@@ -106,6 +249,7 @@ export function closeTab(i) {
   S.active = Math.min(i, S.tabs.length - 1);
   const d = doc_();
   syncPreview();
+  syncDiffView();
   drawTabs(); drawCrumbs(); layout();
   vp.scrollTop = d.scrollTop; render(); updateStatus();
 }
@@ -138,6 +282,7 @@ export function switchTab(i) {
   if (prev) prev.scrollTop = vp.scrollTop;
   S.active = i;
   syncPreview();
+  syncDiffView();
   clearFind();
   clearSelectAll();
   S.at = null;

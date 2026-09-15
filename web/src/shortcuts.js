@@ -8,7 +8,6 @@ import { go } from './history.js';
 import { clearLink, hovercard } from './hover.js';
 import { openFind, clearFind, findbar } from './find.js';
 import { gotoDefinition, findReferences } from './lsp.js';
-import { showPanel } from './panels.js';
 import { showRightInspector, hideRightInspector } from './inspector.js';
 import { overlay, openPalette, closePalette } from './palette.js';
 import { moveCursor, moveCol, caretToEdge } from './cursor.js';
@@ -17,6 +16,7 @@ import { SEL_KEYS, runSelectionAction, selectAll, clearSelectAll, copySelectAll 
 
 import { cycleTheme } from './theme.js';
 import { previewing, togglePreview, previewKey, selectPreview } from './markdown.js';
+import { toggleDiff } from './diff.js';
 
 /* Each entry lists alternative combos, written as for keyLabel in state.js so
    they show as ⌘/⌥/⇧ on a Mac and Ctrl/Alt/Shift elsewhere. Browsers keep
@@ -25,7 +25,7 @@ export const SHORTCUTS = [
   [['Mod+K'], 'Quick search / palette'], [['Mod+P'], 'Go to file'],
   [['Mod+Shift+P'], 'Command palette'], [['Mod+Shift+O'], 'Go to symbol'],
   [['Mod+Shift+F'], 'Search in files'], [['Mod+F'], 'Find in file'],
-  [['Mod+G'], 'Go to line'], [['Alt+Z'], 'Toggle word wrap'],
+  [['Mod+G'], 'Go to line'], [['Mod+D'], 'Toggle diff view (git)'], [['Alt+Z'], 'Toggle word wrap'],
   [['Alt+L'], 'Toggle line numbers'], [['Alt+M'], 'Toggle Markdown preview'],
   [['Enter', 'Shift+Enter'], 'Next / previous match'],
   [['F12', 'Mod+Click'], 'Go to definition'], [['Shift+F12'], 'Find all references'],
@@ -66,7 +66,7 @@ export function initShortcuts() {
     if (!btn) return;
     const act = btn.dataset.action;
     if (act === 'quick-open') openPalette('file');
-    else if (act === 'search') { showPanel('search'); $('#q')?.select(); }
+    else if (act === 'search') { showRightInspector('search'); $('#q')?.select(); }
     else if (act === 'symbols') openPalette('symbol');
     else if (act === 'find') openFind(S.lastWord);
     else if (act === 'goto') openPalette('line');
@@ -108,11 +108,13 @@ export function initShortcuts() {
 
     if (mod && e.shiftKey && (e.key === 'P' || e.key === 'p')) { e.preventDefault(); openPalette('command'); return; }
     if (mod && e.shiftKey && (e.key === 'O' || e.key === 'o')) { e.preventDefault(); showRightInspector('symbols'); return; }
-    if (mod && e.shiftKey && (e.key === 'F' || e.key === 'f')) { e.preventDefault(); showPanel('search'); $('#q')?.select(); return; }
+    if (mod && e.shiftKey && (e.key === 'F' || e.key === 'f')) { e.preventDefault(); showRightInspector('search'); $('#q')?.select(); return; }
     if (mod && !e.shiftKey && (e.key === 'p' || e.key === 'P')) { e.preventDefault(); openPalette('file'); return; }
     if (mod && (e.key === 'g' || e.key === 'G')) { e.preventDefault(); openPalette('line'); return; }
     if (mod && (e.key === 'f' || e.key === 'F')) { e.preventDefault(); openFind(S.lastWord); return; }
     if (mod && (e.key === 'b' || e.key === 'B')) { e.preventDefault(); document.body.classList.toggle('side-hidden'); layout(); render(); return; }
+    // Diff view of the open file (git only; fails quiet when git is off).
+    if (mod && !e.shiftKey && (e.key === 'd' || e.key === 'D')) { if (S.meta?.git) { e.preventDefault(); toggleDiff(); } return; }
     // Alt shortcuts match e.code: on a Mac, Option+letter types a symbol, so e.key is not the letter.
     if ((mod && (e.key === 'w' || e.key === 'W')) || (e.altKey && e.code === 'KeyW')) {
       e.preventDefault();

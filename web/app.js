@@ -181,10 +181,21 @@
     const last = Math.min(d.total, first + count);
     ensureChunks(d, first, last);
     let html = "";
+    const gut = d.gutter || null;
     for (let i = first;i < last; i++) {
       const n = i + 1;
       const body = d.lines[i];
-      html += '<div class="row' + (n === d.cur ? " cur" : "") + '" data-l="' + n + '">' + '<div class="g">' + n + '</div><div class="c">' + (body === undefined ? "" : body) + "</div></div>";
+      let rc = "row", gc = "g";
+      if (n === d.cur)
+        rc += " cur";
+      if (gut) {
+        const m = gut.marks.get(n);
+        if (m)
+          gc += m === "add" ? " gut-add" : " gut-mod";
+        if (gut.dels.has(n))
+          rc += " gut-del";
+      }
+      html += '<div class="' + rc + '" data-l="' + n + '">' + '<div class="' + gc + '">' + n + '</div><div class="c">' + (body === undefined ? "" : body) + "</div></div>";
     }
     const sel = saveSelection();
     rowsEl.style.transform = "translateY(" + first * LH + "px)";
@@ -790,6 +801,15 @@
   // web/src/tree.js
   var treeEl = $("#tree");
   var openDirs = new Set;
+  var GIT_STATUS = {
+    M: ["git-M", "modified"],
+    A: ["git-A", "added"],
+    D: ["git-D", "deleted"],
+    U: ["git-untracked", "untracked"],
+    R: ["git-R", "renamed"],
+    C: ["git-A", "copied"],
+    "!": ["git-M", "unmerged"]
+  };
   async function drawTree(dir, container, depth) {
     let j;
     try {
@@ -802,9 +822,13 @@
       const ig = c.ignored ? " ignored" : "";
       const note2 = c.ignored ? " (ignored by .gitignore, not searched)" : "";
       if (c.dir) {
-        return '<div class="tw"><div class="tr dir' + ig + '" data-dir="' + esc(c.path) + '" style="padding-left:' + pad + 'px" title="Folder: ' + esc(c.path) + note2 + '">' + '<span class="ar"></span><span class="nm">' + esc(c.name) + "</span></div>" + '<div class="kids" data-kids="' + esc(c.path) + '"></div></div>';
+        const dc = c.dirty ? " dirty" : "";
+        return '<div class="tw"><div class="tr dir' + ig + dc + '" data-dir="' + esc(c.path) + '" style="padding-left:' + pad + 'px" title="Folder: ' + esc(c.path) + note2 + '">' + '<span class="ar"></span><span class="nm">' + esc(c.name) + "</span></div>" + '<div class="kids" data-kids="' + esc(c.path) + '"></div></div>';
       }
-      return '<div class="tr file' + ig + '" data-file="' + esc(c.path) + '" style="padding-left:' + (pad + 12) + 'px" title="Open ' + esc(c.path) + note2 + '">' + '<span class="ic" data-t="' + fileKind(c.name) + '"></span><span class="nm">' + esc(c.name) + "</span></div>";
+      const g = GIT_STATUS[c.status];
+      const gc = g ? " dirty " + g[0] : "";
+      const badge = g ? '<span class="gs" title="git: ' + g[1] + '">' + esc(c.status) + "</span>" : "";
+      return '<div class="tr file' + ig + gc + '" data-file="' + esc(c.path) + '" style="padding-left:' + (pad + 12) + 'px" title="Open ' + esc(c.path) + note2 + '">' + '<span class="ic" data-t="' + fileKind(c.name) + '"></span><span class="nm">' + esc(c.name) + "</span>" + badge + "</div>";
     }).join("");
   }
   var FILE_KIND = {
@@ -888,9 +912,9 @@
       last.scrollIntoView({ block: "center" });
   }
   async function revealFile(path) {
-    const dir = path.slice(0, path.lastIndexOf("/"));
-    if (dir)
-      await revealDir(dir);
+    const idx = path.lastIndexOf("/");
+    if (idx > 0)
+      await revealDir(path.slice(0, idx));
     const row = treeEl.querySelector('[data-file="' + CSS.escape(path) + '"]');
     if (row) {
       $$(".tr.sel", treeEl).forEach((x) => x.classList.remove("sel"));
@@ -899,6 +923,10 @@
     }
   }
   function initTree() {
+    $("#btn-changed")?.addEventListener("click", (e) => {
+      const on = treeEl.classList.toggle("changed-only");
+      e.currentTarget.classList.toggle("active", on);
+    });
     treeEl.addEventListener("click", async (e) => {
       const dirRow = e.target.closest("[data-dir]");
       if (dirRow) {
@@ -940,6 +968,7 @@
       treeEl.innerHTML = "";
       openDirs.clear();
       await drawTree("", treeEl, 0);
+      await reloadOpenTabs();
       updateStatus();
     });
     (() => {
@@ -1211,10 +1240,13 @@
     $("#pane-right-refs")?.classList.toggle("active", tab === "refs");
     $("#pane-right-symbols")?.classList.toggle("active", tab === "symbols");
     $("#pane-right-calls")?.classList.toggle("active", tab === "calls");
+    $("#pane-right-search")?.classList.toggle("active", tab === "search");
     if (tab === "symbols") {
       loadOutline();
       $("#right-symbols-filter")?.focus();
     }
+    if (tab === "search")
+      $("#q")?.focus();
   }
   function renderRightResults(word, hits, server, isExact) {
     const targetEl = $("#right-ref-target");
@@ -1434,7 +1466,7 @@
     if (rx.lsp)
       setLspState(rx.lsp);
     if (!rx.defs || !rx.defs.length) {
-      showPanel("search");
+      showRightInspector("search");
       const q = $("#q");
       if (q) {
         q.value = at.word;
@@ -1469,7 +1501,7 @@
     if (refCount)
       head += "  ·  " + refCount + " other references";
     renderResults({ results: groupHits(hits), files: 0, total: n, header: head, exact: !!server });
-    showPanel("search");
+    showRightInspector("search");
   }
   function groupHits(hits) {
     const byPath = new Map;
@@ -2156,7 +2188,7 @@
   var mdDrawn = null;
   var mdGen = 0;
   function previewing(d = doc_()) {
-    return !!(d && d.markdown && S2.mdPreview && !d.mdError);
+    return !!(d && d.markdown && S2.mdPreview && !d.mdError && !d.diffMode);
   }
   function syncPreview() {
     const d = doc_();
@@ -2621,24 +2653,274 @@
     });
   }
 
+  // web/src/diff.js
+  var diffview = $("#diffview");
+  var diffContent = $("#diffcontent");
+  var shown = null;
+  function setLayoutPref(mode) {
+    try {
+      localStorage.setItem("px0.diffLayout", mode);
+    } catch {}
+  }
+  function layoutPref() {
+    try {
+      return localStorage.getItem("px0.diffLayout") || "split";
+    } catch {
+      return "split";
+    }
+  }
+  function syncDiffView() {
+    const d = doc_();
+    const want = d && d.diffMode ? d : null;
+    if (want !== shown) {
+      shown = want;
+      diffview.hidden = !want;
+      if (want)
+        drawDiff(want);
+      else
+        diffContent.replaceChildren();
+    } else if (want && want.diffHunks !== undefined) {
+      renderDiff(want);
+    }
+  }
+  async function toggleDiff() {
+    if (!S2.meta?.git)
+      return;
+    const d = doc_();
+    if (!d)
+      return;
+    if (!d.diffMode && !d.diffAvailable) {
+      setStatusNote("No diff — clean file or not a git repo");
+      return;
+    }
+    setDiffMode(d.diffMode ? "source" : layoutPref() || "split");
+  }
+  async function setDiffMode(mode) {
+    const d = doc_();
+    if (!d)
+      return;
+    if (mode !== "source" && !d.diffAvailable) {
+      setStatusNote("No diff — clean file or not a git repo");
+      return;
+    }
+    if (mode === "source") {
+      d.diffMode = null;
+      d.diffDismissed = true;
+    } else {
+      d.diffMode = mode;
+      d.diffDismissed = false;
+      setLayoutPref(mode);
+    }
+    syncPreview();
+    syncDiffView();
+    updateStatus();
+  }
+  async function drawDiff(d) {
+    if (d.diffText === undefined) {
+      diffContent.replaceChildren();
+      try {
+        d.diffReq = d.diffReq || api("/api/diff", { path: d.path });
+        const j = await d.diffReq;
+        d.diffText = j.diff || "";
+        d.diffHunks = parseDiff(d.diffText);
+      } catch (e) {
+        d.diffText = "";
+        d.diffHunks = [];
+        setStatusNote("No diff: " + e.message);
+      } finally {
+        d.diffReq = null;
+      }
+      if (shown !== d)
+        return;
+    }
+    renderDiff(d);
+  }
+  function renderDiff(d) {
+    diffContent.replaceChildren();
+    if (!d.diffHunks || !d.diffHunks.length) {
+      const p = document.createElement("div");
+      p.className = "diff-empty";
+      p.textContent = "No changes against HEAD.";
+      diffContent.append(p);
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    for (const hunk of d.diffHunks) {
+      frag.append(hunkHeader(hunk));
+      frag.append(d.diffMode === "unified" ? unifiedTable(hunk) : splitTable(hunk));
+    }
+    diffContent.append(frag);
+  }
+  function hunkHeader(hunk) {
+    const el = document.createElement("div");
+    el.className = "diff-hunk-head";
+    el.textContent = "@@ -" + hunk.oldStart + " +" + hunk.newStart + " @@" + (hunk.section ? " " + hunk.section : "");
+    return el;
+  }
+  var HUNK_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@[ \t]?(.*)$/;
+  function parseDiff(text) {
+    if (!text)
+      return [];
+    const hunks = [];
+    let cur = null, oldLine = 0, newLine = 0;
+    for (const line of text.split(`
+`)) {
+      const m = HUNK_RE.exec(line);
+      if (m) {
+        oldLine = +m[1];
+        newLine = +m[3];
+        cur = { oldStart: oldLine, newStart: newLine, section: m[5] || "", rows: [] };
+        hunks.push(cur);
+        continue;
+      }
+      if (!cur || line === "" || line.startsWith("\\"))
+        continue;
+      const c = line[0], body = line.slice(1);
+      if (c === "+")
+        cur.rows.push({ type: "add", newLine: newLine++, text: body });
+      else if (c === "-")
+        cur.rows.push({ type: "del", oldLine: oldLine++, text: body });
+      else
+        cur.rows.push({ type: "ctx", oldLine: oldLine++, newLine: newLine++, text: body });
+    }
+    return hunks;
+  }
+  function unifiedTable(hunk) {
+    const table = document.createElement("div");
+    table.className = "diff-table diff-unified";
+    for (const row of hunk.rows) {
+      const r = document.createElement("div");
+      r.className = "diff-row diff-" + row.type;
+      r.append(lineCell(row.type === "add" ? "" : row.oldLine), lineCell(row.type === "del" ? "" : row.newLine), markerCell(row.type), codeCell(row.text));
+      table.append(r);
+    }
+    return table;
+  }
+  function splitTable(hunk) {
+    const table = document.createElement("div");
+    table.className = "diff-table diff-split";
+    for (const pair of pairRows(hunk.rows)) {
+      const r = document.createElement("div");
+      r.className = "diff-row-pair";
+      r.append(splitSide(pair.left, "left"), splitSide(pair.right, "right"));
+      table.append(r);
+    }
+    return table;
+  }
+  function pairRows(rows) {
+    const pairs = [];
+    let i = 0;
+    while (i < rows.length) {
+      const row = rows[i];
+      if (row.type === "ctx") {
+        pairs.push({ left: row, right: row });
+        i++;
+        continue;
+      }
+      let dels = [], adds = [];
+      while (i < rows.length && rows[i].type === "del")
+        dels.push(rows[i++]);
+      while (i < rows.length && rows[i].type === "add")
+        adds.push(rows[i++]);
+      const n = Math.max(dels.length, adds.length);
+      for (let k = 0;k < n; k++)
+        pairs.push({ left: dels[k] || null, right: adds[k] || null });
+    }
+    return pairs;
+  }
+  function splitSide(row, side) {
+    const el = document.createElement("div");
+    el.className = "diff-side diff-side-" + side + (row ? " diff-" + row.type : " diff-blank");
+    if (!row) {
+      el.append(lineCell(""), markerCell(""), codeCell(""));
+      return el;
+    }
+    const ln = side === "left" ? row.oldLine : row.newLine;
+    el.append(lineCell(ln), markerCell(row.type), codeCell(row.text));
+    return el;
+  }
+  function lineCell(n) {
+    const el = document.createElement("div");
+    el.className = "diff-ln";
+    el.textContent = n === "" || n === undefined ? "" : String(n);
+    return el;
+  }
+  var MARKS = { add: "+", del: "-", ctx: "" };
+  function markerCell(type) {
+    const el = document.createElement("div");
+    el.className = "diff-mk";
+    el.textContent = MARKS[type] || "";
+    return el;
+  }
+  function codeCell(text) {
+    const el = document.createElement("div");
+    el.className = "diff-code";
+    el.innerHTML = esc(text || "") || "&nbsp;";
+    return el;
+  }
+  function initDiff() {
+    const sw = $("#diff-switch");
+    if (!sw)
+      return;
+    sw.addEventListener("mousedown", (e) => {
+      if (!e.target.closest("button"))
+        e.preventDefault();
+    });
+    const btn = $("#diff-btn");
+    if (btn) {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleDiff();
+      });
+    }
+    const menu = $("#diff-menu");
+    if (menu) {
+      menu.addEventListener("click", (e) => {
+        const item = e.target.closest("[data-diff-opt]");
+        if (!item)
+          return;
+        e.stopPropagation();
+        setDiffMode(item.dataset.diffOpt);
+        item.blur();
+      });
+    }
+  }
+
   // web/src/status.js
   function updateStatus() {
     const d = doc_();
     const sizeEl = $("#st-size");
     if (sizeEl)
       sizeEl.textContent = d ? fmtBytes(d.size) : "";
-    const isMd = !!(d && d.markdown), shown = previewing(d);
+    const isMd = !!(d && d.markdown), shown2 = previewing(d);
     const mdBtn = $('[data-action="md-preview"]');
     if (mdBtn) {
       mdBtn.hidden = !isMd;
-      mdBtn.classList.toggle("active", shown);
+      mdBtn.classList.toggle("active", shown2);
     }
     const sw = $("#md-switch");
     if (sw) {
       sw.hidden = !isMd;
       document.body.classList.toggle("md-tab", isMd);
       for (const b of sw.children)
-        b.classList.toggle("on", isMd && b.dataset.md === "preview" === shown);
+        b.classList.toggle("on", isMd && b.dataset.md === "preview" === shown2);
+    }
+    const hasDiff = !!(d && d.diffAvailable);
+    const isDiffOn = !!(d && d.diffMode);
+    const currentLayout = d && d.diffMode || layoutPref();
+    const dsw = $("#diff-switch");
+    if (dsw) {
+      dsw.hidden = !hasDiff;
+      document.body.classList.toggle("diff-tab", hasDiff);
+      const btn = $("#diff-btn");
+      if (btn) {
+        btn.classList.toggle("on", hasDiff && isDiffOn);
+        btn.title = withKeys(isDiffOn ? `Diff: active (${d.diffMode === "unified" ? "Unified" : "Split"}) — click to show source ({Mod+D})` : `Diff: off — click to show diff ({Mod+D})`);
+      }
+      const menuItems = dsw.querySelectorAll(".diff-menu-item");
+      for (const item of menuItems) {
+        item.classList.toggle("active", item.dataset.diffOpt === currentLayout);
+      }
     }
     const idxEl = $("#st-index");
     if (idxEl && S2.meta) {
@@ -2905,6 +3187,7 @@
         showImage(path);
         return;
       }
+      const hasDiff = !!j.diffAvailable;
       const d2 = {
         path,
         name: path.split("/").pop(),
@@ -2920,7 +3203,11 @@
         cur: line || 1,
         outline: null,
         gen: 0,
-        markdown: !!j.markdown
+        markdown: !!j.markdown,
+        gutter: null,
+        diffMode: hasDiff ? layoutPref() || "split" : null,
+        diffAvailable: hasDiff,
+        diffDismissed: false
       };
       for (let i = 0;i < j.lines.length; i++)
         d2.lines[j.start + i] = j.lines[i];
@@ -2929,17 +3216,21 @@
       idx = S2.tabs.length - 1;
       if (j.refine)
         refineChunk(d2, start2 / CHUNK);
+      loadGutter(d2);
     }
     const prev = doc_();
     if (prev && prev !== S2.tabs[idx])
       prev.scrollTop = vp.scrollTop;
-    if (prev !== S2.tabs[idx])
+    if (prev !== S2.tabs[idx]) {
       clearSelectAll();
+      clearFind();
+    }
     S2.active = idx;
     const d = S2.tabs[idx];
     $("#empty").hidden = true;
     hideImage();
     syncPreview();
+    syncDiffView();
     if (!S2.at || S2.at.path !== d.path)
       S2.at = null;
     S2.lsp.state = d.lsp && d.lsp.state || "off";
@@ -2960,6 +3251,129 @@
       loadOutline();
     if (push)
       pushHistory(path, line || d.cur, col);
+  }
+  function loadGutter(d) {
+    if (!S2.meta?.git)
+      return;
+    api("/api/gutter", { path: d.path }).then((j) => {
+      d.diffAvailable = !!j.available;
+      if (j.available && d.diffMode === null && !d.diffDismissed) {
+        d.diffMode = layoutPref() || "split";
+        if (doc_() === d) {
+          syncDiffView();
+          syncPreview();
+        }
+      }
+      if (doc_() === d)
+        updateStatus();
+      if (!j.available)
+        return;
+      const marks = new Map;
+      for (const n of j.modified)
+        marks.set(n, "mod");
+      for (const n of j.added)
+        marks.set(n, "add");
+      d.gutter = { marks, dels: new Set(j.deleted) };
+      if (doc_() === d)
+        render();
+    }).catch(() => {});
+  }
+  async function reloadOpenTabs() {
+    if (S2.tabs.length === 0)
+      return;
+    const activeDoc = doc_();
+    if (activeDoc) {
+      activeDoc.scrollTop = vp.scrollTop;
+      if (previewing(activeDoc)) {
+        const mv = $("#mdview");
+        if (mv)
+          activeDoc.mdScroll = mv.scrollTop;
+      }
+    }
+    const targets = S2.tabs.map((t) => ({
+      oldDoc: t,
+      path: t.path,
+      anchor: t.cur || 1,
+      start: t.cur ? Math.max(0, Math.floor((t.cur - 1) / CHUNK) * CHUNK) : 0
+    }));
+    const results = await Promise.allSettled(targets.map((tgt) => api("/api/file", { path: tgt.path, start: tgt.start, count: CHUNK })));
+    for (let i = 0;i < targets.length; i++) {
+      const res = results[i];
+      const tgt = targets[i];
+      const idx = S2.tabs.indexOf(tgt.oldDoc);
+      if (idx < 0)
+        continue;
+      if (res.status !== "fulfilled") {
+        if (idx === S2.active) {
+          setStatusNote(tgt.path + ": " + (res.reason?.message || "failed to load"));
+        }
+        continue;
+      }
+      const j = res.value;
+      if (j.image)
+        continue;
+      const keep = tgt.oldDoc;
+      const hasDiff = !!j.diffAvailable;
+      const newCur = Math.max(1, Math.min(keep.cur || 1, j.total));
+      let diffMode = null;
+      if (hasDiff) {
+        if (keep.diffDismissed) {
+          diffMode = null;
+        } else if (keep.diffMode) {
+          diffMode = keep.diffMode;
+        } else {
+          diffMode = layoutPref() || "split";
+        }
+      }
+      const d2 = {
+        path: tgt.path,
+        name: tgt.path.split("/").pop(),
+        lang: j.lang,
+        total: j.total,
+        maxCols: j.maxCols,
+        size: j.size,
+        lines: new Array(j.total),
+        chunks: new Set([tgt.start / CHUNK]),
+        pending: new Set,
+        refining: new Set,
+        scrollTop: keep.scrollTop || 0,
+        cur: newCur,
+        col: keep.col || 0,
+        outline: null,
+        gen: 0,
+        markdown: !!j.markdown,
+        mdScroll: keep.mdScroll || 0,
+        gutter: null,
+        diffMode,
+        diffAvailable: hasDiff,
+        diffDismissed: !!keep.diffDismissed
+      };
+      for (let k = 0;k < j.lines.length; k++) {
+        d2.lines[j.start + k] = j.lines[k];
+      }
+      d2.lsp = j.lsp || { state: "off", server: "" };
+      S2.tabs[idx] = d2;
+      if (j.refine)
+        refineChunk(d2, tgt.start / CHUNK);
+      loadGutter(d2);
+    }
+    const d = doc_();
+    if (d) {
+      S2.lsp.state = d.lsp && d.lsp.state || "off";
+      S2.lsp.server = d.lsp && d.lsp.server || "";
+      S2.lsp.missing = d.lsp && d.lsp.missing || "";
+      warmLSP(d);
+      syncPreview();
+      syncDiffView();
+      layout();
+      vp.scrollTop = d.scrollTop;
+      render();
+      if ($("#panel-outline")?.classList.contains("active"))
+        loadOutline();
+    }
+    drawTabs();
+    drawCrumbs();
+    updateStatus();
   }
   function centerLine(n) {
     if (previewing()) {
@@ -2989,6 +3403,7 @@
     if (S2.tabs.length === 0) {
       S2.active = -1;
       syncPreview();
+      syncDiffView();
       rowsEl.innerHTML = "";
       sizer.style.height = "0px";
       $("#empty").hidden = false;
@@ -3000,6 +3415,7 @@
     S2.active = Math.min(i, S2.tabs.length - 1);
     const d = doc_();
     syncPreview();
+    syncDiffView();
     drawTabs();
     drawCrumbs();
     layout();
@@ -3036,6 +3452,7 @@
       prev.scrollTop = vp.scrollTop;
     S2.active = i;
     syncPreview();
+    syncDiffView();
     clearFind();
     clearSelectAll();
     S2.at = null;
@@ -3186,6 +3603,7 @@
     [["Mod+Shift+F"], "Search in files"],
     [["Mod+F"], "Find in file"],
     [["Mod+G"], "Go to line"],
+    [["Mod+D"], "Toggle diff view (git)"],
     [["Alt+Z"], "Toggle word wrap"],
     [["Alt+L"], "Toggle line numbers"],
     [["Alt+M"], "Toggle Markdown preview"],
@@ -3231,7 +3649,7 @@
       if (act === "quick-open")
         openPalette("file");
       else if (act === "search") {
-        showPanel("search");
+        showRightInspector("search");
         $("#q")?.select();
       } else if (act === "symbols")
         openPalette("symbol");
@@ -3311,7 +3729,7 @@
       }
       if (mod && e.shiftKey && (e.key === "F" || e.key === "f")) {
         e.preventDefault();
-        showPanel("search");
+        showRightInspector("search");
         $("#q")?.select();
         return;
       }
@@ -3335,6 +3753,13 @@
         document.body.classList.toggle("side-hidden");
         layout();
         render();
+        return;
+      }
+      if (mod && !e.shiftKey && (e.key === "d" || e.key === "D")) {
+        if (S2.meta?.git) {
+          e.preventDefault();
+          toggleDiff();
+        }
         return;
       }
       if (mod && (e.key === "w" || e.key === "W") || e.altKey && e.code === "KeyW") {
@@ -3514,7 +3939,7 @@
     { name: "Go to File…", run: () => openPalette("file") },
     { name: "Go to Symbol in File…", run: () => openPalette("symbol") },
     { name: "Go to Line…", run: () => openPalette("line") },
-    { name: "Search in Files", run: () => showPanel("search") },
+    { name: "Search in Files", run: () => showRightInspector("search") },
     { name: "Find in Current File", run: () => openFind(S2.lastWord) },
     { name: "Go to Definition", run: () => gotoDefinition() },
     { name: "Find All References (Right Panel)", run: () => findReferences() },
@@ -3747,6 +4172,7 @@
   initPalette();
   initShortcuts();
   initMarkdown();
+  initDiff();
   initMetrics();
   initStatusFit();
   (async function boot() {
@@ -3767,6 +4193,11 @@
     S2.meta = await api("/api/meta");
     if (S2.meta.metrics)
       updateMetricsDisplay(S2.meta.metrics);
+    if (S2.meta.git) {
+      const b = $("#btn-changed");
+      if (b)
+        b.hidden = false;
+    }
     document.title = S2.meta.name + " - px0";
     $("#root-name").textContent = S2.meta.name;
     $("#root-name").title = S2.meta.root;
@@ -3777,6 +4208,21 @@
     }
     updateStatus();
     await drawTree("", treeEl, 0);
+    const params = new URLSearchParams(window.location.search);
+    const initialPath = params.get("path");
+    const initialLine = parseInt(params.get("line"), 10) || undefined;
+    if (initialPath) {
+      await openFile(initialPath, { line: initialLine });
+      await revealFile(initialPath);
+      try {
+        const u = new URL(window.location.href);
+        u.searchParams.delete("path");
+        u.searchParams.delete("line");
+        const cleanSearch = u.searchParams.toString();
+        const cleanUrl = u.pathname + (cleanSearch ? "?" + cleanSearch : "") + u.hash;
+        window.history.replaceState({}, "", cleanUrl);
+      } catch {}
+    }
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(() => {
         measure();

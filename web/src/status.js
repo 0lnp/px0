@@ -1,5 +1,6 @@
-import { $, S, doc_, api } from './state.js';
+import { $, S, doc_, api, withKeys } from './state.js';
 import { previewing } from './markdown.js';
+import { layoutPref } from './diff.js';
 
 export function updateStatus() {
   const d = doc_();
@@ -17,6 +18,26 @@ export function updateStatus() {
     sw.hidden = !isMd;
     document.body.classList.toggle('md-tab', isMd);
     for (const b of sw.children) b.classList.toggle('on', isMd && (b.dataset.md === 'preview') === shown);
+  }
+
+  const hasDiff = !!(d && d.diffAvailable);
+  const isDiffOn = !!(d && d.diffMode);
+  const currentLayout = (d && d.diffMode) || layoutPref();
+  const dsw = $('#diff-switch');
+  if (dsw) {
+    dsw.hidden = !hasDiff;
+    document.body.classList.toggle('diff-tab', hasDiff);
+    const btn = $('#diff-btn');
+    if (btn) {
+      btn.classList.toggle('on', hasDiff && isDiffOn);
+      btn.title = withKeys(isDiffOn
+        ? `Diff: active (${d.diffMode === 'unified' ? 'Unified' : 'Split'}) — click to show source ({Mod+D})`
+        : `Diff: off — click to show diff ({Mod+D})`);
+    }
+    const menuItems = dsw.querySelectorAll('.diff-menu-item');
+    for (const item of menuItems) {
+      item.classList.toggle('active', item.dataset.diffOpt === currentLayout);
+    }
   }
 
   const idxEl = $('#st-index');
