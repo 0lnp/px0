@@ -83,7 +83,7 @@
   var toastEl = $("#toast");
   var toastTimer = 0;
   var toastLeaveTimer = 0;
-  function showToast(accentText, text) {
+  function showToast(accentText, text, duration = 2200) {
     if (!toastEl)
       return;
     clearTimeout(toastTimer);
@@ -107,7 +107,7 @@
         toastEl.hidden = true;
         toastEl.classList.remove("toast-hide");
       }, 180);
-    }, 2200);
+    }, duration);
   }
   async function copyToClipboard(text, notify = "Copied to clipboard") {
     try {
@@ -1126,11 +1126,12 @@
     if (listEl)
       listEl.innerHTML = '<div class="hint">Finding references for "' + esc(at.word) + '"…</div>';
     if (canAskServer(at)) {
-      setStatusNote("references to " + at.word + "…");
+      setStatusNote("references to " + at.word + "…", 8000);
       try {
         const j = await lspCall("refs", at, 30000);
         updateStatus();
         if (j && j.hits && j.hits.length) {
+          setStatusNote("");
           renderRightResults(at.word, j.hits, j.server, true);
           return;
         }
@@ -1138,10 +1139,11 @@
         updateStatus();
       }
     }
-    setStatusNote("searching references to " + at.word + "…");
+    setStatusNote("searching references to " + at.word + "…", 8000);
     try {
       const j = await api("/api/search", { q: at.word, word: true, case: true });
       updateStatus();
+      setStatusNote("");
       const hits = [];
       if (j.results) {
         for (const f of j.results) {
@@ -1153,6 +1155,7 @@
       renderRightResults(at.word, hits, "", false);
     } catch (err) {
       updateStatus();
+      setStatusNote("");
       if (listEl)
         listEl.innerHTML = '<div class="hint">Search error: ' + esc(err.message) + "</div>";
     }
@@ -1279,7 +1282,7 @@
     if (!d || !at)
       return;
     if (canAskServer(at)) {
-      setStatusNote("definition of " + at.word + "…");
+      setStatusNote("definition of " + at.word + "…", 8000);
       const j = await lspCall("def", at, S2.lsp.state === "ready" ? 5000 : 20000);
       updateStatus();
       if (j && j.hits && j.hits.length) {
@@ -1292,18 +1295,19 @@
           showHits(at.word, j.hits, j.server, "definition");
       });
     }
-    setStatusNote("searching for " + at.word + "…");
+    setStatusNote("searching for " + at.word + "…", 8000);
     let rx;
     try {
       rx = await api("/api/def", { sym: at.word, path: d.path });
     } catch (e) {
-      setStatusNote(e.message);
+      setStatusNote(e.message, 4000);
       return;
     }
     updateStatus();
     if (rx.lsp)
       setLspState(rx.lsp);
     if (!rx.defs || !rx.defs.length) {
+      setStatusNote("");
       showRightInspector("search");
       const q = $("#q");
       if (q) {
@@ -1327,12 +1331,14 @@
       const h = hits[0];
       openFile(h.path, { line: h.line });
       flashFind(h.mid || word);
-      setStatusNote(server ? server + " · " + h.path + ":" + h.line : h.path + ":" + h.line);
+      setStatusNote(server ? server + " · " + h.path + ":" + h.line : h.path + ":" + h.line, 4000);
       return;
     }
+    setStatusNote("");
     showHits(word, hits, server, noun, refCount);
   }
   function showHits(word, hits, server, noun, refCount) {
+    setStatusNote("");
     const n = hits.length;
     let head = n + " " + noun + (n === 1 ? "" : "s") + ' of "' + word + '"';
     head += server ? "  ·  " + server : "  ·  text match, no language server";
@@ -1826,13 +1832,14 @@
     T = null;
     $("#right-calls-target").textContent = at.word;
     hint('Tracing calls for "' + esc(at.word) + '"…');
-    setStatusNote("call trail for " + at.word + "…");
+    setStatusNote("call trail for " + at.word + "…", 8000);
     let j;
     try {
       j = await api("/api/lsp/calls", { path: d.path, line: at.line, col: at.col, wait: S2.lsp.state === "ready" ? 1e4 : 30000 });
     } catch (e) {
       if (my === seq) {
         updateStatus();
+        setStatusNote("");
         hint('Could not trace "' + esc(at.word) + '": ' + esc(explain(e.message)));
       }
       return;
@@ -1841,6 +1848,7 @@
       return;
     setLspState(j);
     updateStatus();
+    setStatusNote("");
     if (!j.nodes || !j.nodes.length) {
       hint('"' + esc(at.word) + '" is not a function ' + esc(j.server || "the language server") + " can trace.");
       return;
@@ -2601,7 +2609,7 @@
     if (!d)
       return;
     if (!d.diffMode && !d.diffAvailable) {
-      setStatusNote("No diff — clean file or not a git repo");
+      setStatusNote("No diff — clean file or not a git repo", 4000);
       return;
     }
     setDiffMode(d.diffMode ? "source" : layoutPref() || "split");
@@ -2611,7 +2619,7 @@
     if (!d)
       return;
     if (mode !== "source" && !d.diffAvailable) {
-      setStatusNote("No diff — clean file or not a git repo");
+      setStatusNote("No diff — clean file or not a git repo", 4000);
       return;
     }
     if (mode === "source") {
@@ -2637,7 +2645,7 @@
       } catch (e) {
         d.diffText = "";
         d.diffHunks = [];
-        setStatusNote("No diff: " + e.message);
+        setStatusNote("No diff: " + e.message, 4000);
       } finally {
         d.diffReq = null;
       }
@@ -2873,10 +2881,22 @@
     }
     drawLspStatus();
   }
-  function setStatusNote(msg) {
+  var noteTimer = null;
+  function setStatusNote(msg, timeoutMs = 0) {
+    if (noteTimer) {
+      clearTimeout(noteTimer);
+      noteTimer = null;
+    }
     const el = $("#st-pos");
     if (el)
-      el.textContent = msg;
+      el.textContent = msg || "";
+    if (msg && timeoutMs > 0) {
+      noteTimer = setTimeout(() => {
+        if (el && el.textContent === msg)
+          el.textContent = "";
+        noteTimer = null;
+      }, timeoutMs);
+    }
   }
   function fmtBytes(n) {
     if (n < 1024)
@@ -3211,22 +3231,26 @@
     if (menu && !menu.hidden)
       menu.hidden = true;
   }
+  var SEL_MENU_ITEMS = [
+    { sel: "copy-agent", label: "Copy for Agent", keys: "Alt+A" },
+    { sel: "agent-edit", label: "Edit Inline", keys: "Alt+E" },
+    { sel: "usages", label: "Find Usages", keys: "Alt+U" }
+  ];
   function openSelMenu(x, y) {
     menu.replaceChildren();
-    for (const src of bar().querySelectorAll("[data-sel]")) {
-      if (src.hidden)
-        continue;
-      const item = document.createElement("button");
-      item.className = "sel-menu-item";
-      item.dataset.sel = src.dataset.sel;
-      item.setAttribute("role", "menuitem");
+    for (const item of SEL_MENU_ITEMS) {
+      const btn = document.createElement("button");
+      btn.className = "sel-menu-item";
+      btn.dataset.sel = item.sel;
+      btn.setAttribute("role", "menuitem");
       const label = document.createElement("span");
-      label.textContent = src.querySelector(".footer-btn-label").textContent;
-      item.append(label);
-      const kbd = src.querySelector("kbd");
-      if (kbd)
-        item.append(kbd.cloneNode(true));
-      menu.append(item);
+      label.textContent = item.label;
+      btn.append(label);
+      const kbd = document.createElement("kbd");
+      kbd.className = "footer-kbd";
+      kbd.textContent = keyLabel(item.keys);
+      btn.append(kbd);
+      menu.append(btn);
     }
     menu.hidden = false;
     const { offsetWidth: w, offsetHeight: h } = menu;
@@ -3311,7 +3335,7 @@
       try {
         j = await api("/api/file", { path, start: start2, count: CHUNK });
       } catch (e) {
-        setStatusNote(path + ": " + e.message);
+        setStatusNote(path + ": " + e.message, 4000);
         return;
       }
       if (j.image) {
@@ -3436,7 +3460,7 @@
         continue;
       if (res.status !== "fulfilled") {
         if (idx === S2.active) {
-          setStatusNote(tgt.path + ": " + (res.reason?.message || "failed to load"));
+          setStatusNote(tgt.path + ": " + (res.reason?.message || "failed to load"), 4000);
         }
         continue;
       }
@@ -3744,7 +3768,7 @@
     [["Mod+A"], "Select whole file"],
     [["Alt+C", "Alt+A"], "Copy selection ref / for agent"],
     [["Alt+U"], "Find usages of selection"],
-    [["Alt+E"], "Edit selection with a coding harness"],
+    [["Alt+E"], "Edit selection inline"],
     [["Right click"], "Selection actions at the pointer"],
     [["Mod+Home|Mod+Up", "Mod+End|Mod+Down"], "Top / bottom of file"],
     [["Home|Mod+Left", "End|Mod+Right"], "Start / end of line"],
@@ -4297,13 +4321,9 @@
   var installed = () => (S2.meta?.agents || []).filter((h) => h.installed);
   var chosen = () => S2.meta && S2.meta.agent || "";
   var chosenModel = () => S2.meta && S2.meta.agentModel || "";
-  var offerable = () => !!chosen() || installed().length > 0;
   var refOf2 = ({ path, l1, l2 }) => path + ":" + (l1 === l2 ? l1 : l1 + "-" + l2);
   var rangesOverlap = (a, b) => a.path === b.path && a.l1 <= b.l2 && b.l1 <= a.l2;
   function applyAgentMeta() {
-    const btn = $('[data-sel="agent-edit"]');
-    if (btn)
-      btn.hidden = !offerable();
     for (const session of sessions.values()) {
       updateSessionMeta(session);
     }
@@ -4375,7 +4395,7 @@
     box.hidden = sessions.size === 0;
   }
   function openAgentEdit(info) {
-    if (!offerable() || !info)
+    if (!info)
       return;
     for (const s of sessions.values()) {
       if (rangesOverlap(s.target, info)) {
@@ -4388,10 +4408,11 @@
     syncAgentTargets();
     applyAgentMeta();
     syncBoxVisibility();
-    if (chosen())
+    if (chosen() && installed().some((h) => h.name === chosen())) {
       showCompose(session);
-    else
+    } else {
       showPicker(session);
+    }
   }
   function syncAgentTargets() {
     S2.agentTargets = [...sessions.values()].map((s) => ({
@@ -4583,7 +4604,8 @@
     }
     const ready = list.filter((h) => h.installed);
     if (!ready.length) {
-      session.pickEl.innerHTML = '<div class="hint">No coding harness found. Install ' + list.map((h) => "<b>" + esc(h.name) + "</b>").join(", ") + " and make sure it is on PATH.</div>";
+      showToast("!", "Could not find any coding harness like Claude Code, Antigravity, etc. Install one and restart px0.", 6000);
+      session.pickEl.innerHTML = '<div class="hint" style="line-height: 1.5; padding: 4px 2px;">' + "Could not find any coding harness like <b>Claude Code</b>, <b>Antigravity</b> (<code>agy</code>), <b>Gemini CLI</b>, or <b>Cursor Agent</b>.<br><br>" + "Please install a coding harness, make sure it is on your <code>PATH</code>, and restart px0 after that.</div>";
       return;
     }
     session.pickEl.innerHTML = '<div class="hint">This harness will edit files in this workspace.</div>' + optionsHtml(ready, settingsPath);

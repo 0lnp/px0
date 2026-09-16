@@ -58,17 +58,18 @@ export async function showCalls(arg) {
   T = null;
   $('#right-calls-target').textContent = at.word;
   hint('Tracing calls for "' + esc(at.word) + '"…');
-  setStatusNote('call trail for ' + at.word + '…');
+  setStatusNote('call trail for ' + at.word + '…', 8000);
   let j;
   try {
     j = await api('/api/lsp/calls', { path: d.path, line: at.line, col: at.col, wait: S.lsp.state === 'ready' ? 10000 : 30000 });
   } catch (e) {
-    if (my === seq) { updateStatus(); hint('Could not trace "' + esc(at.word) + '": ' + esc(explain(e.message))); }
+    if (my === seq) { updateStatus(); setStatusNote(''); hint('Could not trace "' + esc(at.word) + '": ' + esc(explain(e.message))); }
     return;
   }
   if (my !== seq) return;
   setLspState(j);
   updateStatus();
+  setStatusNote('');
   if (!j.nodes || !j.nodes.length) {
     hint('"' + esc(at.word) + '" is not a function ' + esc(j.server || 'the language server') + ' can trace.');
     return;

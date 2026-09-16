@@ -1,5 +1,5 @@
 // web/src/selbar.js
-import { $, S, doc_ } from './state.js';
+import { $, S, doc_, keyLabel } from './state.js';
 import { vp, copyToClipboard, showToast } from './ui.js';
 import { render } from './renderer.js';
 import { findReferences } from './lsp.js';
@@ -194,21 +194,28 @@ export function closeSelMenu() {
   if (menu && !menu.hidden) menu.hidden = true;
 }
 
-/* Built from the footer's own actions each time. */
+const SEL_MENU_ITEMS = [
+  { sel: 'copy-agent', label: 'Copy for Agent', keys: 'Alt+A' },
+  { sel: 'agent-edit', label: 'Edit Inline', keys: 'Alt+E' },
+  { sel: 'usages', label: 'Find Usages', keys: 'Alt+U' },
+];
+
+/* Built from the selection actions each time, keeping Find Usages in context menu. */
 function openSelMenu(x, y) {
   menu.replaceChildren();
-  for (const src of bar().querySelectorAll('[data-sel]')) {
-    if (src.hidden) continue;
-    const item = document.createElement('button');
-    item.className = 'sel-menu-item';
-    item.dataset.sel = src.dataset.sel;
-    item.setAttribute('role', 'menuitem');
+  for (const item of SEL_MENU_ITEMS) {
+    const btn = document.createElement('button');
+    btn.className = 'sel-menu-item';
+    btn.dataset.sel = item.sel;
+    btn.setAttribute('role', 'menuitem');
     const label = document.createElement('span');
-    label.textContent = src.querySelector('.footer-btn-label').textContent;
-    item.append(label);
-    const kbd = src.querySelector('kbd');
-    if (kbd) item.append(kbd.cloneNode(true));
-    menu.append(item);
+    label.textContent = item.label;
+    btn.append(label);
+    const kbd = document.createElement('kbd');
+    kbd.className = 'footer-kbd';
+    kbd.textContent = keyLabel(item.keys);
+    btn.append(kbd);
+    menu.append(btn);
   }
   menu.hidden = false;
   // Open toward the pointer's bottom-right, flipping at the window's edges.

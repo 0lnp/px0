@@ -53,9 +53,21 @@ export function updateStatus() {
   drawLspStatus();
 }
 
-export function setStatusNote(msg) {
+let noteTimer = null;
+
+export function setStatusNote(msg, timeoutMs = 0) {
+  if (noteTimer) {
+    clearTimeout(noteTimer);
+    noteTimer = null;
+  }
   const el = $('#st-pos');
-  if (el) el.textContent = msg;
+  if (el) el.textContent = msg || '';
+  if (msg && timeoutMs > 0) {
+    noteTimer = setTimeout(() => {
+      if (el && el.textContent === msg) el.textContent = '';
+      noteTimer = null;
+    }, timeoutMs);
+  }
 }
 
 export function fmtBytes(n) {

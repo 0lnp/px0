@@ -10,7 +10,7 @@ export const toastEl = $('#toast');
 let toastTimer = 0;
 let toastLeaveTimer = 0;
 
-export function showToast(accentText, text) {
+export function showToast(accentText, text, duration = 2200) {
   if (!toastEl) return;
   clearTimeout(toastTimer);
   clearTimeout(toastLeaveTimer);
@@ -37,7 +37,7 @@ export function showToast(accentText, text) {
       toastEl.hidden = true;
       toastEl.classList.remove('toast-hide');
     }, 180);
-  }, 2200);
+  }, duration);
 }
 
 export async function copyToClipboard(text, notify = 'Copied to clipboard') {

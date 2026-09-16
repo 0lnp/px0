@@ -85,11 +85,12 @@ export async function inspectReferences(arg) {
   if (listEl) listEl.innerHTML = '<div class="hint">Finding references for "' + esc(at.word) + '"…</div>';
 
   if (canAskServer(at)) {
-    setStatusNote('references to ' + at.word + '…');
+    setStatusNote('references to ' + at.word + '…', 8000);
     try {
       const j = await lspCall('refs', at, 30000);
       updateStatus();
       if (j && j.hits && j.hits.length) {
+        setStatusNote('');
         renderRightResults(at.word, j.hits, j.server, true);
         return;
       }
@@ -99,10 +100,11 @@ export async function inspectReferences(arg) {
   }
 
   // Fallback: search workspace text for whole word
-  setStatusNote('searching references to ' + at.word + '…');
+  setStatusNote('searching references to ' + at.word + '…', 8000);
   try {
     const j = await api('/api/search', { q: at.word, word: true, case: true });
     updateStatus();
+    setStatusNote('');
     const hits = [];
     if (j.results) {
       for (const f of j.results) {
@@ -114,6 +116,7 @@ export async function inspectReferences(arg) {
     renderRightResults(at.word, hits, '', false);
   } catch (err) {
     updateStatus();
+    setStatusNote('');
     if (listEl) listEl.innerHTML = '<div class="hint">Search error: ' + esc(err.message) + '</div>';
   }
 }

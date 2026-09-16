@@ -31,15 +31,10 @@ let seq = 0;
 const installed = () => (S.meta?.agents || []).filter(h => h.installed);
 const chosen = () => (S.meta && S.meta.agent) || '';
 const chosenModel = () => (S.meta && S.meta.agentModel) || '';
-const offerable = () => !!chosen() || installed().length > 0;
 const refOf = ({ path, l1, l2 }) => path + ':' + (l1 === l2 ? l1 : l1 + '-' + l2);
 const rangesOverlap = (a, b) => a.path === b.path && a.l1 <= b.l2 && b.l1 <= a.l2;
 
-/* The button ships hidden: only the workspace metadata knows whether any
-   harness is installed, and that arrives after the modules are wired up. */
 export function applyAgentMeta() {
-  const btn = $('[data-sel="agent-edit"]');
-  if (btn) btn.hidden = !offerable();
   for (const session of sessions.values()) {
     updateSessionMeta(session);
   }
@@ -119,7 +114,7 @@ function syncBoxVisibility() {
 }
 
 export function openAgentEdit(info) {
-  if (!offerable() || !info) return;
+  if (!info) return;
   for (const s of sessions.values()) {
     if (rangesOverlap(s.target, info)) {
       showToast('!', 'Overlaps the edit already open on ' + refOf(s.target));
@@ -131,7 +126,11 @@ export function openAgentEdit(info) {
   syncAgentTargets();
   applyAgentMeta();
   syncBoxVisibility();
-  if (chosen()) showCompose(session); else showPicker(session);
+  if (chosen() && installed().some(h => h.name === chosen())) {
+    showCompose(session);
+  } else {
+    showPicker(session);
+  }
 }
 
 function syncAgentTargets() {
@@ -331,9 +330,10 @@ async function showPicker(session) {
 
   const ready = list.filter(h => h.installed);
   if (!ready.length) {
-    session.pickEl.innerHTML = '<div class="hint">No coding harness found. Install ' +
-      list.map(h => '<b>' + esc(h.name) + '</b>').join(', ') +
-      ' and make sure it is on PATH.</div>';
+    showToast('!', 'Could not find any coding harness like Claude Code, Antigravity, etc. Install one and restart px0.', 6000);
+    session.pickEl.innerHTML = '<div class="hint" style="line-height: 1.5; padding: 4px 2px;">' +
+      'Could not find any coding harness like <b>Claude Code</b>, <b>Antigravity</b> (<code>agy</code>), <b>Gemini CLI</b>, or <b>Cursor Agent</b>.<br><br>' +
+      'Please install a coding harness, make sure it is on your <code>PATH</code>, and restart px0 after that.</div>';
     return;
   }
 
