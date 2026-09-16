@@ -1412,41 +1412,135 @@
     else if (x > vp.scrollLeft + vp.clientWidth - 24)
       vp.scrollLeft = x - vp.clientWidth + 60;
   }
-  function moveCol(delta) {
+  function updateDomSelection() {
     const d = doc_();
     if (!d)
       return;
+    const sel = window.getSelection();
+    if (!sel)
+      return;
+    if (!d.selAnchor) {
+      if (sel.rangeCount && !sel.isCollapsed && vp.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+        sel.removeAllRanges();
+      }
+      return;
+    }
+    const pa = toPoint(d.selAnchor);
+    const headCol = d.col === Infinity ? rowFor(d.cur) ? $(".c", rowFor(d.cur)).textContent.length : 0 : d.col || 0;
+    const pf = toPoint({ line: d.cur, col: headCol });
+    if (pa && pf) {
+      sel.setBaseAndExtent(pa[0], pa[1], pf[0], pf[1]);
+    }
+  }
+  function ensureAnchor(d) {
+    if (!d.selAnchor) {
+      const col = d.col === Infinity ? rowFor(d.cur) ? $(".c", rowFor(d.cur)).textContent.length : 0 : d.col || 0;
+      d.selAnchor = { line: d.cur, col };
+    }
+  }
+  function moveCol(delta, shift = false) {
+    const d = doc_();
+    if (!d)
+      return;
+    if (shift)
+      ensureAnchor(d);
+    else
+      d.selAnchor = null;
     const row = rowFor(d.cur);
     const len = row ? $(".c", row).textContent.length : 0;
     const col = Math.min(d.col || 0, len) + delta;
     if (col < 0) {
       if (d.cur > 1) {
         d.col = Infinity;
-        moveCursor(-1);
-      }
+        moveCursor(-1, shift);
+      } else
+        updateDomSelection();
       return;
     }
     if (col > len) {
       if (d.cur < d.total) {
         d.col = 0;
-        moveCursor(1);
-      }
+        moveCursor(1, shift);
+      } else
+        updateDomSelection();
       return;
     }
     d.col = col;
     revealCaretX(placeCaret());
+    updateDomSelection();
   }
-  function caretToEdge(end) {
+  function moveWord(delta, shift = false) {
     const d = doc_();
     if (!d)
       return;
+    if (shift)
+      ensureAnchor(d);
+    else
+      d.selAnchor = null;
+    const row = rowFor(d.cur);
+    const text = row ? $(".c", row).textContent : "";
+    const len = text.length;
+    let col = Math.min(d.col === Infinity ? len : d.col || 0, len);
+    if (delta < 0) {
+      if (col === 0) {
+        if (d.cur > 1) {
+          d.col = Infinity;
+          moveCursor(-1, shift);
+        }
+        return;
+      }
+      col--;
+      while (col > 0 && /\s/.test(text[col]))
+        col--;
+      if (WORD.test(text[col])) {
+        while (col > 0 && WORD.test(text[col - 1]))
+          col--;
+      } else {
+        while (col > 0 && !WORD.test(text[col - 1]) && !/\s/.test(text[col - 1]))
+          col--;
+      }
+    } else {
+      if (col >= len) {
+        if (d.cur < d.total) {
+          d.col = 0;
+          moveCursor(1, shift);
+        }
+        return;
+      }
+      if (WORD.test(text[col])) {
+        while (col < len && WORD.test(text[col]))
+          col++;
+      } else if (!/\s/.test(text[col])) {
+        while (col < len && !WORD.test(text[col]) && !/\s/.test(text[col]))
+          col++;
+      }
+      while (col < len && /\s/.test(text[col]))
+        col++;
+    }
+    d.col = col;
+    revealCaretX(placeCaret());
+    updateDomSelection();
+  }
+  function caretToEdge(end, shift = false) {
+    const d = doc_();
+    if (!d)
+      return;
+    if (shift)
+      ensureAnchor(d);
+    else
+      d.selAnchor = null;
     d.col = end ? Infinity : 0;
     revealCaretX(placeCaret());
+    updateDomSelection();
   }
-  function moveCursor(delta) {
+  function moveCursor(delta, shift = false) {
     const d = doc_();
     if (!d)
       return;
+    if (shift)
+      ensureAnchor(d);
+    else
+      d.selAnchor = null;
     d.cur = Math.max(1, Math.min(d.total, d.cur + delta));
     const y = (d.cur - 1) * LH;
     if (y < vp.scrollTop)
@@ -1455,6 +1549,7 @@
       vp.scrollTop = y - vp.clientHeight + LH * 3;
     render();
     updateStatus();
+    updateDomSelection();
   }
   function initCursor() {
     vp.addEventListener("mousedown", (e) => {
@@ -1464,9 +1559,23 @@
       const d = doc_();
       if (!d)
         return;
-      d.cur = +row.dataset.l;
+      const targetLine = +row.dataset.l;
       const p = colAtPoint(e.clientX, e.clientY);
-      d.col = p && p.line === d.cur ? p.col : 0;
+      const targetCol = p && p.line === targetLine ? p.col : 0;
+      if (e.shiftKey) {
+        ensureAnchor(d);
+        d.cur = targetLine;
+        d.col = targetCol;
+        placeCaret();
+        updateStatus();
+        updateDomSelection();
+        for (const r of rowsEl.children)
+          r.classList.toggle("cur", +r.dataset.l === d.cur);
+        return;
+      }
+      d.selAnchor = null;
+      d.cur = targetLine;
+      d.col = targetCol;
       placeCaret();
       updateStatus();
       const w = wordAtPoint(e.clientX, e.clientY);
@@ -2952,10 +3061,7 @@
       if (e.shiftKey)
         setTimeout(updateSelectionBar, 20);
     });
-    document.addEventListener("selectionchange", () => {
-      if (current)
-        updateSelectionBar();
-    });
+    document.addEventListener("selectionchange", () => updateSelectionBar());
     document.addEventListener("mousedown", (e) => {
       if (!S2.selAll || e.target.closest?.("#footer-sel"))
         return;
@@ -3672,14 +3778,21 @@
         render();
         updateStatus();
       };
+      const shift = e.shiftKey;
       if (mod && e.key === "Home") {
         e.preventDefault();
-        toTop();
+        if (shift)
+          caretToEdge(false, true);
+        else
+          toTop();
         return;
       }
       if (mod && e.key === "End") {
         e.preventDefault();
-        toBottom();
+        if (shift)
+          caretToEdge(true, true);
+        else
+          toBottom();
         return;
       }
       if (isMac && mod && e.key === "ArrowUp") {
@@ -3694,42 +3807,52 @@
       }
       if (isMac && mod && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
         e.preventDefault();
-        caretToEdge(e.key === "ArrowRight");
+        caretToEdge(e.key === "ArrowRight", shift);
         return;
       }
-      if (e.key === "ArrowDown" || e.key === "j") {
+      if (mod && !isMac && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
         e.preventDefault();
-        moveCursor(1);
+        moveWord(e.key === "ArrowRight" ? 1 : -1, shift);
         return;
       }
-      if (e.key === "ArrowUp" || e.key === "k") {
+      if (isMac && e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
         e.preventDefault();
-        moveCursor(-1);
+        moveWord(e.key === "ArrowRight" ? 1 : -1, shift);
+        return;
+      }
+      if (!mod && (e.key === "ArrowDown" || e.key === "j")) {
+        e.preventDefault();
+        moveCursor(1, shift);
+        return;
+      }
+      if (!mod && (e.key === "ArrowUp" || e.key === "k")) {
+        e.preventDefault();
+        moveCursor(-1, shift);
         return;
       }
       if (!mod && !e.altKey && e.key === "ArrowLeft") {
         e.preventDefault();
-        moveCol(-1);
+        moveCol(-1, shift);
         return;
       }
       if (!mod && !e.altKey && e.key === "ArrowRight") {
         e.preventDefault();
-        moveCol(1);
+        moveCol(1, shift);
         return;
       }
       if (!mod && (e.key === "Home" || e.key === "End")) {
         e.preventDefault();
-        caretToEdge(e.key === "End");
+        caretToEdge(e.key === "End", shift);
         return;
       }
       if (e.key === "PageDown") {
         e.preventDefault();
-        moveCursor(Math.floor(vp.clientHeight / LH) - 2);
+        moveCursor(Math.floor(vp.clientHeight / LH) - 2, shift);
         return;
       }
       if (e.key === "PageUp") {
         e.preventDefault();
-        moveCursor(-(Math.floor(vp.clientHeight / LH) - 2));
+        moveCursor(-(Math.floor(vp.clientHeight / LH) - 2), shift);
         return;
       }
     }, { capture: true });
@@ -3996,9 +4119,8 @@
     target2 = info;
     refEl.textContent = refOf2(info);
     refEl.title = refOf2(info);
-    if (hintEl) {
-      hintEl.textContent = info.fromDiff ? "Editing uncommitted changes · Enter to send" : "Enter to send, Esc to cancel";
-    }
+    setBusy(false);
+    resetHint();
     input.value = "";
     box.hidden = false;
     if (chosen())
@@ -4007,8 +4129,24 @@
       showPicker();
   }
   function closeAgentEdit() {
+    if (timer)
+      return;
     box.hidden = true;
+    setBusy(false);
     target2 = null;
+  }
+  function resetHint() {
+    if (!hintEl)
+      return;
+    hintEl.textContent = target2?.fromDiff ? "Editing uncommitted changes · Enter to send" : "Enter to send, Esc to cancel";
+  }
+  function setBusy(busy, msg) {
+    box.classList.toggle("busy", busy);
+    input.disabled = busy;
+    sendBtn.disabled = busy;
+    harnessBtn.disabled = busy || !!(S2.meta && S2.meta.agentPinned);
+    if (hintEl && msg)
+      hintEl.textContent = msg;
   }
   function showCompose() {
     pickEl.hidden = true;
@@ -4063,6 +4201,8 @@
     showCompose();
   }
   async function submit() {
+    if (timer)
+      return;
     const instruction = input.value.trim();
     if (!instruction || !target2)
       return;
@@ -4085,9 +4225,10 @@ Run the edit anyway?`)) {
         return;
       }
     }
-    closeAgentEdit();
     hideSelectionBar();
-    setStatusNote("Editing with " + chosen() + "...");
+    const initialNote = "Editing with " + chosen() + "...";
+    setBusy(true, initialNote);
+    setStatusNote(initialNote);
     timer = setTimeout(tick, 400);
   }
   async function tick() {
@@ -4096,12 +4237,16 @@ Run the edit anyway?`)) {
       j = await api("/api/agent/job");
     } catch (e) {
       timer = null;
+      setBusy(false);
+      resetHint();
       setStatusNote("");
       showToast("!", e.message);
       return;
     }
     if (j.running) {
-      setStatusNote("Editing with " + j.harness + "... " + Math.round((j.ms || 0) / 1000) + "s");
+      const note = "Editing with " + j.harness + "... " + Math.round((j.ms || 0) / 1000) + "s";
+      setBusy(true, note);
+      setStatusNote(note);
       timer = setTimeout(tick, 600);
       return;
     }
@@ -4110,17 +4255,27 @@ Run the edit anyway?`)) {
   }
   async function finish(j) {
     setStatusNote("");
-    if (j.error)
+    const editTarget = target2;
+    if (j.error) {
+      setBusy(false);
+      resetHint();
       showToast("!", (j.harness || "agent") + ": " + j.error);
+      return;
+    }
+    box.hidden = true;
+    setBusy(false);
+    target2 = null;
     const changed = j.changed || [];
     if (!changed.length && j.tracked !== false) {
-      if (!j.error)
-        showToast("✓", "Finished with no file changes");
+      showToast("✓", "Finished with no file changes");
       return;
     }
     try {
       await api("/api/reindex");
       await reloadOpenTabs();
+      if (editTarget?.path) {
+        await openFile(editTarget.path, { line: editTarget.l1, push: false });
+      }
       await drawTree("", treeEl, 0);
     } catch (e) {
       showToast("!", "Edited, but the reload failed: " + e.message);
@@ -4142,7 +4297,7 @@ Run the edit anyway?`)) {
       if (e.key === "Escape") {
         e.preventDefault();
         closeAgentEdit();
-      } else if (e.key === "Enter" && !e.shiftKey && !composeEl.hidden) {
+      } else if (e.key === "Enter" && !e.shiftKey && !composeEl.hidden && !timer) {
         e.preventDefault();
         submit();
       }

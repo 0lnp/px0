@@ -175,7 +175,7 @@ export function initSelectionBar() {
      is released outside the viewport. */
   document.addEventListener('mouseup', () => setTimeout(updateSelectionBar, 20));
   vp.addEventListener('keyup', e => { if (e.shiftKey) setTimeout(updateSelectionBar, 20); });
-  document.addEventListener('selectionchange', () => { if (current) updateSelectionBar(); });
+  document.addEventListener('selectionchange', () => updateSelectionBar());
   // Any click ends a whole-file selection, except on the bar's buttons or a viewport scrollbar.
   document.addEventListener('mousedown', e => {
     if (!S.selAll || e.target.closest?.('#footer-sel')) return;

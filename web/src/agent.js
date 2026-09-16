@@ -2,7 +2,7 @@
 import { $, esc, S, api, apiPost } from './state.js';
 import { showToast } from './ui.js';
 import { setStatusNote } from './status.js';
-import { reloadOpenTabs } from './tabs.js';
+import { openFile, reloadOpenTabs } from './tabs.js';
 import { drawTree, treeEl } from './tree.js';
 import { setAgentHandler, hideSelectionBar } from './selbar.js';
 
@@ -52,11 +52,8 @@ export function openAgentEdit(info) {
   target = info;
   refEl.textContent = refOf(info);
   refEl.title = refOf(info);
-  if (hintEl) {
-    hintEl.textContent = info.fromDiff
-      ? 'Editing uncommitted changes · Enter to send'
-      : 'Enter to send, Esc to cancel';
-  }
+  setBusy(false);
+  resetHint();
   input.value = '';
   box.hidden = false;
   // Nothing runs until a harness has been picked at least once.
@@ -64,8 +61,25 @@ export function openAgentEdit(info) {
 }
 
 export function closeAgentEdit() {
+  if (timer) return; // Do not dismiss box while edit is in flight
   box.hidden = true;
+  setBusy(false);
   target = null;
+}
+
+function resetHint() {
+  if (!hintEl) return;
+  hintEl.textContent = target?.fromDiff
+    ? 'Editing uncommitted changes · Enter to send'
+    : 'Enter to send, Esc to cancel';
+}
+
+function setBusy(busy, msg) {
+  box.classList.toggle('busy', busy);
+  input.disabled = busy;
+  sendBtn.disabled = busy;
+  harnessBtn.disabled = busy || !!(S.meta && S.meta.agentPinned);
+  if (hintEl && msg) hintEl.textContent = msg;
 }
 
 function showCompose() {
@@ -132,6 +146,7 @@ async function pick(name) {
 }
 
 async function submit() {
+  if (timer) return;
   const instruction = input.value.trim();
   if (!instruction || !target) return;
   const params = { path: target.path, l1: target.l1, l2: target.l2, instruction };
@@ -157,9 +172,10 @@ async function submit() {
     }
   }
 
-  closeAgentEdit();
   hideSelectionBar();
-  setStatusNote('Editing with ' + chosen() + '...');
+  const initialNote = 'Editing with ' + chosen() + '...';
+  setBusy(true, initialNote);
+  setStatusNote(initialNote);
   timer = setTimeout(tick, 400);
 }
 
@@ -169,13 +185,17 @@ async function tick() {
     j = await api('/api/agent/job');
   } catch (e) {
     timer = null;
+    setBusy(false);
+    resetHint();
     setStatusNote('');
     showToast('!', e.message);
     return;
   }
 
   if (j.running) {
-    setStatusNote('Editing with ' + j.harness + '... ' + Math.round((j.ms || 0) / 1000) + 's');
+    const note = 'Editing with ' + j.harness + '... ' + Math.round((j.ms || 0) / 1000) + 's';
+    setBusy(true, note);
+    setStatusNote(note);
     timer = setTimeout(tick, 600);
     return;
   }
@@ -186,13 +206,24 @@ async function tick() {
 
 async function finish(j) {
   setStatusNote('');
-  if (j.error) showToast('!', (j.harness || 'agent') + ': ' + j.error);
+  const editTarget = target;
+  if (j.error) {
+    setBusy(false);
+    resetHint();
+    showToast('!', (j.harness || 'agent') + ': ' + j.error);
+    return;
+  }
+
+  /* Close the agent compose box on completion */
+  box.hidden = true;
+  setBusy(false);
+  target = null;
 
   /* Without git px0 cannot tell what the harness touched, so an empty list
      means "unknown" rather than "nothing" and everything is reloaded. */
   const changed = j.changed || [];
   if (!changed.length && j.tracked !== false) {
-    if (!j.error) showToast('✓', 'Finished with no file changes');
+    showToast('✓', 'Finished with no file changes');
     return;
   }
 
@@ -202,6 +233,9 @@ async function finish(j) {
   try {
     await api('/api/reindex');
     await reloadOpenTabs();
+    if (editTarget?.path) {
+      await openFile(editTarget.path, { line: editTarget.l1, push: false });
+    }
     await drawTree('', treeEl, 0);
   } catch (e) {
     showToast('!', 'Edited, but the reload failed: ' + e.message);
@@ -229,7 +263,7 @@ export function initAgent() {
     if (e.key === 'Escape') {
       e.preventDefault();
       closeAgentEdit();
-    } else if (e.key === 'Enter' && !e.shiftKey && !composeEl.hidden) {
+    } else if (e.key === 'Enter' && !e.shiftKey && !composeEl.hidden && !timer) {
       e.preventDefault();
       submit();
     }
