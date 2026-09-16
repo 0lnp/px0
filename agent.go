@@ -14,11 +14,12 @@ import (
 	"time"
 )
 
-// Editing through a coding harness. px0 still never writes a source file
-// itself: it composes an instruction anchored to a line range, hands it to a
-// harness already installed on this machine, and reloads whatever moved once
-// that harness exits. The harness edits; px0 stays the reader that knows
-// exactly when to look again.
+// Editing through a coding harness. px0 never authors a change itself: it
+// composes an instruction anchored to a line range, hands it to a harness
+// already installed on this machine, and reloads whatever moved once that
+// harness exits. The harness edits; px0 stays the reader that knows exactly
+// when to look again. The one write px0 makes is putting back what a harness
+// changed, when asked to undo it (agent_undo.go).
 //
 // Harnesses are discovered the same way language servers are, and the one to
 // use is chosen in the UI. Discovery alone never enables editing: running a
@@ -62,15 +63,22 @@ type agentJob struct {
 	Running bool     `json:"running"`
 	Error   string   `json:"error,omitempty"`
 	Log     string   `json:"log"`
+	Stdout  string   `json:"stdout,omitempty"`
+	Stderr  string   `json:"stderr,omitempty"`
 	Changed []string `json:"changed"`
 	Ms      int64    `json:"ms"`
+	// Undoable says the changes can still be reversed through /api/agent/undo.
+	// UndoNote says why not when the run changed files but no undo is possible.
+	Undoable bool   `json:"undoable"`
+	UndoNote string `json:"undoNote,omitempty"`
 	// Tracked is false outside a git repository, where px0 cannot tell which
 	// files a harness touched. An empty Changed then means "unknown", not
 	// "nothing", and the client reloads regardless.
 	Tracked bool `json:"tracked"`
 
-	out   *tailBuffer
-	start time.Time
+	out    *tailBuffer
+	stderr *tailBuffer
+	start  time.Time
 }
 
 var (
@@ -92,6 +100,7 @@ type agentManager struct {
 	args     []string // resolved argv, nil when nothing is selected
 	pinned   bool     // -agent was given, so the UI cannot change it
 	job      *agentJob
+	undo     *agentUndo // reverses the last job's changes, nil once used or unavailable
 	cancel   context.CancelFunc
 	seq      int64
 }
@@ -221,11 +230,13 @@ func (m *agentManager) Select(name string) error {
 
 	display, args, err := resolveAgentSpec(name)
 	if err != nil {
+		uiStatus("err", fmt.Sprintf("agent: failed to select harness %q", name), err.Error(), 0, os.Stdout)
 		return err
 	}
 	m.mu.Lock()
 	m.selected, m.args = display, args
 	m.mu.Unlock()
+	uiStatus("ok", fmt.Sprintf("agent: selected harness %s", display), strings.Join(args, " "), 0, os.Stdout)
 	// Persist the spec as given, not the display name: a command template
 	// shortens to its binary for display and would not survive the round trip.
 	return writeSettings(settings{Agent: name})
@@ -243,6 +254,10 @@ func (m *agentManager) Job() *agentJob {
 	}
 	cp := *m.job
 	cp.Log = m.job.out.String()
+	cp.Stdout = cp.Log
+	if m.job.stderr != nil {
+		cp.Stderr = m.job.stderr.String()
+	}
 	if cp.Running {
 		cp.Ms = time.Since(m.job.start).Milliseconds()
 	}
@@ -260,22 +275,25 @@ func (m *agentManager) Start(abs, rel string, l1, l2 int, instruction string, fo
 	m.mu.Lock()
 	if m.args == nil {
 		m.mu.Unlock()
+		uiStatus("err", "agent: edit dispatch refused", "no coding harness selected", 0, os.Stdout)
 		return nil, errAgentNone
 	}
 	if m.job != nil && m.job.Running {
 		m.mu.Unlock()
+		uiStatus("warn", "agent: edit dispatch refused", "an edit is already running", 0, os.Stdout)
 		return nil, errAgentBusy
 	}
 	args := m.args
 	name := m.selected
 	m.mu.Unlock()
 
-	// The harness rewrites the file in place and px0 has no undo of its own:
-	// git is the undo. Editing on top of changes that were never committed
-	// puts them out of reach, so that needs saying once before it happens.
+	// The harness rewrites the file in place. px0 can undo the last edit, but
+	// only that one: a later edit replaces the copy, and then uncommitted work
+	// is out of reach. That needs saying once before it happens.
 	if !force && gitAvailable(m.root) {
 		if st := gitStatus(m.root); st != nil {
 			if _, dirty := st[rel]; dirty {
+				uiStatus("warn", fmt.Sprintf("agent: edit refused on uncommitted file %s", rel), "use force to override", 0, os.Stdout)
 				return nil, fmt.Errorf("%s has %w changes that this edit would write over", rel, errAgentDirty)
 			}
 		}
@@ -283,11 +301,13 @@ func (m *agentManager) Start(abs, rel string, l1, l2 int, instruction string, fo
 
 	snippet, err := readLineRange(abs, l1, l2)
 	if err != nil {
+		uiStatus("err", fmt.Sprintf("agent: failed reading snippet for %s:%s", rel, lineRef(l1, l2)), err.Error(), 0, os.Stdout)
 		return nil, err
 	}
 
 	m.mu.Lock()
 	m.seq++
+	m.undo = nil // a new run makes the previous plan unsafe to apply
 	job := &agentJob{
 		ID:      m.seq,
 		Harness: name,
@@ -297,11 +317,13 @@ func (m *agentManager) Start(abs, rel string, l1, l2 int, instruction string, fo
 		Changed: []string{},
 		Tracked: gitAvailable(m.root),
 		out:     &tailBuffer{max: agentLogBytes},
+		stderr:  &tailBuffer{max: agentLogBytes},
 		start:   time.Now(),
 	}
 	m.job = job
 	m.mu.Unlock()
 
+	uiStatus("step", fmt.Sprintf("agent: dispatching edit with %s", name), fmt.Sprintf("%s:%s %q", rel, lineRef(l1, l2), instruction), 0, os.Stdout)
 	go m.run(job, args, agentPrompt(rel, l1, l2, snippet, instruction))
 	return m.Job(), nil
 }
@@ -313,7 +335,7 @@ func (m *agentManager) run(job *agentJob, template []string, prompt string) {
 	m.mu.Unlock()
 	defer cancel()
 
-	before := gitStatus(m.root)
+	pre := capturePreEdit(m.root)
 
 	args := make([]string, len(template))
 	for i, tok := range template {
@@ -322,7 +344,8 @@ func (m *agentManager) run(job *agentJob, template []string, prompt string) {
 
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Dir = m.root
-	cmd.Stdout, cmd.Stderr = job.out, job.out
+	cmd.Stdout = job.out
+	cmd.Stderr = job.stderr
 	// stdin stays empty: a harness that still wants to ask something fails
 	// fast instead of hanging until the timeout with nothing on screen.
 
@@ -331,17 +354,44 @@ func (m *agentManager) run(job *agentJob, template []string, prompt string) {
 		err = fmt.Errorf("gave up after %s", agentTimeout)
 	}
 
-	changed := changedSince(m.root, before)
+	changed := changedSince(m.root, pre.status)
 	m.settle(changed)
+	// Planned even for a failed run: whatever it wrote before failing still counts.
+	var undo *agentUndo
+	undoNote := ""
+	if len(changed) > 0 {
+		undo, undoNote = planUndo(m.root, pre, changed)
+	}
 
 	m.mu.Lock()
 	job.Running = false
 	job.Changed = changed
 	job.Ms = time.Since(job.start).Milliseconds()
+	m.undo = undo
+	job.Undoable = undo != nil
+	job.UndoNote = undoNote
 	if err != nil {
 		job.Error = err.Error()
 	}
+	stdoutOutput := job.out.String()
+	stderrOutput := job.stderr.String()
 	m.mu.Unlock()
+
+	if err != nil {
+		uiStatus("err", fmt.Sprintf("agent: harness %s failed (%dms)", job.Harness, job.Ms), err.Error(), 0, os.Stdout)
+		if trimmedErr := strings.TrimSpace(stderrOutput); trimmedErr != "" {
+			fmt.Fprintf(os.Stdout, "  %s %s\n", uiDim("harness stderr:", os.Stdout), trimmedErr)
+		}
+		if trimmedOut := strings.TrimSpace(stdoutOutput); trimmedOut != "" {
+			fmt.Fprintf(os.Stdout, "  %s %s\n", uiDim("harness stdout:", os.Stdout), trimmedOut)
+		}
+	} else {
+		summary := fmt.Sprintf("%d file(s) changed", len(changed))
+		if len(changed) > 0 {
+			summary += ": " + strings.Join(changed, ", ")
+		}
+		uiStatus("ok", fmt.Sprintf("agent: harness %s finished (%dms)", job.Harness, job.Ms), summary, 0, os.Stdout)
+	}
 }
 
 // settle drops every trace of the old bytes. Open memoises on path+mtime+size
@@ -370,17 +420,32 @@ func (m *agentManager) Cancel() bool {
 	if m.job == nil || !m.job.Running || m.cancel == nil {
 		return false
 	}
+	uiStatus("warn", fmt.Sprintf("agent: cancelling in-flight run with %s", m.job.Harness), fmt.Sprintf("job %d", m.job.ID), 0, os.Stdout)
 	m.cancel()
 	return true
 }
 
 func (m *agentManager) Close() { m.Cancel() }
 
-// changedSince reports the paths whose git status differs from the snapshot
-// taken before the run. Asking git is the only honest answer to "what did it
-// touch": a harness routinely edits files nobody pointed it at.
+// changedSince reports the paths whose state differs from the snapshot taken
+// before the run. Asking git is the only honest answer to "what did it touch":
+// a harness routinely edits files nobody pointed it at.
 func changedSince(root string, before map[string]string) []string {
-	return changedSinceMaps(before, gitStatus(root))
+	return changedSinceMaps(before, worktreeSnapshot(root))
+}
+
+// worktreeSnapshot is git status with each listed file's size and mtime folded
+// into its entry. Status alone misses the common case of editing a file that is
+// already modified: it reads "M" before and after, so the edit would go unseen.
+// Files git lists as clean are left out, and those still surface through status.
+func worktreeSnapshot(root string) map[string]string {
+	st := gitStatus(root)
+	for rel, code := range st {
+		if fi, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err == nil {
+			st[rel] = code + " " + strconv.FormatInt(fi.Size(), 10) + " " + strconv.FormatInt(fi.ModTime().UnixNano(), 10)
+		}
+	}
+	return st
 }
 
 // changedSinceMaps compares two status snapshots in both directions. Outside a

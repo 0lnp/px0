@@ -352,6 +352,108 @@ func TestAgentRefusesUncommittedFileUntilForced(t *testing.T) {
 	}
 }
 
+// Editing in the diff view means editing a file that is already modified. Its
+// git status reads M before and after, so the change has to be seen some other way.
+func TestAgentReportsEditToAlreadyModifiedFile(t *testing.T) {
+	if !gitInstalled() {
+		t.Skip("git not installed")
+	}
+	root := gitRepo(t)
+	s := agentServer(t, root, writeHarness(t, "printf 'touched\\n' >> sub/mod.go\n"))
+
+	if code, _ := agentPost(t, s, "/api/agent/edit?path=sub/mod.go&l1=1&l2=1&instruction=hi&force=1"); code != 200 {
+		t.Fatalf("edit = %d, want 200", code)
+	}
+	job := waitIdle(t, s)
+	if job.Error != "" {
+		t.Fatalf("harness failed: %s", job.Error)
+	}
+	if len(job.Changed) != 1 || job.Changed[0] != "sub/mod.go" {
+		t.Fatalf("changed = %v, want [sub/mod.go]", job.Changed)
+	}
+}
+
+// Undo puts back each kind of path a run can touch: a clean file from HEAD, an
+// already-modified file from the copy taken before the run, and a new file or
+// directory by removing it.
+func TestAgentUndoRestoresEveryKindOfChange(t *testing.T) {
+	if !gitInstalled() {
+		t.Skip("git not installed")
+	}
+	root := gitRepo(t)
+	s := agentServer(t, root, writeHarness(t, strings.Join([]string{
+		"printf 'x\\n' >> keep.go",
+		"printf 'x\\n' >> sub/mod.go",
+		"printf 'new\\n' > fresh.go",
+		"mkdir -p newdir && printf 'n\\n' > newdir/f.go",
+		"rm untr.go",
+	}, "\n")+"\n"))
+
+	read := func(rel string) string {
+		b, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			return "<missing>"
+		}
+		return string(b)
+	}
+	exists := func(rel string) bool { _, err := os.Stat(filepath.Join(root, rel)); return err == nil }
+
+	if code, _ := agentPost(t, s, "/api/agent/undo"); code != http.StatusNotFound {
+		t.Fatalf("undo before any edit = %d, want 404", code)
+	}
+	if code, _ := agentPost(t, s, "/api/agent/edit?path=keep.go&l1=1&l2=1&instruction=hi"); code != 200 {
+		t.Fatalf("edit = %d, want 200", code)
+	}
+	job := waitIdle(t, s)
+	if job.Error != "" || !job.Undoable {
+		t.Fatalf("job error=%q undoable=%v note=%q", job.Error, job.Undoable, job.UndoNote)
+	}
+
+	code, body := agentPost(t, s, "/api/agent/undo")
+	if code != 200 {
+		t.Fatalf("undo = %d %v", code, body)
+	}
+	if got := read("keep.go"); got != "keep\n" {
+		t.Fatalf("keep.go = %q, want the committed content", got)
+	}
+	if got := read("sub/mod.go"); got != "line two\n" {
+		t.Fatalf("sub/mod.go = %q, want the uncommitted content from before the run", got)
+	}
+	if got := read("untr.go"); got != "untracked\n" {
+		t.Fatalf("untr.go = %q, want it restored", got)
+	}
+	if exists("fresh.go") || exists("newdir") {
+		t.Fatal("files the run created should be removed")
+	}
+	if code, _ := agentPost(t, s, "/api/agent/undo"); code != http.StatusNotFound {
+		t.Fatalf("second undo = %d, want 404", code)
+	}
+}
+
+// Undo never overwrites work done after the edit unless told to.
+func TestAgentUndoRefusesWhenChangedSince(t *testing.T) {
+	if !gitInstalled() {
+		t.Skip("git not installed")
+	}
+	root := gitRepo(t)
+	s := agentServer(t, root, writeHarness(t, "printf 'x\\n' >> keep.go\n"))
+	agentPost(t, s, "/api/agent/edit?path=keep.go&l1=1&l2=1&instruction=hi")
+	waitIdle(t, s)
+
+	if err := os.WriteFile(filepath.Join(root, "keep.go"), []byte("mine, written after\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := agentPost(t, s, "/api/agent/undo"); code != http.StatusConflict {
+		t.Fatalf("undo over later work = %d, want 409", code)
+	}
+	if code, _ := agentPost(t, s, "/api/agent/undo?force=1"); code != 200 {
+		t.Fatalf("forced undo = %d, want 200", code)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "keep.go")); string(b) != "keep\n" {
+		t.Fatalf("keep.go = %q after forced undo", b)
+	}
+}
+
 func TestAgentMutationsRejectCrossOriginPost(t *testing.T) {
 	if !gitInstalled() {
 		t.Skip("git not installed")
@@ -363,6 +465,7 @@ func TestAgentMutationsRejectCrossOriginPost(t *testing.T) {
 		"/api/agent/edit?path=keep.go&l1=1&l2=1&instruction=hi",
 		"/api/agent/select?name=claude",
 		"/api/agent/cancel",
+		"/api/agent/undo",
 	} {
 		req := httptest.NewRequest(http.MethodPost, path, nil)
 		req.Host = "127.0.0.1:7777"

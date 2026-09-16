@@ -82,6 +82,7 @@ func NewServer(ix *Index, lsp *lspManager) *Server {
 	s.mux.HandleFunc("/api/agent/edit", s.handleAgentEdit)
 	s.mux.HandleFunc("/api/agent/job", s.handleAgentJob)
 	s.mux.HandleFunc("/api/agent/cancel", s.handleAgentCancel)
+	s.mux.HandleFunc("/api/agent/undo", s.handleAgentUndo)
 	s.lastReq.Store(time.Now().UnixNano())
 	go s.scavenge()
 	return s

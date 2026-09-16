@@ -60,23 +60,38 @@ export function getSelectedRangeInfo() {
   return { text, l1, l2, path: d.path };
 }
 
-/* A diff selection is anchored to the working-tree line numbers stamped on the
-   rows that have one. Deleted lines belong to HEAD and carry none, so a
-   selection covering only those has nothing on disk to point at and is ignored.
-   The text is gathered from the code cells alone, leaving out the line-number
-   and +/- gutters a raw selection would otherwise sweep up. */
+/* A diff selection is anchored to the working-tree lines stamped on its rows,
+   on either side of a split. A selection of deleted lines alone has nothing on
+   disk, so it is anchored to the lines either side of where they were. The text
+   is gathered from the code cells alone, leaving out the line-number and +/-
+   gutters a raw selection would otherwise sweep up, and a context line showing
+   on both sides of a split is taken once. */
 function diffSelection(range, d) {
-  let l1 = Infinity, l2 = -Infinity;
+  let l1 = Infinity, l2 = -Infinity, at1 = Infinity, at2 = -Infinity;
   const parts = [];
-  for (const el of diffview.querySelectorAll('[data-l]')) {
+  const seen = new Set();
+  for (const el of diffview.querySelectorAll('[data-l], [data-at]')) {
     if (!range.intersectsNode(el)) continue;
-    const n = +el.dataset.l;
-    if (n < l1) l1 = n;
-    if (n > l2) l2 = n;
     const code = el.querySelector('.diff-code');
+    if (el.dataset.l !== undefined) {
+      const n = +el.dataset.l;
+      if (n < l1) l1 = n;
+      if (n > l2) l2 = n;
+      if (seen.has(n)) continue;
+      seen.add(n);
+    } else {
+      const n = +el.dataset.at;
+      if (n < at1) at1 = n;
+      if (n > at2) at2 = n;
+    }
     parts.push(code ? code.textContent : '');
   }
   if (!parts.length) return null;
+  if (l1 === Infinity) {
+    const last = Math.max(1, d.total || 1);
+    l1 = Math.min(last, Math.max(1, at1 - 1));
+    l2 = Math.max(l1, Math.min(last, at2));
+  }
   const text = parts.join('\n').trim();
   if (!text) return null;
   return { text, l1, l2, path: d.path, fromDiff: true };
@@ -96,6 +111,7 @@ function showSelectionBar(info) {
 }
 
 export function hideSelectionBar() {
+  closeSelMenu();
   if (!current) return;
   current = null;
   status.classList.remove('selecting');
@@ -168,6 +184,40 @@ export function runSelectionAction(act) {
   return true;
 }
 
+/* ---------- context menu: the same actions, next to the pointer ---------- */
+
+const menu = $('#sel-menu');
+
+export function closeSelMenu() {
+  if (menu && !menu.hidden) menu.hidden = true;
+}
+
+/* Built from the footer's own buttons each time, so the two can never disagree
+   about which actions exist or whether Edit with Agent is on offer. */
+function openSelMenu(x, y) {
+  menu.replaceChildren();
+  for (const src of bar().querySelectorAll('[data-sel]')) {
+    if (src.hidden) continue;
+    const item = document.createElement('button');
+    item.className = 'sel-menu-item';
+    item.dataset.sel = src.dataset.sel;
+    item.setAttribute('role', 'menuitem');
+    const label = document.createElement('span');
+    label.textContent = src.querySelector('.footer-btn-label').textContent;
+    item.append(label);
+    const kbd = src.querySelector('kbd');
+    if (kbd) item.append(kbd.cloneNode(true));
+    menu.append(item);
+  }
+  menu.hidden = false;
+  // Open toward the pointer's bottom-right, flipping at the window's edges.
+  const w = menu.offsetWidth, h = menu.offsetHeight;
+  menu.style.left = Math.max(4, x + w > innerWidth - 4 ? x - w : x) + 'px';
+  menu.style.top = Math.max(4, y + h > innerHeight - 4 ? y - h : y) + 'px';
+}
+
+const bar = () => $('#footer-sel');
+
 export function initSelectionBar() {
   /* Enter only once the gesture is over: swapping the footer mid-drag flickers.
      Once showing, follow the selection as it changes, and leave when it collapses
@@ -178,16 +228,41 @@ export function initSelectionBar() {
   document.addEventListener('selectionchange', () => updateSelectionBar());
   // Any click ends a whole-file selection, except on the bar's buttons or a viewport scrollbar.
   document.addEventListener('mousedown', e => {
-    if (!S.selAll || e.target.closest?.('#footer-sel')) return;
+    // A right click opens the menu for the selection, so it must not end it.
+    if (!S.selAll || e.button === 2 || e.target.closest?.('#footer-sel, #sel-menu')) return;
     if (e.target === vp && (e.offsetX >= vp.clientWidth || e.offsetY >= vp.clientHeight)) return;
     clearSelectAll();
   }, true);
 
-  const bar = $('#footer-sel');
   // Pressing a button must not clear the selection it is about to act on.
-  bar.addEventListener('mousedown', e => e.preventDefault());
-  bar.addEventListener('click', e => {
-    const btn = e.target.closest('[data-sel]');
-    if (btn) runSelectionAction(btn.dataset.sel);
+  for (const el of [bar(), menu]) {
+    if (!el) continue;
+    el.addEventListener('mousedown', e => e.preventDefault());
+    el.addEventListener('click', e => {
+      const btn = e.target.closest('[data-sel]');
+      if (!btn) return;
+      closeSelMenu();
+      runSelectionAction(btn.dataset.sel);
+    });
+  }
+  if (!menu) return;
+
+  /* Only a right click on a selection is taken over. Anywhere else the browser
+     keeps its own menu, which is what a right click on plain code expects. */
+  document.addEventListener('contextmenu', e => {
+    if (menu.contains(e.target)) { e.preventDefault(); return; }
+    const inCode = vp.contains(e.target) || (diffview && !diffview.hidden && diffview.contains(e.target));
+    if (!inCode) { closeSelMenu(); return; }
+    updateSelectionBar();
+    if (!current) { closeSelMenu(); return; }
+    e.preventDefault();
+    openSelMenu(e.clientX, e.clientY);
   });
+  document.addEventListener('mousedown', e => {
+    if (!menu.hidden && !menu.contains(e.target)) closeSelMenu();
+  }, true);
+  addEventListener('keydown', e => { if (e.key === 'Escape') closeSelMenu(); });
+  addEventListener('resize', closeSelMenu);
+  addEventListener('blur', closeSelMenu);
+  document.addEventListener('scroll', closeSelMenu, true);
 }
