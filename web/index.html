@@ -131,6 +131,25 @@
         <button id="find-next" title="Next ({Enter})">&#8595;</button>
         <button id="find-close" title="Close ({Esc})">&#10005;</button>
       </div>
+
+      <!-- Instruction composer: what the harness is asked to change, and where -->
+      <div id="agentbox" hidden>
+        <div class="agent-head">
+          <span class="sel-chip">Edit</span>
+          <span id="agent-ref"></span>
+          <span class="grow"></span>
+          <button id="agent-harness" title="Change the coding harness"></button>
+        </div>
+        <!-- Shown until a harness has been picked, and whenever one is changed -->
+        <div id="agent-pick" hidden></div>
+        <div id="agent-compose">
+          <textarea id="agent-input" rows="3" spellcheck="false" autocomplete="off" placeholder="What should change here?"></textarea>
+          <div class="agent-foot">
+            <span class="agent-hint">Enter to send, Esc to cancel</span>
+            <button id="agent-send">Send</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Floating Copy Toast Notification -->
@@ -145,6 +164,7 @@
         <span class="status-sep"></span>
         <button class="footer-btn" data-sel="copy-ref" title="Copy file and line reference ({Alt+C})"><span class="footer-btn-label">Copy Ref</span><kbd class="footer-kbd" data-keys="Alt+C"></kbd></button>
         <button class="footer-btn" data-sel="copy-agent" title="Copy snippet with file path for an AI agent ({Alt+A})"><span class="footer-btn-label">Copy for Agent</span><kbd class="footer-kbd" data-keys="Alt+A"></kbd></button>
+        <button class="footer-btn" data-sel="agent-edit" title="Edit this selection with a coding harness ({Alt+E})" hidden><span class="footer-btn-label">Edit with Agent</span><kbd class="footer-kbd" data-keys="Alt+E"></kbd></button>
         <button class="footer-btn" data-sel="usages" title="Find usages across the workspace ({Alt+U})"><span class="footer-btn-label">Find Usages</span><kbd class="footer-kbd" data-keys="Alt+U"></kbd></button>
       </div>
       <div id="footer-actions">

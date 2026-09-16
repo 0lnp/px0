@@ -11,9 +11,17 @@ import { fitStatus } from './status.js';
 
 const status = $('#status');
 const statsEl = $('#sel-stats');
+// Queried rather than imported from diff.js, to keep the modules independent.
+const diffview = $('#diffview');
 
 // e.code, not e.key: Option+letter types a symbol on macOS.
-export const SEL_KEYS = { KeyC: 'copy-ref', KeyA: 'copy-agent', KeyU: 'usages' };
+export const SEL_KEYS = { KeyC: 'copy-ref', KeyA: 'copy-agent', KeyU: 'usages', KeyE: 'agent-edit' };
+
+/* Editing lives in agent.js, which registers itself here on load. Keeping the
+   dependency one-way means selbar imports nothing back and the two never form
+   a cycle; the button simply does nothing when no harness is configured. */
+let agentHandler = null;
+export function setAgentHandler(fn) { agentHandler = fn; }
 
 let current = null;   // the selection the bar is showing, or null when it is not
 let allText = null;   // Ctrl+A: promise of the S.selAll file's full text
@@ -27,6 +35,9 @@ export function getSelectedRangeInfo() {
   if (!d) return null;
 
   const range = sel.getRangeAt(0);
+  if (diffview && !diffview.hidden && diffview.contains(range.commonAncestorContainer)) {
+    return diffSelection(range, d);
+  }
   if (!vp.contains(range.commonAncestorContainer)) return null;
 
   const text = sel.toString().trim();
@@ -47,6 +58,28 @@ export function getSelectedRangeInfo() {
   if (l1 > l2) { const tmp = l1; l1 = l2; l2 = tmp; }
 
   return { text, l1, l2, path: d.path };
+}
+
+/* A diff selection is anchored to the working-tree line numbers stamped on the
+   rows that have one. Deleted lines belong to HEAD and carry none, so a
+   selection covering only those has nothing on disk to point at and is ignored.
+   The text is gathered from the code cells alone, leaving out the line-number
+   and +/- gutters a raw selection would otherwise sweep up. */
+function diffSelection(range, d) {
+  let l1 = Infinity, l2 = -Infinity;
+  const parts = [];
+  for (const el of diffview.querySelectorAll('[data-l]')) {
+    if (!range.intersectsNode(el)) continue;
+    const n = +el.dataset.l;
+    if (n < l1) l1 = n;
+    if (n > l2) l2 = n;
+    const code = el.querySelector('.diff-code');
+    parts.push(code ? code.textContent : '');
+  }
+  if (!parts.length) return null;
+  const text = parts.join('\n').trim();
+  if (!text) return null;
+  return { text, l1, l2, path: d.path, fromDiff: true };
 }
 
 const refOf = ({ path, l1, l2 }) => path + ':' + (l1 === l2 ? l1 : l1 + '-' + l2);
@@ -124,6 +157,9 @@ export function runSelectionAction(act) {
   } else if (act === 'copy-agent') {
     const ext = path.split('.').pop() || '';
     copyToClipboard('### Reference: ' + ref + '\n```' + ext + '\n' + text + '\n```', 'Copied snippet for Agent (' + ref + ')');
+  } else if (act === 'agent-edit') {
+    if (!agentHandler) return false;
+    agentHandler(current);
   } else if (act === 'usages') {
     findReferences(text.split(/\s+/)[0] || text);
   } else {

@@ -68,6 +68,7 @@ The internal documentation is modularized into the following focused guides:
 - [Windowed Syntax Highlighting](syntax-highlighting.md): Solving Chroma lexer bottlenecks with viewport-based windowing (`hlChunk = 1000`), byte-capping (`512 KB`), dual-tier tokenization (instant inexact window + background exact pass), and byte-budgeted LRU caching.
 - [Language Server Protocol (LSP) Architecture](lsp-and-intelligence.md): Lazy on-demand server lifecycle, zero-cost background binary discovery, external path boundary control, stateless call hierarchy trails, in-app installer recipes, and regex fallback.
 - [Git Awareness & Diffing](git-integration.md): Read-only CLI shell-out architecture, concurrent status generation with indexing, ancestor folder dirty propagation, gutter diff parsing, and the client-side split/unified diff renderer.
+- [Harness Editing & Agent Dispatch](agent-editing.md): The optional `-agent` flow. Dispatcher model, headless invocation contract for Claude Code / Gemini CLI / Cursor Agent, single-flight and uncommitted-work guards, git-based change detection, and the cache, language-server and tab reload path.
 
 ### Frontend & UI Subsystems
 

@@ -2557,6 +2557,8 @@
     for (const row of hunk.rows) {
       const r = document.createElement("div");
       r.className = "diff-row diff-" + row.type;
+      if (row.newLine !== undefined)
+        r.dataset.l = row.newLine;
       r.append(lineCell(row.type === "add" ? "" : row.oldLine), lineCell(row.type === "del" ? "" : row.newLine), markerCell(row.type), codeCell(row.text));
       table.append(r);
     }
@@ -2602,6 +2604,8 @@
       return el;
     }
     const ln = side === "left" ? row.oldLine : row.newLine;
+    if (side === "right" && row.newLine !== undefined)
+      el.dataset.l = row.newLine;
     el.append(lineCell(ln), markerCell(row.type), codeCell(row.text));
     return el;
   }
@@ -2786,7 +2790,12 @@
   // web/src/selbar.js
   var status = $("#status");
   var statsEl = $("#sel-stats");
-  var SEL_KEYS = { KeyC: "copy-ref", KeyA: "copy-agent", KeyU: "usages" };
+  var diffview2 = $("#diffview");
+  var SEL_KEYS = { KeyC: "copy-ref", KeyA: "copy-agent", KeyU: "usages", KeyE: "agent-edit" };
+  var agentHandler = null;
+  function setAgentHandler(fn) {
+    agentHandler = fn;
+  }
   var current = null;
   var allText = null;
   var allInfo = null;
@@ -2800,6 +2809,9 @@
     if (!d)
       return null;
     const range = sel.getRangeAt(0);
+    if (diffview2 && !diffview2.hidden && diffview2.contains(range.commonAncestorContainer)) {
+      return diffSelection(range, d);
+    }
     if (!vp.contains(range.commonAncestorContainer))
       return null;
     const text = sel.toString().trim();
@@ -2824,6 +2836,28 @@
       l2 = tmp;
     }
     return { text, l1, l2, path: d.path };
+  }
+  function diffSelection(range, d) {
+    let l1 = Infinity, l2 = -Infinity;
+    const parts = [];
+    for (const el of diffview2.querySelectorAll("[data-l]")) {
+      if (!range.intersectsNode(el))
+        continue;
+      const n = +el.dataset.l;
+      if (n < l1)
+        l1 = n;
+      if (n > l2)
+        l2 = n;
+      const code = el.querySelector(".diff-code");
+      parts.push(code ? code.textContent : "");
+    }
+    if (!parts.length)
+      return null;
+    const text = parts.join(`
+`).trim();
+    if (!text)
+      return null;
+    return { text, l1, l2, path: d.path, fromDiff: true };
   }
   var refOf = ({ path, l1, l2 }) => path + ":" + (l1 === l2 ? l1 : l1 + "-" + l2);
   function showSelectionBar(info) {
@@ -2901,6 +2935,10 @@
       const ext = path.split(".").pop() || "";
       copyToClipboard("### Reference: " + ref + "\n```" + ext + `
 ` + text + "\n```", "Copied snippet for Agent (" + ref + ")");
+    } else if (act === "agent-edit") {
+      if (!agentHandler)
+        return false;
+      agentHandler(current);
     } else if (act === "usages") {
       findReferences(text.split(/\s+/)[0] || text);
     } else {
@@ -3388,6 +3426,7 @@
     [["Mod+A"], "Select whole file"],
     [["Alt+C", "Alt+A"], "Copy selection ref / for agent"],
     [["Alt+U"], "Find usages of selection"],
+    [["Alt+E"], "Edit selection with a coding harness"],
     [["Mod+Home|Mod+Up", "Mod+End|Mod+Down"], "Top / bottom of file"],
     [["Home|Mod+Left", "End|Mod+Right"], "Start / end of line"],
     [["Left", "Right"], "Move caret along the line"],
@@ -3922,6 +3961,194 @@
     });
   }
 
+  // web/src/agent.js
+  var box = $("#agentbox");
+  var input = $("#agent-input");
+  var refEl = $("#agent-ref");
+  var harnessBtn = $("#agent-harness");
+  var pickEl = $("#agent-pick");
+  var composeEl = $("#agent-compose");
+  var sendBtn = $("#agent-send");
+  var hintEl = $(".agent-hint");
+  var target2 = null;
+  var timer = null;
+  var installed = () => (S2.meta?.agents || []).filter((h) => h.installed);
+  var chosen = () => S2.meta && S2.meta.agent || "";
+  var offerable = () => !!chosen() || installed().length > 0;
+  var refOf2 = ({ path, l1, l2 }) => path + ":" + (l1 === l2 ? l1 : l1 + "-" + l2);
+  function applyAgentMeta() {
+    const btn = $('[data-sel="agent-edit"]');
+    if (btn)
+      btn.hidden = !offerable();
+    if (harnessBtn) {
+      harnessBtn.textContent = chosen() || "choose harness";
+      harnessBtn.disabled = !!(S2.meta && S2.meta.agentPinned);
+      harnessBtn.title = S2.meta && S2.meta.agentPinned ? "Fixed for this run by -agent" : "Change the coding harness";
+    }
+  }
+  function openAgentEdit(info) {
+    if (!offerable() || !info)
+      return;
+    if (timer) {
+      showToast("!", "An edit is already running");
+      return;
+    }
+    target2 = info;
+    refEl.textContent = refOf2(info);
+    refEl.title = refOf2(info);
+    if (hintEl) {
+      hintEl.textContent = info.fromDiff ? "Editing uncommitted changes · Enter to send" : "Enter to send, Esc to cancel";
+    }
+    input.value = "";
+    box.hidden = false;
+    if (chosen())
+      showCompose();
+    else
+      showPicker();
+  }
+  function closeAgentEdit() {
+    box.hidden = true;
+    target2 = null;
+  }
+  function showCompose() {
+    pickEl.hidden = true;
+    composeEl.hidden = false;
+    input.focus();
+  }
+  async function showPicker() {
+    composeEl.hidden = true;
+    pickEl.hidden = false;
+    pickEl.innerHTML = '<div class="hint">Looking for coding harnesses…</div>';
+    let list = S2.meta?.agents || [];
+    let settingsPath = "";
+    try {
+      const j = await api("/api/agent/harnesses");
+      list = j.harnesses || [];
+      settingsPath = j.settings || "";
+      S2.meta.agents = list;
+      S2.meta.agent = j.selected || "";
+      S2.meta.agentPinned = !!j.pinned;
+    } catch (e) {
+      pickEl.innerHTML = '<div class="hint">Could not look for harnesses: ' + esc(e.message) + "</div>";
+      return;
+    }
+    const ready = list.filter((h) => h.installed);
+    if (!ready.length) {
+      pickEl.innerHTML = '<div class="hint">No coding harness found. Install ' + list.map((h) => "<b>" + esc(h.name) + "</b>").join(", ") + " and make sure it is on PATH.</div>";
+      return;
+    }
+    let html = '<div class="hint">This harness will edit files in this workspace.</div>';
+    for (const h of ready) {
+      html += '<button class="agent-opt' + (h.name === chosen() ? " on" : "") + '" data-pick="' + esc(h.name) + '">' + '<span class="agent-opt-name">' + esc(h.name) + "</span>" + '<code class="agent-opt-cmd">' + esc(h.cmd) + "</code></button>";
+    }
+    if (settingsPath)
+      html += '<div class="agent-note">Remembered in ' + esc(settingsPath) + "</div>";
+    pickEl.innerHTML = html;
+    pickEl.querySelectorAll("[data-pick]").forEach((b) => {
+      b.addEventListener("click", () => pick(b.dataset.pick));
+    });
+  }
+  async function pick(name) {
+    try {
+      const j = await apiPost("/api/agent/select", { name });
+      S2.meta.agent = j.selected || "";
+      S2.meta.agents = j.harnesses || S2.meta.agents;
+      S2.meta.agentPinned = !!j.pinned;
+    } catch (e) {
+      showToast("!", e.message);
+      return;
+    }
+    applyAgentMeta();
+    showToast("✓", "Edits will run through " + name);
+    showCompose();
+  }
+  async function submit() {
+    const instruction = input.value.trim();
+    if (!instruction || !target2)
+      return;
+    const params = { path: target2.path, l1: target2.l1, l2: target2.l2, instruction };
+    if (target2.fromDiff)
+      params.force = 1;
+    try {
+      await apiPost("/api/agent/edit", params);
+    } catch (e) {
+      if (!/uncommitted/.test(e.message) || !confirm(e.message + `
+
+Run the edit anyway?`)) {
+        showToast("!", e.message);
+        return;
+      }
+      try {
+        await apiPost("/api/agent/edit", { ...params, force: 1 });
+      } catch (e2) {
+        showToast("!", e2.message);
+        return;
+      }
+    }
+    closeAgentEdit();
+    hideSelectionBar();
+    setStatusNote("Editing with " + chosen() + "...");
+    timer = setTimeout(tick, 400);
+  }
+  async function tick() {
+    let j;
+    try {
+      j = await api("/api/agent/job");
+    } catch (e) {
+      timer = null;
+      setStatusNote("");
+      showToast("!", e.message);
+      return;
+    }
+    if (j.running) {
+      setStatusNote("Editing with " + j.harness + "... " + Math.round((j.ms || 0) / 1000) + "s");
+      timer = setTimeout(tick, 600);
+      return;
+    }
+    timer = null;
+    await finish(j);
+  }
+  async function finish(j) {
+    setStatusNote("");
+    if (j.error)
+      showToast("!", (j.harness || "agent") + ": " + j.error);
+    const changed = j.changed || [];
+    if (!changed.length && j.tracked !== false) {
+      if (!j.error)
+        showToast("✓", "Finished with no file changes");
+      return;
+    }
+    try {
+      await api("/api/reindex");
+      await reloadOpenTabs();
+      await drawTree("", treeEl, 0);
+    } catch (e) {
+      showToast("!", "Edited, but the reload failed: " + e.message);
+      return;
+    }
+    showToast("✓", !changed.length ? "Reloaded the workspace" : changed.length === 1 ? "Updated " + changed[0] : "Updated " + changed.length + " files");
+  }
+  function initAgent() {
+    if (!box)
+      return;
+    setAgentHandler(openAgentEdit);
+    sendBtn.addEventListener("click", submit);
+    harnessBtn.addEventListener("click", () => {
+      if (!harnessBtn.disabled)
+        showPicker();
+    });
+    box.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeAgentEdit();
+      } else if (e.key === "Enter" && !e.shiftKey && !composeEl.hidden) {
+        e.preventDefault();
+        submit();
+      }
+    });
+  }
+
   // web/src/main.js
   initRenderer();
   initTabs();
@@ -3939,6 +4166,7 @@
   initShortcuts();
   initMarkdown();
   initDiff();
+  initAgent();
   initMetrics();
   initStatusFit();
   (async function boot() {
@@ -3964,6 +4192,7 @@
       if (b)
         b.hidden = false;
     }
+    applyAgentMeta();
     document.title = S2.meta.name + " - px0";
     $("#root-name").textContent = S2.meta.name;
     $("#root-name").title = S2.meta.root;
@@ -3997,16 +4226,16 @@
       });
     }
     if (S2.meta && !S2.meta.ready) {
-      const timer = setInterval(async () => {
+      const timer2 = setInterval(async () => {
         try {
           const m = await api("/api/meta");
           if (m.ready) {
-            clearInterval(timer);
+            clearInterval(timer2);
             S2.meta = m;
             updateStatus();
           }
         } catch {
-          clearInterval(timer);
+          clearInterval(timer2);
         }
       }, 150);
     }

@@ -152,6 +152,9 @@ function unifiedTable(hunk) {
   for (const row of hunk.rows) {
     const r = document.createElement('div');
     r.className = 'diff-row diff-' + row.type;
+    // Only a line that exists in the working tree can anchor an edit: a
+    // deletion belongs to HEAD and has no line on disk to point at.
+    if (row.newLine !== undefined) r.dataset.l = row.newLine;
     r.append(
       lineCell(row.type === 'add' ? '' : row.oldLine),
       lineCell(row.type === 'del' ? '' : row.newLine),
@@ -200,6 +203,8 @@ function splitSide(row, side) {
   el.className = 'diff-side diff-side-' + side + (row ? ' diff-' + row.type : ' diff-blank');
   if (!row) { el.append(lineCell(''), markerCell(''), codeCell('')); return el; }
   const ln = side === 'left' ? row.oldLine : row.newLine;
+  // The right side is the working tree, so only it can anchor an edit.
+  if (side === 'right' && row.newLine !== undefined) el.dataset.l = row.newLine;
   el.append(lineCell(ln), markerCell(row.type), codeCell(row.text));
   return el;
 }
