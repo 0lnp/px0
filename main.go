@@ -111,9 +111,6 @@ func main() {
 	uiHeading("px0 "+version, nil, os.Stdout)
 	uiKV("workspace", root, 11, os.Stdout)
 	uiKV("url", uiAccent(url, os.Stdout), 11, os.Stdout)
-	if n := agent.Name(); n != "" {
-		uiKV("agent", n+" (edits this workspace)", 11, os.Stdout)
-	}
 	uiHint("ctrl-c to stop", os.Stdout)
 
 	// Launch browser immediately without blocking startup.
@@ -128,6 +125,21 @@ func main() {
 		uiStatus("ok", fmt.Sprintf("indexed %d files", n), fmt.Sprintf("%dms", ms), 0, os.Stdout)
 		if names := lsp.Available(); len(names) > 0 {
 			uiBullet(fmt.Sprintf("language servers: %s (started on first use)", strings.Join(names, ", ")), os.Stdout)
+		}
+		if agent != nil {
+			var found []string
+			for _, h := range agent.Detect() {
+				if h.Installed {
+					item := h.Name
+					if h.Model != "" {
+						item = fmt.Sprintf("%s (%s)", h.Name, h.Model)
+					}
+					found = append(found, item)
+				}
+			}
+			if len(found) > 0 {
+				uiStatus("info", uiInfo("coding harnesses: "+strings.Join(found, ", "), os.Stdout), "", 0, os.Stdout)
+			}
 		}
 
 		tel.Track("session_started", map[string]any{
@@ -150,7 +162,7 @@ func main() {
 		<-stop
 		interrupted = true
 		fmt.Print("\r")
-		uiStatus("warn", "interrupted", "", 0, os.Stderr)
+		uiStatus("info", "px0 stopped", "", 0, os.Stderr)
 		go func() {
 			<-stop // Second interrupt forces immediate exit
 			os.Exit(130)

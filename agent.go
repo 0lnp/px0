@@ -568,9 +568,9 @@ func (m *agentManager) Select(name string, modelOpt ...string) error {
 
 	modelNote := ""
 	if chosenModel != "" {
-		modelNote = fmt.Sprintf(" (model: %s)", chosenModel)
+		modelNote = fmt.Sprintf(" (%s)", chosenModel)
 	}
-	uiStatus("ok", fmt.Sprintf("agent: selected harness %s%s", display, modelNote), strings.Join(args, " "), 0, os.Stdout)
+	uiStatus("ok", "agent", fmt.Sprintf("%s%s", display, modelNote), 0, os.Stdout)
 	// Persist the spec as given, not the display name: a command template
 	// shortens to its binary for display and would not survive the round trip.
 	return writeSettings(settings{Agent: name, Models: savedModels})
@@ -643,12 +643,12 @@ func (m *agentManager) Start(abs, rel string, l1, l2 int, instruction string, fo
 	m.mu.Lock()
 	if m.args == nil {
 		m.mu.Unlock()
-		uiStatus("err", "agent: edit dispatch refused", "no coding harness selected", 0, os.Stdout)
+		uiStatus("err", "agent", "edit dispatch refused: no coding harness selected", 0, os.Stdout)
 		return nil, errAgentNone
 	}
 	if m.overlapLocked(rel, l1, l2) {
 		m.mu.Unlock()
-		uiStatus("warn", "agent: edit dispatch refused", "an edit is already running on an overlapping range", 0, os.Stdout)
+		uiStatus("warn", "agent", "edit dispatch refused: overlapping edit already running", 0, os.Stdout)
 		return nil, errAgentBusy
 	}
 	args := m.args
@@ -657,7 +657,7 @@ func (m *agentManager) Start(abs, rel string, l1, l2 int, instruction string, fo
 
 	snippet, err := readLineRange(abs, l1, l2)
 	if err != nil {
-		uiStatus("err", fmt.Sprintf("agent: failed reading snippet for %s:%s", rel, lineRef(l1, l2)), err.Error(), 0, os.Stdout)
+		uiStatus("err", "agent", fmt.Sprintf("failed reading snippet for %s:%s: %s", rel, lineRef(l1, l2), err.Error()), 0, os.Stdout)
 		return nil, err
 	}
 
@@ -666,7 +666,7 @@ func (m *agentManager) Start(abs, rel string, l1, l2 int, instruction string, fo
 	// above and here, while this one was reading the file and git status.
 	if m.overlapLocked(rel, l1, l2) {
 		m.mu.Unlock()
-		uiStatus("warn", "agent: edit dispatch refused", "an edit is already running on an overlapping range", 0, os.Stdout)
+		uiStatus("warn", "agent", "edit dispatch refused: overlapping edit already running", 0, os.Stdout)
 		return nil, errAgentBusy
 	}
 	m.seq++
@@ -692,7 +692,11 @@ func (m *agentManager) Start(abs, rel string, l1, l2 int, instruction string, fo
 	m.jobs[job.ID] = job
 	m.mu.Unlock()
 
-	uiStatus("step", fmt.Sprintf("agent: dispatching edit with %s", name), fmt.Sprintf("%s:%s %q", rel, lineRef(l1, l2), instruction), 0, os.Stdout)
+	modelStr := ""
+	if m.models != nil && m.models[name] != "" {
+		modelStr = fmt.Sprintf(" (%s)", m.models[name])
+	}
+	uiStatus("step", "agent", fmt.Sprintf("%s%s · %s:%s  %q", name, modelStr, rel, lineRef(l1, l2), instruction), 0, os.Stdout)
 	go m.run(ctx, cancel, job, args, agentPrompt(rel, l1, l2, snippet, instruction))
 	return m.Job(job.ID), nil
 }
@@ -707,10 +711,8 @@ func (m *agentManager) run(ctx context.Context, cancel context.CancelFunc, job *
 		args[i] = strings.ReplaceAll(tok, "{prompt}", prompt)
 	}
 
-	uiCommand(shellCommand(args), os.Stdout)
-
-	stdoutStreamer := newLineStreamer(job.out, uiDim(fmt.Sprintf("[%s]", job.Harness), os.Stdout), os.Stdout)
-	stderrStreamer := newLineStreamer(job.stderr, uiDim(fmt.Sprintf("[%s err]", job.Harness), os.Stdout), os.Stdout)
+	stdoutStreamer := newLineStreamer(job.out, uiFaint("│", os.Stdout), os.Stdout)
+	stderrStreamer := newLineStreamer(job.stderr, uiDim("│", os.Stdout), os.Stdout)
 
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Dir = m.root
@@ -740,8 +742,9 @@ func (m *agentManager) run(ctx context.Context, cancel context.CancelFunc, job *
 	stderrOutput := job.stderr.String()
 	m.mu.Unlock()
 
+	durStr := fmtDuration(time.Duration(job.Ms) * time.Millisecond)
 	if err != nil {
-		uiStatus("err", fmt.Sprintf("agent: harness %s failed (%dms)", job.Harness, job.Ms), err.Error(), 0, os.Stdout)
+		uiStatus("err", "agent", fmt.Sprintf("%s failed in %s: %s", job.Harness, durStr, err.Error()), 0, os.Stdout)
 		if trimmedErr := strings.TrimSpace(stderrOutput); trimmedErr != "" {
 			uiKV("harness stderr", trimmedErr, 0, os.Stdout)
 		}
@@ -749,11 +752,16 @@ func (m *agentManager) run(ctx context.Context, cancel context.CancelFunc, job *
 			uiKV("harness stdout", trimmedOut, 0, os.Stdout)
 		}
 	} else {
-		summary := fmt.Sprintf("%d file(s) changed", len(changed))
-		if len(changed) > 0 {
-			summary += ": " + strings.Join(changed, ", ")
+		var summary string
+		switch len(changed) {
+		case 0:
+			summary = "no files changed"
+		case 1:
+			summary = fmt.Sprintf("1 file changed: %s", changed[0])
+		default:
+			summary = fmt.Sprintf("%d files changed: %s", len(changed), strings.Join(changed, ", "))
 		}
-		uiStatus("ok", fmt.Sprintf("agent: harness %s finished (%dms)", job.Harness, job.Ms), summary, 0, os.Stdout)
+		uiStatus("ok", "agent", fmt.Sprintf("%s · %s  (%s)", job.Harness, durStr, summary), 0, os.Stdout)
 		if len(changed) == 0 && job.Tracked {
 			if trimmedErr := strings.TrimSpace(stderrOutput); trimmedErr != "" {
 				uiKV("harness stderr", trimmedErr, 0, os.Stdout)
@@ -795,7 +803,7 @@ func (m *agentManager) CancelJob(id int64) bool {
 	if id != 0 {
 		j := m.jobs[id]
 		if j != nil && j.Running && j.cancel != nil {
-			uiStatus("warn", fmt.Sprintf("agent: cancelling in-flight run with %s", j.Harness), fmt.Sprintf("job %d", j.ID), 0, os.Stdout)
+			uiStatus("warn", "agent", fmt.Sprintf("cancelled in-flight run with %s (job %d)", j.Harness, j.ID), 0, os.Stdout)
 			j.cancel()
 			return true
 		}
@@ -806,7 +814,7 @@ func (m *agentManager) CancelJob(id int64) bool {
 		if !j.Running || j.cancel == nil {
 			continue
 		}
-		uiStatus("warn", fmt.Sprintf("agent: cancelling in-flight run with %s", j.Harness), fmt.Sprintf("job %d", j.ID), 0, os.Stdout)
+		uiStatus("warn", "agent", fmt.Sprintf("cancelled in-flight run with %s (job %d)", j.Harness, j.ID), 0, os.Stdout)
 		j.cancel()
 		cancelled = true
 	}
