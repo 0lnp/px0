@@ -13,7 +13,7 @@ import { renderLspSetup, cancelLspSetup } from './lspsetup.js';
 
 let T = null;       // { path, word, dir, roots: [node] }
 let dirPref = 'in'; // 'in' = callers, 'out' = callees
-let seq = 0;
+let callSeq = 0;
 const flat = [];    // node by row index, rebuilt on every draw
 
 const listEl = () => $('#right-calls-list');
@@ -54,7 +54,7 @@ export async function showCalls(arg) {
   }
   if (!at || at.imprecise) { hint('Click a function name in the editor, then press <b>' + esc(keyLabel('Alt+Shift+H')) + '</b>.'); return; }
 
-  const my = ++seq;
+  const my = ++callSeq;
   T = null;
   $('#right-calls-target').textContent = at.word;
   hint('Tracing calls for "' + esc(at.word) + '"…');
@@ -63,10 +63,10 @@ export async function showCalls(arg) {
   try {
     j = await api('/api/lsp/calls', { path: d.path, line: at.line, col: at.col, wait: S.lsp.state === 'ready' ? 10000 : 30000 });
   } catch (e) {
-    if (my === seq) { updateStatus(); setStatusNote(''); hint('Could not trace "' + esc(at.word) + '": ' + esc(explain(e.message))); }
+    if (my === callSeq) { updateStatus(); setStatusNote(''); hint('Could not trace "' + esc(at.word) + '": ' + esc(explain(e.message))); }
     return;
   }
-  if (my !== seq) return;
+  if (my !== callSeq) return;
   setLspState(j);
   updateStatus();
   setStatusNote('');

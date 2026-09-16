@@ -12,7 +12,7 @@ import { fitStatus } from './status.js';
 const status = $('#status');
 const statsEl = $('#sel-stats');
 // Queried rather than imported from diff.js, to keep the modules independent.
-const diffview = $('#diffview');
+const diffviewEl = $('#diffview');
 
 // e.code, not e.key: Option+letter types a symbol on macOS.
 export const SEL_KEYS = { KeyC: 'copy-ref', KeyA: 'copy-agent', KeyU: 'usages', KeyE: 'agent-edit' };
@@ -35,7 +35,7 @@ export function getSelectedRangeInfo() {
   if (!d) return null;
 
   const range = sel.getRangeAt(0);
-  if (diffview && !diffview.hidden && diffview.contains(range.commonAncestorContainer)) {
+  if (diffviewEl && !diffviewEl.hidden && diffviewEl.contains(range.commonAncestorContainer)) {
     return diffSelection(range, d);
   }
   if (!vp.contains(range.commonAncestorContainer)) return null;
@@ -70,7 +70,7 @@ function diffSelection(range, d) {
   let l1 = Infinity, l2 = -Infinity, at1 = Infinity, at2 = -Infinity;
   const parts = [];
   const seen = new Set();
-  for (const el of diffview.querySelectorAll('[data-l], [data-at]')) {
+  for (const el of diffviewEl.querySelectorAll('[data-l], [data-at]')) {
     if (!range.intersectsNode(el)) continue;
     const code = el.querySelector('.diff-code');
     if (el.dataset.l !== undefined) {
@@ -97,13 +97,11 @@ function diffSelection(range, d) {
   return { text, l1, l2, path: d.path, fromDiff: true };
 }
 
-const refOf = ({ path, l1, l2 }) => path + ':' + (l1 === l2 ? l1 : l1 + '-' + l2);
+const selectionRef = ({ path, l1, l2 }) => path + ':' + (l1 === l2 ? l1 : l1 + '-' + l2);
 
 function showSelectionBar(info) {
   current = info;
-  const ref = refOf(info);
   const lines = info.l2 - info.l1 + 1;
-  statsEl.title = 'Click to copy reference: ' + ref + ' (Alt+C)';
   statsEl.textContent = (lines === 1 ? '1 line' : lines + ' lines') + ' · ' +
     info.text.length.toLocaleString() + ' chars';
   status.classList.add('selecting');
@@ -114,6 +112,7 @@ export function hideSelectionBar() {
   closeSelMenu();
   if (!current) return;
   current = null;
+  if (statsEl) statsEl.textContent = '';
   status.classList.remove('selecting');
   fitStatus();
 }
@@ -167,14 +166,14 @@ export function copySelectAll() {
 export function runSelectionAction(act) {
   if (!current) return false;
   const { text, path } = current;
-  const ref = refOf(current);
+  const ref = selectionRef(current);
   if (act === 'copy-ref') {
-    copyToClipboard(ref, 'Copied ' + ref);
+    copyToClipboard(ref, 'Copied');
   } else if (act === 'copy-agent') {
     const ext = path.split('.').pop() || '';
     const lineStr = current.l1 === current.l2 ? 'line ' + current.l1 : 'lines ' + current.l1 + '-' + current.l2;
     const snippet = '@' + path + ' ' + lineStr + '\n```' + ext + '\n' + text + '\n```';
-    copyToClipboard(snippet, 'Copied snippet for Agent (@' + path + ' ' + lineStr + ')');
+    copyToClipboard(snippet, 'Copied');
   } else if (act === 'agent-edit') {
     if (!agentHandler) return false;
     agentHandler(current);
@@ -195,7 +194,8 @@ export function closeSelMenu() {
 }
 
 const SEL_MENU_ITEMS = [
-  { sel: 'copy-agent', label: 'Copy for Agent', keys: 'Alt+A' },
+  { sel: 'copy-ref', label: 'Copy Ref', keys: 'Alt+C' },
+  { sel: 'copy-agent', label: 'Copy with Context', keys: 'Alt+A' },
   { sel: 'agent-edit', label: 'Edit Inline', keys: 'Alt+E' },
   { sel: 'usages', label: 'Find Usages', keys: 'Alt+U' },
 ];
@@ -253,18 +253,13 @@ export function initSelectionBar() {
       runSelectionAction(btn.dataset.sel);
     });
   }
-  if (statsEl) {
-    statsEl.addEventListener('click', () => {
-      if (current) runSelectionAction('copy-ref');
-    });
-  }
   if (!menu) return;
 
   /* Only a right click on a selection is taken over. Anywhere else the browser
      keeps its own menu, which is what a right click on plain code expects. */
   document.addEventListener('contextmenu', e => {
     if (menu.contains(e.target)) { e.preventDefault(); return; }
-    const inCode = vp.contains(e.target) || (diffview && !diffview.hidden && diffview.contains(e.target));
+    const inCode = vp.contains(e.target) || (diffviewEl && !diffviewEl.hidden && diffviewEl.contains(e.target));
     if (!inCode) { closeSelMenu(); return; }
     updateSelectionBar();
     if (!current) { closeSelMenu(); return; }

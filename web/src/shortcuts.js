@@ -35,7 +35,7 @@ export const SHORTCUTS = [
   [['Alt+W'], 'Close tab'], [['Alt+Shift+T'], 'Reopen closed tab'], [['Ctrl+Tab'], 'Next tab'],
   [['Alt+1…9'], 'Select tab'], [['Double click'], 'Highlight all occurrences'],
   [['Mod+A'], 'Select whole file'],
-  [['Alt+C', 'Alt+A'], 'Copy selection ref / for agent'], [['Alt+U'], 'Find usages of selection'],
+  [['Alt+C', 'Alt+A'], 'Copy selection ref / with context'], [['Alt+U'], 'Find usages of selection'],
   [['Alt+E'], 'Edit selection inline'],
   [['Right click'], 'Selection actions at the pointer'],
   [['Mod+Home|Mod+Up', 'Mod+End|Mod+Down'], 'Top / bottom of file'],

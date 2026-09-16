@@ -40,7 +40,7 @@ export function showToast(accentText, text, duration = 2200) {
   }, duration);
 }
 
-export async function copyToClipboard(text, notify = 'Copied to clipboard') {
+export async function copyToClipboard(text, notify = 'Copied') {
   try {
     await navigator.clipboard.writeText(text);
     showToast('✓', notify);

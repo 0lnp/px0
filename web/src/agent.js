@@ -26,12 +26,12 @@ const box = $('#agentbox');
 const tpl = $('#agentbox-tpl');
 
 const sessions = new Map(); // local session id -> in-progress compose/edit
-let seq = 0;
+let agentSeq = 0;
 
 const installed = () => (S.meta?.agents || []).filter(h => h.installed);
 const chosen = () => (S.meta && S.meta.agent) || '';
 const chosenModel = () => (S.meta && S.meta.agentModel) || '';
-const refOf = ({ path, l1, l2 }) => path + ':' + (l1 === l2 ? l1 : l1 + '-' + l2);
+const targetRef = ({ path, l1, l2 }) => path + ':' + (l1 === l2 ? l1 : l1 + '-' + l2);
 const rangesOverlap = (a, b) => a.path === b.path && a.l1 <= b.l2 && b.l1 <= a.l2;
 
 export function applyAgentMeta() {
@@ -117,7 +117,7 @@ export function openAgentEdit(info) {
   if (!info) return;
   for (const s of sessions.values()) {
     if (rangesOverlap(s.target, info)) {
-      showToast('!', 'Overlaps the edit already open on ' + refOf(s.target));
+      showToast('!', 'Overlaps the edit already open on ' + targetRef(s.target));
       return;
     }
   }
@@ -150,7 +150,7 @@ function createSession(info) {
   // to the corner the stack grows from, where a triggered action was aimed.
   box.prepend(el);
   const session = {
-    id: ++seq,
+    id: ++agentSeq,
     target: info,
     timer: null,
     jobId: null,
@@ -228,7 +228,7 @@ async function cancelSession(session) {
   setBusy(session, false);
   resetHint(session);
   refreshStatusNote();
-  showToast('!', 'Cancelled edit on ' + refOf(session.target));
+  showToast('!', 'Cancelled edit on ' + targetRef(session.target));
   if (jobId) {
     try {
       await apiPost('/api/agent/cancel', { id: jobId });
@@ -248,7 +248,7 @@ function closeAgentEdit(session) {
 }
 
 function refreshRef(session) {
-  const ref = refOf(session.target);
+  const ref = targetRef(session.target);
   session.refEl.textContent = ref;
   session.refEl.title = ref;
 }

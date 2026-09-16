@@ -74,7 +74,7 @@ export async function showHover(at, x, y) {
     (j.doc ? '<div class="doc">' + esc(j.doc) + '</div>' : '') +
     '<div class="actions">' +
       '<button id="hc-copy-ref" title="Copy file and line reference">Copy Ref</button>' +
-      '<button id="hc-copy-ai" title="Copy snippet with file path for AI Agent / LLMs">Copy for Agent</button>' +
+      '<button id="hc-copy-ai" title="Copy snippet with file path and line numbers">Copy with Context</button>' +
       '<button id="hc-find-refs" title="Find all usages across codebase">Usages</button>' +
       '<button id="hc-calls" title="' + withKeys('Trace callers and callees ({Alt+Shift+H})') + '">Calls</button>' +
     '</div>' +
@@ -88,7 +88,7 @@ export async function showHover(at, x, y) {
 
   if (btnRef) btnRef.onclick = (e) => {
     e.stopPropagation();
-    copyToClipboard(refPath, 'Copied ' + refPath);
+    copyToClipboard(refPath, 'Copied');
   };
   if (btnAi) btnAi.onclick = (e) => {
     e.stopPropagation();
@@ -96,7 +96,7 @@ export async function showHover(at, x, y) {
     const ext = d.path.split('.').pop() || '';
     const lineStr = 'line ' + at.line;
     const text = '@' + d.path + ' ' + lineStr + '\n```' + ext + '\n' + lineText + '\n```';
-    copyToClipboard(text, 'Copied snippet for Agent (@' + d.path + ' ' + lineStr + ')');
+    copyToClipboard(text, 'Copied');
   };
   if (btnRefs) btnRefs.onclick = (e) => {
     e.stopPropagation();

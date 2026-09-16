@@ -55,7 +55,7 @@ body.side-hidden #side, body.side-hidden #resizer { display: none; }
 }
 .panel-head #root-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel-actions { margin-left: auto; flex: none; display: flex; align-items: center; gap: 2px; }
-.panel-actions .mini { margin-left: 0; display: inline-flex; align-items: center; justify-content: center; }
+.panel-actions .mini { margin-left: 0; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; }
 .panel-actions .mini svg { display: block; }
 .mini { margin-left: auto; color: var(--faint); font-size: 14px; line-height: 1; padding: 2px 4px; border-radius: 4px; }
 .mini:hover { color: var(--fg); background: var(--bg3); }
@@ -70,7 +70,7 @@ body.side-hidden #side, body.side-hidden #resizer { display: none; }
 .side-foot .mini svg { display: block; }
 /* Project links and the theme button, together at the right edge. */
 .side-actions { margin-left: auto; display: flex; align-items: center; gap: 2px; }
-.side-actions .mini { margin-left: 0; display: block; }
+.side-actions .mini { margin-left: 0; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; }
 .side-logo { flex: none; display: flex; align-items: center; padding: 2px 3px; border-radius: 3px; }
 .side-logo:hover { background: var(--bg4); }
 .side-logo img { height: 13px; width: auto; }
@@ -296,23 +296,28 @@ body.md-tab #tabs { padding-right: 140px; }
 body.diff-tab #tabs { padding-right: 150px; }
 body.md-tab.diff-tab #tabs { padding-right: 290px; }
 
-#tabs { display: flex; height: 28px; background: var(--bg2); border-bottom: 1px solid var(--line); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+#tabs { display: flex; height: 28px; background: var(--bg2); box-shadow: inset 0 -1px 0 var(--line); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
 #tabs::-webkit-scrollbar { display: none; }
 #tabs:empty { display: none; }
 .tab {
   display: flex; align-items: center; gap: 6px; padding: 0 8px 0 10px; flex: none;
   border-right: 1px solid var(--line); color: var(--dim); cursor: pointer;
   font-size: 11.5px; max-width: 200px; position: relative; user-select: none;
-  line-height: 27px;
+  line-height: 28px; height: 28px;
+  box-shadow: inset 0 -1px 0 var(--line);
+  transition: background .1s ease, color .1s ease;
 }
-.tab:hover { background: var(--bg3); }
-.tab.active { background: var(--bg); color: var(--fg); }
-.tab.active::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1.5px; background: var(--accent); }
+.tab:hover { background: var(--bg3); color: var(--fg); }
+.tab.active {
+  background: var(--bg); color: var(--fg); font-weight: 500;
+  box-shadow: none;
+}
 .tab .tn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The close cross is drawn, not typed: a glyph's ink sits wherever the font puts
    it, which is below centre for x in most UI fonts. */
 .tab .x { width: 15px; height: 15px; border-radius: 3px; display: grid; place-items: center; color: var(--faint); flex: none; }
 .tab .x svg { width: 9px; height: 9px; display: block; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
+.tab.active .x { color: var(--dim); }
 .tab .x:hover { background: var(--bg4); color: var(--fg); }
 
 #crumbs { display: none !important; }
@@ -786,7 +791,7 @@ kbd {
 #status > .grow { flex: 1; }
 /* Shed in steps as the bar narrows; the classes accumulate, so each step keeps the ones before. */
 #status.fit-1 .footer-kbd,
-#status.fit-2 #st-index, #status.fit-2 #st-size,
+#status.fit-2 #st-size,
 #status.fit-3 .metric-label,
 #status.fit-4 [data-action="wrap"], #status.fit-4 [data-action="help"], #status.fit-4 .sel-chip, #status.fit-4 #sel-stats,
 #status.fit-5 #st-metrics,
@@ -834,13 +839,8 @@ kbd {
   flex: none; font: 600 9.5px/1 var(--ui); letter-spacing: .06em; text-transform: uppercase;
   color: var(--on-accent); background: var(--accent); padding: 3px 6px; border-radius: 3px;
 }
-#sel-stats {
-  flex: none; white-space: nowrap; cursor: pointer; border-radius: 3px; padding: 2px 5px;
-  transition: background .12s ease, color .12s ease;
-}
-#sel-stats:hover, #sel-stats:focus-visible {
-  background: var(--btn-hover); color: var(--fg);
-}
+#sel-stats { display: none; white-space: nowrap; }
+#status.selecting #sel-stats { display: inline-flex; }
 #footer-sel .footer-btn { flex: none; }
 
 /* Right-click menu on a selection: the footer's actions at the pointer. */

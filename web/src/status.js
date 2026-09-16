@@ -39,12 +39,6 @@ export function updateStatus() {
     }
   }
 
-  const idxEl = $('#st-index');
-  if (idxEl && S.meta) {
-    idxEl.textContent = S.meta.indexMs + 'ms';
-    idxEl.title = `Workspace Indexing: took ${S.meta.indexMs}ms to index ${S.meta.files.toLocaleString()} files (${S.meta.ready ? 'ready' : 'in progress'})`;
-  }
-
   const verEl = $('#st-ver');
   if (verEl && S.meta?.version) {
     verEl.textContent = 'v' + S.meta.version;

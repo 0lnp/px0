@@ -109,7 +109,7 @@
       }, 180);
     }, duration);
   }
-  async function copyToClipboard(text, notify = "Copied to clipboard") {
+  async function copyToClipboard(text, notify = "Copied") {
     try {
       await navigator.clipboard.writeText(text);
       showToast("✓", notify);
@@ -777,7 +777,6 @@
   }
   function initPanels() {
     $("#btn-reindex").addEventListener("click", async () => {
-      $("#st-index").textContent = "reindexing…";
       const j = await api("/api/reindex");
       S2.meta.files = j.files;
       S2.meta.indexMs = j.indexMs;
@@ -786,6 +785,7 @@
       await drawTree("", treeEl, 0);
       await reloadOpenTabs();
       updateStatus();
+      showToast("✓", "Workspace reindexed");
     });
     (() => {
       const rz = $("#resizer");
@@ -1785,7 +1785,7 @@
   // web/src/calls.js
   var T = null;
   var dirPref = "in";
-  var seq = 0;
+  var callSeq = 0;
   var flat = [];
   var listEl = () => $("#right-calls-list");
   var hint = (html) => {
@@ -1828,7 +1828,7 @@
       hint("Click a function name in the editor, then press <b>" + esc(keyLabel("Alt+Shift+H")) + "</b>.");
       return;
     }
-    const my = ++seq;
+    const my = ++callSeq;
     T = null;
     $("#right-calls-target").textContent = at.word;
     hint('Tracing calls for "' + esc(at.word) + '"…');
@@ -1837,14 +1837,14 @@
     try {
       j = await api("/api/lsp/calls", { path: d.path, line: at.line, col: at.col, wait: S2.lsp.state === "ready" ? 1e4 : 30000 });
     } catch (e) {
-      if (my === seq) {
+      if (my === callSeq) {
         updateStatus();
         setStatusNote("");
         hint('Could not trace "' + esc(at.word) + '": ' + esc(explain(e.message)));
       }
       return;
     }
-    if (my !== seq)
+    if (my !== callSeq)
       return;
     setLspState(j);
     updateStatus();
@@ -2018,14 +2018,14 @@
     const d = doc_();
     if (!d || at.path !== d.path)
       return;
-    const seq2 = ++hoverSeq;
+    const seq = ++hoverSeq;
     let j;
     try {
       j = await api("/api/lsp/hover", { path: d.path, line: at.line, col: at.col, wait: 4000 });
     } catch {
       return;
     }
-    if (seq2 !== hoverSeq || doc_() !== d)
+    if (seq !== hoverSeq || doc_() !== d)
       return;
     setLspState(j);
     if (!j || j.empty || !j.signature && !j.doc)
@@ -2033,14 +2033,14 @@
     S2.hover = at;
     S2.hoverAnchor = { x, y };
     const refPath = d.path + ":" + at.line;
-    hovercard.innerHTML = (j.signature ? '<div class="sig">' + j.signature + "</div>" : "") + (j.doc ? '<div class="doc">' + esc(j.doc) + "</div>" : "") + '<div class="actions">' + '<button id="hc-copy-ref" title="Copy file and line reference">Copy Ref</button>' + '<button id="hc-copy-ai" title="Copy snippet with file path for AI Agent / LLMs">Copy for Agent</button>' + '<button id="hc-find-refs" title="Find all usages across codebase">Usages</button>' + '<button id="hc-calls" title="' + withKeys("Trace callers and callees ({Alt+Shift+H})") + '">Calls</button>' + "</div>" + '<div class="foot"><b>' + esc(j.server || "lsp") + "</b>" + "<span>" + withKeys("{Mod+Click} definition") + "</span>" + "<span>" + withKeys("{Shift+F12} references") + "</span></div>";
+    hovercard.innerHTML = (j.signature ? '<div class="sig">' + j.signature + "</div>" : "") + (j.doc ? '<div class="doc">' + esc(j.doc) + "</div>" : "") + '<div class="actions">' + '<button id="hc-copy-ref" title="Copy file and line reference">Copy Ref</button>' + '<button id="hc-copy-ai" title="Copy snippet with file path and line numbers">Copy with Context</button>' + '<button id="hc-find-refs" title="Find all usages across codebase">Usages</button>' + '<button id="hc-calls" title="' + withKeys("Trace callers and callees ({Alt+Shift+H})") + '">Calls</button>' + "</div>" + '<div class="foot"><b>' + esc(j.server || "lsp") + "</b>" + "<span>" + withKeys("{Mod+Click} definition") + "</span>" + "<span>" + withKeys("{Shift+F12} references") + "</span></div>";
     const btnRef = hovercard.querySelector("#hc-copy-ref");
     const btnAi = hovercard.querySelector("#hc-copy-ai");
     const btnRefs = hovercard.querySelector("#hc-find-refs");
     if (btnRef)
       btnRef.onclick = (e) => {
         e.stopPropagation();
-        copyToClipboard(refPath, "Copied " + refPath);
+        copyToClipboard(refPath, "Copied");
       };
     if (btnAi)
       btnAi.onclick = (e) => {
@@ -2050,7 +2050,7 @@
         const lineStr = "line " + at.line;
         const text = "@" + d.path + " " + lineStr + "\n```" + ext + `
 ` + lineText + "\n```";
-        copyToClipboard(text, "Copied snippet for Agent (@" + d.path + " " + lineStr + ")");
+        copyToClipboard(text, "Copied");
       };
     if (btnRefs)
       btnRefs.onclick = (e) => {
@@ -2869,11 +2869,6 @@
         item.classList.toggle("active", item.dataset.diffOpt === currentLayout);
       }
     }
-    const idxEl = $("#st-index");
-    if (idxEl && S2.meta) {
-      idxEl.textContent = S2.meta.indexMs + "ms";
-      idxEl.title = `Workspace Indexing: took ${S2.meta.indexMs}ms to index ${S2.meta.files.toLocaleString()} files (${S2.meta.ready ? "ready" : "in progress"})`;
-    }
     const verEl = $("#st-ver");
     if (verEl && S2.meta?.version) {
       verEl.textContent = "v" + S2.meta.version;
@@ -3050,7 +3045,7 @@
   // web/src/selbar.js
   var status = $("#status");
   var statsEl = $("#sel-stats");
-  var diffview2 = $("#diffview");
+  var diffviewEl = $("#diffview");
   var SEL_KEYS = { KeyC: "copy-ref", KeyA: "copy-agent", KeyU: "usages", KeyE: "agent-edit" };
   var agentHandler = null;
   function setAgentHandler(fn) {
@@ -3069,7 +3064,7 @@
     if (!d)
       return null;
     const range = sel.getRangeAt(0);
-    if (diffview2 && !diffview2.hidden && diffview2.contains(range.commonAncestorContainer)) {
+    if (diffviewEl && !diffviewEl.hidden && diffviewEl.contains(range.commonAncestorContainer)) {
       return diffSelection(range, d);
     }
     if (!vp.contains(range.commonAncestorContainer))
@@ -3101,7 +3096,7 @@
     let l1 = Infinity, l2 = -Infinity, at1 = Infinity, at2 = -Infinity;
     const parts = [];
     const seen = new Set;
-    for (const el of diffview2.querySelectorAll("[data-l], [data-at]")) {
+    for (const el of diffviewEl.querySelectorAll("[data-l], [data-at]")) {
       if (!range.intersectsNode(el))
         continue;
       const code = el.querySelector(".diff-code");
@@ -3136,12 +3131,10 @@
       return null;
     return { text, l1, l2, path: d.path, fromDiff: true };
   }
-  var refOf = ({ path, l1, l2 }) => path + ":" + (l1 === l2 ? l1 : l1 + "-" + l2);
+  var selectionRef = ({ path, l1, l2 }) => path + ":" + (l1 === l2 ? l1 : l1 + "-" + l2);
   function showSelectionBar(info) {
     current = info;
-    const ref = refOf(info);
     const lines = info.l2 - info.l1 + 1;
-    statsEl.title = "Click to copy reference: " + ref + " (Alt+C)";
     statsEl.textContent = (lines === 1 ? "1 line" : lines + " lines") + " · " + info.text.length.toLocaleString() + " chars";
     status.classList.add("selecting");
     fitStatus();
@@ -3151,6 +3144,8 @@
     if (!current)
       return;
     current = null;
+    if (statsEl)
+      statsEl.textContent = "";
     status.classList.remove("selecting");
     fitStatus();
   }
@@ -3206,15 +3201,15 @@
     if (!current)
       return false;
     const { text, path } = current;
-    const ref = refOf(current);
+    const ref = selectionRef(current);
     if (act === "copy-ref") {
-      copyToClipboard(ref, "Copied " + ref);
+      copyToClipboard(ref, "Copied");
     } else if (act === "copy-agent") {
       const ext = path.split(".").pop() || "";
       const lineStr = current.l1 === current.l2 ? "line " + current.l1 : "lines " + current.l1 + "-" + current.l2;
       const snippet = "@" + path + " " + lineStr + "\n```" + ext + `
 ` + text + "\n```";
-      copyToClipboard(snippet, "Copied snippet for Agent (@" + path + " " + lineStr + ")");
+      copyToClipboard(snippet, "Copied");
     } else if (act === "agent-edit") {
       if (!agentHandler)
         return false;
@@ -3232,7 +3227,8 @@
       menu.hidden = true;
   }
   var SEL_MENU_ITEMS = [
-    { sel: "copy-agent", label: "Copy for Agent", keys: "Alt+A" },
+    { sel: "copy-ref", label: "Copy Ref", keys: "Alt+C" },
+    { sel: "copy-agent", label: "Copy with Context", keys: "Alt+A" },
     { sel: "agent-edit", label: "Edit Inline", keys: "Alt+E" },
     { sel: "usages", label: "Find Usages", keys: "Alt+U" }
   ];
@@ -3284,12 +3280,6 @@
         runSelectionAction(btn.dataset.sel);
       });
     }
-    if (statsEl) {
-      statsEl.addEventListener("click", () => {
-        if (current)
-          runSelectionAction("copy-ref");
-      });
-    }
     if (!menu)
       return;
     document.addEventListener("contextmenu", (e) => {
@@ -3297,7 +3287,7 @@
         e.preventDefault();
         return;
       }
-      const inCode = vp.contains(e.target) || diffview2 && !diffview2.hidden && diffview2.contains(e.target);
+      const inCode = vp.contains(e.target) || diffviewEl && !diffviewEl.hidden && diffviewEl.contains(e.target);
       if (!inCode) {
         closeSelMenu();
         return;
@@ -3667,6 +3657,7 @@
 
   // web/src/theme.js
   var KEY = "px0.theme";
+  var DEFAULT_THEME = "github-dark";
   var THEME_SELECTOR = /^(?::root|html)?\[data-theme=["']?([\w-]+)["']?\]$/;
   var themes = null;
   function listThemes() {
@@ -3736,6 +3727,8 @@
     } catch {}
     if (saved && setTheme(saved, false))
       return;
+    if (setTheme(DEFAULT_THEME, false))
+      return;
     const all = listThemes();
     if (all.length && !all.some((t) => t.id === currentTheme()))
       setTheme(all[0].id, false);
@@ -3766,7 +3759,7 @@
     [["Alt+1…9"], "Select tab"],
     [["Double click"], "Highlight all occurrences"],
     [["Mod+A"], "Select whole file"],
-    [["Alt+C", "Alt+A"], "Copy selection ref / for agent"],
+    [["Alt+C", "Alt+A"], "Copy selection ref / with context"],
     [["Alt+U"], "Find usages of selection"],
     [["Alt+E"], "Edit selection inline"],
     [["Right click"], "Selection actions at the pointer"],
@@ -4317,11 +4310,11 @@
   var box = $("#agentbox");
   var tpl = $("#agentbox-tpl");
   var sessions = new Map;
-  var seq2 = 0;
+  var agentSeq = 0;
   var installed = () => (S2.meta?.agents || []).filter((h) => h.installed);
   var chosen = () => S2.meta && S2.meta.agent || "";
   var chosenModel = () => S2.meta && S2.meta.agentModel || "";
-  var refOf2 = ({ path, l1, l2 }) => path + ":" + (l1 === l2 ? l1 : l1 + "-" + l2);
+  var targetRef = ({ path, l1, l2 }) => path + ":" + (l1 === l2 ? l1 : l1 + "-" + l2);
   var rangesOverlap = (a, b) => a.path === b.path && a.l1 <= b.l2 && b.l1 <= a.l2;
   function applyAgentMeta() {
     for (const session of sessions.values()) {
@@ -4399,7 +4392,7 @@
       return;
     for (const s of sessions.values()) {
       if (rangesOverlap(s.target, info)) {
-        showToast("!", "Overlaps the edit already open on " + refOf2(s.target));
+        showToast("!", "Overlaps the edit already open on " + targetRef(s.target));
         return;
       }
     }
@@ -4428,7 +4421,7 @@
     const el = tpl.content.firstElementChild.cloneNode(true);
     box.prepend(el);
     const session = {
-      id: ++seq2,
+      id: ++agentSeq,
       target: info,
       timer: null,
       jobId: null,
@@ -4504,7 +4497,7 @@
     setBusy(session, false);
     resetHint(session);
     refreshStatusNote();
-    showToast("!", "Cancelled edit on " + refOf2(session.target));
+    showToast("!", "Cancelled edit on " + targetRef(session.target));
     if (jobId) {
       try {
         await apiPost("/api/agent/cancel", { id: jobId });
@@ -4522,7 +4515,7 @@
     syncAgentTargets();
   }
   function refreshRef(session) {
-    const ref = refOf2(session.target);
+    const ref = targetRef(session.target);
     session.refEl.textContent = ref;
     session.refEl.title = ref;
   }
