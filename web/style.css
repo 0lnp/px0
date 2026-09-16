@@ -435,7 +435,7 @@ body.word-wrap .c { white-space: pre-wrap; word-break: break-word; overflow-wrap
   white-space: nowrap; transition: background .12s, border-color .12s, color .12s;
 }
 #hovercard .actions button:hover {
-  background: var(--accent); color: var(--on-accent); border-color: var(--accent);
+  background: var(--bg4); color: var(--accent-fg); border-color: var(--accent);
 }
 #hovercard .actions button .btn-icon {
   font-size: 12px; opacity: 0.85;
@@ -449,26 +449,19 @@ body.word-wrap .c { white-space: pre-wrap; word-break: break-word; overflow-wrap
 /* ---------- toast notification ---------- */
 #toast {
   position: fixed; bottom: 36px; right: 20px; z-index: 1000;
-  background: var(--bg2); color: var(--fg); border: 1px solid var(--line);
-  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.36), 0 2px 6px -1px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  padding: 6px 14px 6px 10px; border-radius: 20px;
+  background: var(--bg3); color: var(--fg); border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  padding: 6px 14px 6px 10px; border-radius: 7px;
   font: 12px/1.4 var(--ui); font-weight: 500; letter-spacing: -0.01em;
   display: flex; align-items: center; gap: 8px;
   pointer-events: none; user-select: none;
-  animation: toastIn .22s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: toastIn .16s ease-out;
   transform-origin: bottom right;
-}
-@supports (backdrop-filter: blur(16px)) or (-webkit-backdrop-filter: blur(16px)) {
-  #toast {
-    background: color-mix(in srgb, var(--bg2) 88%, transparent);
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
-  }
 }
 #toast.toast-hide {
   opacity: 0;
-  transform: translateY(6px) scale(0.96);
-  transition: opacity .18s ease-in, transform .18s ease-in;
+  transform: translateY(4px);
+  transition: opacity .14s ease-in, transform .14s ease-in;
 }
 .toast-icon {
   width: 18px; height: 18px; border-radius: 50%;
@@ -476,13 +469,17 @@ body.word-wrap .c { white-space: pre-wrap; word-break: break-word; overflow-wrap
   flex: none;
 }
 .toast-icon svg { display: block; }
+/* --gi/--mark-active are the app's existing green/amber semantics (diff gutters,
+   LSP state dot, .hint .warn) -- reused here so success/warn track the active
+   theme instead of a fixed colour that can clash with it (or with itself: --s is
+   the syntax "string" token, not a status colour, and drifts theme to theme). */
 .toast-icon-ok {
-  background: color-mix(in srgb, var(--s, #4ade80) 18%, transparent);
-  color: var(--s, #4ade80);
+  background: color-mix(in srgb, var(--gi) 18%, transparent);
+  color: var(--gi);
 }
 .toast-icon-warn {
-  background: color-mix(in srgb, var(--warn, #f59e0b) 18%, transparent);
-  color: var(--warn, #f59e0b);
+  background: color-mix(in srgb, var(--mark-active) 18%, transparent);
+  color: var(--mark-active);
 }
 .toast-chip {
   font: 10px/1.2 var(--mono); color: var(--dim);
@@ -640,7 +637,7 @@ body.word-wrap .c { white-space: pre-wrap; word-break: break-word; overflow-wrap
 .empty-inner dd { margin: 0; text-align: left; color: var(--dim); }
 kbd {
   font: 10.5px/1 var(--mono); padding: 4px 6px; border: 1px solid var(--line);
-  border-bottom-width: 2px; border-radius: 4px; background: var(--bg3); color: var(--dim);
+  border-radius: 4px; background: var(--bg3); color: var(--dim);
 }
 
 /* ---------- find bar ---------- */
@@ -950,7 +947,7 @@ kbd {
 }
 #palette {
   width: min(680px, 92vw); max-height: 74vh; background: var(--bg3);
-  border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+  border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow);
   display: flex; flex-direction: column; overflow: hidden;
 }
 .pal-input { display: flex; align-items: center; gap: 8px; padding: 13px 18px; border-bottom: 1px solid var(--line); }
@@ -974,7 +971,7 @@ kbd {
   backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
   z-index: 110; display: grid; place-items: center;
 }
-.help-card { background: var(--bg3); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 24px 28px; max-height: 82vh; overflow: auto; }
+.help-card { background: var(--bg3); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 24px 28px; max-height: 82vh; overflow: auto; }
 .help-header { display: flex; align-items: baseline; gap: 8px; margin: 0 0 16px; }
 .help-header h2 { margin: 0; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 600; }
 .help-version { font: 11px var(--mono); color: var(--accent-fg); background: var(--bg4); padding: 2px 6px; border-radius: 4px; }
