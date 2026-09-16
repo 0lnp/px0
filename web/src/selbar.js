@@ -103,7 +103,7 @@ function showSelectionBar(info) {
   current = info;
   const ref = refOf(info);
   const lines = info.l2 - info.l1 + 1;
-  statsEl.title = ref;
+  statsEl.title = 'Click to copy reference: ' + ref + ' (Alt+C)';
   statsEl.textContent = (lines === 1 ? '1 line' : lines + ' lines') + ' · ' +
     info.text.length.toLocaleString() + ' chars';
   status.classList.add('selecting');
@@ -172,7 +172,9 @@ export function runSelectionAction(act) {
     copyToClipboard(ref, 'Copied ' + ref);
   } else if (act === 'copy-agent') {
     const ext = path.split('.').pop() || '';
-    copyToClipboard('### Reference: ' + ref + '\n```' + ext + '\n' + text + '\n```', 'Copied snippet for Agent (' + ref + ')');
+    const lineStr = current.l1 === current.l2 ? 'line ' + current.l1 : 'lines ' + current.l1 + '-' + current.l2;
+    const snippet = '@' + path + ' ' + lineStr + '\n```' + ext + '\n' + text + '\n```';
+    copyToClipboard(snippet, 'Copied snippet for Agent (@' + path + ' ' + lineStr + ')');
   } else if (act === 'agent-edit') {
     if (!agentHandler) return false;
     agentHandler(current);
@@ -192,8 +194,7 @@ export function closeSelMenu() {
   if (menu && !menu.hidden) menu.hidden = true;
 }
 
-/* Built from the footer's own buttons each time, so the two can never disagree
-   about which actions exist or whether Edit with Agent is on offer. */
+/* Built from the footer's own actions each time. */
 function openSelMenu(x, y) {
   menu.replaceChildren();
   for (const src of bar().querySelectorAll('[data-sel]')) {
@@ -243,6 +244,11 @@ export function initSelectionBar() {
       if (!btn) return;
       closeSelMenu();
       runSelectionAction(btn.dataset.sel);
+    });
+  }
+  if (statsEl) {
+    statsEl.addEventListener('click', () => {
+      if (current) runSelectionAction('copy-ref');
     });
   }
   if (!menu) return;

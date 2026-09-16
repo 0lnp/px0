@@ -94,8 +94,9 @@ export async function showHover(at, x, y) {
     e.stopPropagation();
     const lineText = d.lines[at.line - 1] || at.word || '';
     const ext = d.path.split('.').pop() || '';
-    const text = '### Reference: ' + refPath + '\n```' + ext + '\n' + lineText + '\n```';
-    copyToClipboard(text, 'Copied snippet for Agent (' + refPath + ')');
+    const lineStr = 'line ' + at.line;
+    const text = '@' + d.path + ' ' + lineStr + '\n```' + ext + '\n' + lineText + '\n```';
+    copyToClipboard(text, 'Copied snippet for Agent (@' + d.path + ' ' + lineStr + ')');
   };
   if (btnRefs) btnRefs.onclick = (e) => {
     e.stopPropagation();

@@ -6,7 +6,7 @@ px0 is a fast, ultra-light, remote-first IDE designed for instant code navigatio
 
 More and more code generation happens directly in the terminal—driven by coding agents, CLI tools, and background orchestrators. Developers spend significantly less time typing boilerplate and more time reviewing, auditing, and navigating.
 
-Because speed of access is everything when inspecting code, **px0 is obsessively optimized for reads.** You don't need a heavy editing environment with background extension churn just to verify code; you need a sub-millisecond, zero-latency window into the repository, especially across remote machines. When something needs to change, select it and hand it to the coding agent you already use: px0 runs it, reloads what moved, and lets you undo it.
+Because speed of access is everything when inspecting code, **px0 is obsessively optimized for reads.** You don't need a heavy editing environment with background extension churn just to verify code; you need a sub-millisecond, zero-latency window into the repository, especially across remote machines. When something needs to change, select it and hand it to the coding agent you already use: px0 runs it and reloads what moved.
 
 ### Where px0 fits in best:
 
@@ -46,7 +46,7 @@ make dist
 - **Remote-First, Zero SSH Hassle**: Spin up on any remote server, cloud instance, or runner in < 1 ms. Inspect remote code in your local browser over a single port (Tailscale, WireGuard, reverse proxy, or tunnel) without SSH key setups, port forwarding churn, or remote extension daemons.
 - **Rich Syntax Highlighting**: Native tokenization for ~280 languages via Chroma with windowed rendering.
 - **Git Awareness & Visual Diffs**: Status badges (`M`, `A`, `D`, `U`, `R`), dirty folder ancestry propagation, changed-files filter, and side-by-side / unified diffs vs `HEAD` (`Cmd/Ctrl+D`).
-- **Edit with Your Coding Agent**: Select code in the source or diff view, right-click (or `Alt+E`), and describe the change. px0 runs Claude Code, Gemini CLI, or Cursor Agent on it, reloads what changed, shows harness errors inline, and offers a one-click undo.
+- **Edit with Your Coding Agent**: Select code in the source or diff view, right-click (or `Alt+E`), and describe the change. px0 runs Claude Code, Gemini CLI, Cursor Agent, or Antigravity on it, reloads what changed, and shows harness errors inline. Several edits can run at once, as long as their line ranges don't overlap.
 - **Rendered Markdown Preview**: Full GFM preview with Chroma-highlighted code fences; switch between preview and source with `Alt+M` while preserving scroll.
 - **Custom Themes**: 14 built-in themes (Tokyo Night, Catppuccin, Dracula, GitHub Dark, Gruvbox, Nord, Solarized, and more).
 - **Optional Language Server Protocol (LSP)**: Zero-config auto-detection (`gopls`, `rust-analyzer`, `pyright`, `typescript-language-server`, `clangd`) for Go-to-Definition (`F12`), Hover, references, and call trails. Falls back automatically to regex outlines.
@@ -79,41 +79,35 @@ Servers spawn lazily on first request and shut down cleanly upon exit. Disable w
 
 px0 does not have a text editor. It hands changes to a coding agent already installed on your machine, then reloads what the agent changed.
 
-| Harness | Command px0 runs |
-| --- | --- |
-| Claude Code | `claude -p --permission-mode acceptEdits {prompt}` |
-| Gemini CLI | `gemini --approval-mode auto_edit -p {prompt}` |
-| Cursor Agent | `cursor-agent -p --force {prompt}` |
+| Harness | Default Model | Command px0 runs |
+| --- | --- | --- |
+| Claude Code | `haiku` | `claude --permission-mode acceptEdits --model haiku -p {prompt}` |
+| Gemini CLI | `gemini-2.5-flash-lite` | `gemini --approval-mode auto_edit -m gemini-2.5-flash-lite -p {prompt}` |
+| Cursor Agent | `gemini-3.6-flash-minimal` | `cursor-agent --force --model gemini-3.6-flash-minimal -p {prompt}` |
+| Antigravity | `gemini-3.6-flash-low` | `agy --dangerously-skip-permissions --mode accept-edits --model gemini-3.6-flash-low -p {prompt}` |
+
+By default, px0 selects the least capable (fastest and most economical) model for each harness, and allows you to choose any available model from the harness menu.
 
 ### How an Edit Works
 
 1. Select code in the source view or the git diff view (split or unified, either side).
 1. Pick **Edit with Agent** from the right-click menu, the footer selection bar, or press `Alt+E`.
-1. The first time, choose a harness. The choice is remembered in `~/.px0/settings.json` (or `$XDG_CONFIG_HOME/px0/settings.json`), never inside your repository.
+1. The first time, choose a harness (and optional model). The choice is remembered in `~/.px0/settings.json` (or `$XDG_CONFIG_HOME/px0/settings.json`), never inside your repository.
 1. Type what should change and press `Enter`. px0 sends the harness the instruction, the file and line range, and the selected lines.
+1. As the agent runs, its progress and actions stream in real time to the terminal stdout where px0 was launched.
 1. When the harness exits, px0 reloads the files it changed. Each tab stays in the view it was in: source stays source, diff stays diff.
 
-The footer always shows the harness in use (**Agent: claude**). Click it to switch between installed harnesses.
+The footer always shows the harness and model in use (**Agent: agy (gemini-3.6-flash-low)**). Click it to switch harnesses or choose a different model.
 
 ### When Something Goes Wrong
 
 If the harness fails, the error appears inline under your instruction together with the harness's stdout and stderr, which usually say why (for example an invalid API key). Nothing is lost: the composer stays open with your instruction.
 
-### Undo
-
-After an edit that changed files, **Undo Edit** appears in the footer. It reverts exactly what that edit changed:
-
-- files that were clean go back to their committed version,
-- files that already had uncommitted changes go back to how they were just before the edit,
-- files and folders the edit created are removed.
-
-Undo covers the most recent edit, once. If a file changed again after the edit, px0 asks before overwriting that later work. Undo needs a git repository.
-
 ### Guards
 
-- One edit runs at a time.
-- Editing a file with uncommitted changes asks for confirmation first, since undo only reaches back one edit. Edits started from the diff view skip this: the changes are already on screen.
-- Edits and undo are accepted only from px0's own page, opened by IP address or `localhost`. Through a hostname (reverse proxy, tunnel domain) they are refused. Anyone who can reach px0 by IP can run the harness as you, so keep `-host 0.0.0.0` to private networks.
+- Several edits can run at once, each in its own box, as long as their line ranges don't overlap. A range that overlaps an edit already in flight is refused: two harnesses rewriting the same lines would produce a result nobody could review.
+- Closing the tab while an edit is still running asks for confirmation first, so a harness is never abandoned mid-write with no way to see how it went.
+- Edits are accepted only from px0's own page, opened by IP address or `localhost`. Through a hostname (reverse proxy, tunnel domain) they are refused. Anyone who can reach px0 by IP can run the harness as you, so keep `-host 0.0.0.0` to private networks.
 - Nothing runs until you pick a harness. `-agent` pins one for the session; `-no-agent` turns editing off.
 
 ## Why a Dedicated Code Viewer?
@@ -208,7 +202,7 @@ px0 --update
 | `-no-open`   | `false`     | Do not launch the web browser automatically                     |
 | `-no-lsp`    | `false`     | Disable language server discovery and use regex-based outline   |
 | `-no-git`    | `false`     | Disable git awareness (tree status badges and the diff view)    |
-| `-agent H`   | none        | Pin the coding harness for edits: `claude`, `gemini`, `cursor-agent`, or a command template containing `{prompt}` |
+| `-agent H`   | none        | Pin the coding harness for edits: `claude`, `gemini`, `cursor-agent`, `agy`, or a command template containing `{prompt}` |
 | `-no-agent`  | `false`     | Do not offer editing through a coding harness                   |
 | `-no-telemetry` | `false`  | Disable anonymous usage telemetry                               |
 | `-no-color`  | `false`     | Strip ANSI escape sequences from terminal output                |
@@ -333,7 +327,7 @@ For comprehensive technical deep-dives into the architecture, indexing, virtuali
 - `search.go` / `fuzzy.go`: High-performance substring and fuzzy file/symbol matching algorithms.
 - `lsp.go` / `lspnav.go` / `calls.go`: Lightweight JSON-RPC client communicating with local language servers over stdio, plus definitions, references and call trails.
 - `lspservers.go` / `lspsetup.go`: Language server registry, discovery, and install on request.
-- `agent.go` / `agent_undo.go` / `settings.go`: Coding harness discovery and dispatch, change detection, undo of the last edit, and the remembered harness choice.
+- `agent.go` / `settings.go`: Coding harness discovery and dispatch, change detection, and the remembered harness choice.
 - `web/`: Native zero-dependency ES module frontend (custom virtual scroll, syntax highlight rendering, tab manager).
 - `web/themes/`: One CSS file per colour theme, joined by the server into `/static/themes.css`. Token reference in [Styling & Themes](docs/internals/styling-and-themes.md).
 

@@ -1,7 +1,7 @@
 // web/src/shortcuts.js
 import { $, $$, esc, S, doc_, isMac, MOD, LH, keyCaps } from './state.js';
 import { vp, sizer } from './ui.js';
-import { layout, render, paint, toggleWordWrap, toggleLineNumbers } from './renderer.js';
+import { layout, render, paint, toggleWordWrap } from './renderer.js';
 import { updateStatus } from './status.js';
 import { closeTab, switchTab, reopenClosedTab } from './tabs.js';
 import { go } from './history.js';
@@ -26,7 +26,7 @@ export const SHORTCUTS = [
   [['Mod+Shift+P'], 'Command palette'], [['Mod+Shift+O'], 'Go to symbol'],
   [['Mod+Shift+F'], 'Search in files'], [['Mod+F'], 'Find in file'],
   [['Mod+G'], 'Go to line'], [['Mod+D'], 'Toggle diff view (git)'], [['Alt+Z'], 'Toggle word wrap'],
-  [['Alt+L'], 'Toggle line numbers'], [['Alt+M'], 'Toggle Markdown preview'],
+  [['Alt+M'], 'Toggle Markdown preview'],
   [['Enter', 'Shift+Enter'], 'Next / previous match'],
   [['F12', 'Mod+Click'], 'Go to definition'], [['Shift+F12'], 'Find all references'],
   [['Alt+Shift+H'], 'Call trail (callers / callees)'],
@@ -73,7 +73,6 @@ export function initShortcuts() {
     else if (act === 'find') openFind(S.lastWord);
     else if (act === 'goto') openPalette('line');
     else if (act === 'wrap') toggleWordWrap();
-    else if (act === 'line-numbers') toggleLineNumbers();
     else if (act === 'md-preview') togglePreview();
     else if (act === 'palette') openPalette('command');
     else if (act === 'help') showHelp();
@@ -144,12 +143,6 @@ export function initShortcuts() {
     if (e.altKey && e.code === 'KeyZ') {
       e.preventDefault();
       toggleWordWrap();
-      return;
-    }
-
-    if (e.altKey && e.code === 'KeyL') {
-      e.preventDefault();
-      toggleLineNumbers();
       return;
     }
 

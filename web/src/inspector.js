@@ -5,7 +5,7 @@ import { updateStatus, setStatusNote } from './status.js';
 import { openFile, centerLine } from './tabs.js';
 import { pushHistory } from './history.js';
 import { loadOutline, drawOutline } from './outline.js';
-import { displayPath } from './search.js';
+import { displayPath, cancelSearch } from './search.js';
 import { groupHits, flashFind, canAskServer, lspCall, positionNow } from './lsp.js';
 
 export function showRightInspector(tab = 'refs') {
@@ -16,12 +16,14 @@ export function showRightInspector(tab = 'refs') {
 }
 
 export function hideRightInspector() {
+  cancelSearch();
   document.body.classList.add('right-hidden');
   layout();
   render();
 }
 
 export function setRightInspectorTab(tab) {
+  if (tab !== 'search') cancelSearch();
   $$('.inspector-tab').forEach(b => b.classList.toggle('active', b.dataset.itab === tab));
   $('#pane-right-refs')?.classList.toggle('active', tab === 'refs');
   $('#pane-right-symbols')?.classList.toggle('active', tab === 'symbols');

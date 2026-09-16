@@ -114,12 +114,25 @@ function renderDiff(d) {
     frag.append(d.diffMode === 'unified' ? unifiedTable(hunk) : splitTable(hunk));
   }
   diffContent.append(frag);
+  syncDiffAgentTargets();
+}
+
+export function syncDiffAgentTargets() {
+  if (!diffview || diffview.hidden) return;
+  const d = doc_();
+  if (!d) return;
+  const ranges = (S.agentTargets || []).filter(t => t.path === d.path);
+  for (const el of diffview.querySelectorAll('[data-l]')) {
+    const l = +el.dataset.l;
+    const inAgent = ranges.some(r => l >= r.l1 && l <= r.l2);
+    el.classList.toggle('agent-sel', inAgent);
+  }
 }
 
 function hunkHeader(hunk) {
   const el = document.createElement('div');
   el.className = 'diff-hunk-head';
-  el.textContent = '@@ -' + hunk.oldStart + ' +' + hunk.newStart + ' @@' + (hunk.section ? ' ' + hunk.section : '');
+  el.textContent = '@@ -' + hunk.oldStart + ' +' + hunk.newStart + ' @@';
   return el;
 }
 

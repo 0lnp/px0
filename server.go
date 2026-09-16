@@ -5,6 +5,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"errors"
 	"io"
 	"io/fs"
 	"mime"
@@ -82,7 +83,6 @@ func NewServer(ix *Index, lsp *lspManager) *Server {
 	s.mux.HandleFunc("/api/agent/edit", s.handleAgentEdit)
 	s.mux.HandleFunc("/api/agent/job", s.handleAgentJob)
 	s.mux.HandleFunc("/api/agent/cancel", s.handleAgentCancel)
-	s.mux.HandleFunc("/api/agent/undo", s.handleAgentUndo)
 	s.lastReq.Store(time.Now().UnixNano())
 	go s.scavenge()
 	return s
@@ -250,8 +250,9 @@ func (s *Server) handleMeta(w http.ResponseWriter, r *http.Request) {
 		"metrics":     getProcessMetrics(),
 		"version":     version,
 		"agent":       s.agent.Name(),
+		"agentModel":  s.agent.Model(),
 		"agentPinned": s.agent.Pinned(),
-		"agents":      s.agentHarnesses(),
+		"agents":      []agentHarness{},
 	})
 }
 
@@ -593,8 +594,11 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		Word:  q.Get("word") == "1",
 		Glob:  q.Get("glob"),
 	}
-	res, truncated, err := Search(s.ix, opts)
+	res, truncated, err := SearchContext(r.Context(), s.ix, opts)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || r.Context().Err() != nil {
+			return
+		}
 		fail(w, 400, err.Error())
 		return
 	}
@@ -633,11 +637,14 @@ func (s *Server) handleDef(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "no symbol")
 		return
 	}
-	res, _, err := Search(s.ix, SearchOpts{
+	res, _, err := SearchContext(r.Context(), s.ix, SearchOpts{
 		Query: sym, Word: true, Case: true,
 		MaxFiles: 400, MaxPerFil: 20, classifyDefs: true,
 	})
 	if err != nil {
+		if errors.Is(err, context.Canceled) || r.Context().Err() != nil {
+			return
+		}
 		fail(w, 400, err.Error())
 		return
 	}

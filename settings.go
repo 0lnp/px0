@@ -13,7 +13,8 @@ import (
 // other per-user files px0 already writes (~/.px0), never in the working tree.
 
 type settings struct {
-	Agent string `json:"agent,omitempty"`
+	Agent  string            `json:"agent,omitempty"`
+	Models map[string]string `json:"models,omitempty"`
 }
 
 var settingsMu sync.Mutex
