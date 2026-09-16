@@ -96,6 +96,70 @@ var agentPresets = []agentPreset{
 			"gemini-3.1-pro-high",
 		},
 	},
+	{
+		Name:         "opencode",
+		Args:         []string{"opencode", "run", "{prompt}"},
+		ModelFlag:    "-m",
+		DefaultModel: "opencode/big-pickle",
+		Models: []string{
+			"opencode/big-pickle",
+			"opencode/gpt-5-nano",
+			"opencode/minimax-m2.5-free",
+			"opencode/trinity-large-preview-free",
+			"github-copilot/claude-haiku-4.5",
+			"github-copilot/claude-sonnet-4.5",
+			"github-copilot/claude-opus-4.5",
+			"google/gemini-2.5-flash",
+			"google/gemini-2.5-pro",
+		},
+	},
+	{
+		Name:         "codex",
+		Args:         []string{"codex", "exec", "--ask-for-approval", "never", "{prompt}"},
+		ModelFlag:    "-m",
+		DefaultModel: "gpt-5-codex",
+		Models: []string{
+			"gpt-5-codex",
+			"gpt-5-mini",
+			"gpt-5.1-codex",
+			"gpt-5.1-codex-max",
+			"gpt-5.1-codex-mini",
+			"gpt-5.2-codex",
+			"gpt-4.1",
+			"o3-mini",
+			"o1",
+		},
+	},
+	{
+		Name:         "aider",
+		Args:         []string{"aider", "--yes-always", "--no-auto-commits", "--message", "{prompt}"},
+		ModelFlag:    "--model",
+		DefaultModel: "claude-3-7-sonnet",
+		Models: []string{
+			"claude-3-7-sonnet",
+			"claude-3-5-haiku",
+			"claude-3-opus",
+			"gpt-4o",
+			"gpt-4o-mini",
+			"o3-mini",
+			"gemini/gemini-2.5-flash",
+			"deepseek/deepseek-chat",
+			"ollama/qwen2.5-coder",
+		},
+	},
+	{
+		Name:         "goose",
+		Args:         []string{"goose", "run", "--no-session", "-t", "{prompt}"},
+		ModelFlag:    "--model",
+		DefaultModel: "gpt-4o",
+		Models: []string{
+			"gpt-4o",
+			"gpt-4o-mini",
+			"claude-3-5-sonnet",
+			"claude-3-5-haiku",
+			"gemini-2.5-flash",
+		},
+	},
 }
 
 var (
@@ -220,6 +284,31 @@ func runModelDiscovery(name, bin string, staticModels []string) {
 				} else {
 					models = list
 				}
+			}
+		}
+	case "opencode":
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		out, err := exec.CommandContext(ctx, bin, "models").Output()
+		cancel()
+		if err == nil {
+			var list []string
+			scanner := bufio.NewScanner(bytes.NewReader(out))
+			for scanner.Scan() {
+				line := strings.TrimSpace(scanner.Text())
+				if line == "" || strings.Contains(line, " ") {
+					continue
+				}
+				list = append(list, line)
+			}
+			if len(list) > 0 {
+				def := "opencode/big-pickle"
+				reordered := []string{def}
+				for _, m := range list {
+					if m != def {
+						reordered = append(reordered, m)
+					}
+				}
+				models = reordered
 			}
 		}
 	}
@@ -394,18 +483,20 @@ func resolveAgentSpec(spec, model string) (string, []string, string, error) {
 			if chosenModel == "" {
 				chosenModel = p.DefaultModel
 			}
-			hasDashP := false
-			for _, arg := range p.Args {
-				if arg == "-p" {
-					hasDashP = true
+			promptIdx := -1
+			for i, arg := range p.Args {
+				if arg == "{prompt}" {
+					promptIdx = i
 					break
 				}
 			}
 			args = make([]string, 0, len(p.Args)+2)
-			for _, arg := range p.Args {
-				if hasDashP && arg == "-p" && p.ModelFlag != "" && chosenModel != "" {
-					args = append(args, p.ModelFlag, chosenModel)
-				} else if !hasDashP && arg == "{prompt}" && p.ModelFlag != "" && chosenModel != "" {
+			insertIdx := promptIdx
+			if promptIdx > 0 && strings.HasPrefix(p.Args[promptIdx-1], "-") {
+				insertIdx = promptIdx - 1
+			}
+			for i, arg := range p.Args {
+				if i == insertIdx && p.ModelFlag != "" && chosenModel != "" {
 					args = append(args, p.ModelFlag, chosenModel)
 				}
 				args = append(args, arg)
@@ -696,13 +787,17 @@ func (m *agentManager) Start(abs, rel string, l1, l2 int, instruction string, fo
 	if m.models != nil && m.models[name] != "" {
 		modelStr = fmt.Sprintf(" (%s)", m.models[name])
 	}
-	uiStatus("step", "agent", fmt.Sprintf("%s%s · %s:%s  %q", name, modelStr, rel, lineRef(l1, l2), instruction), 0, os.Stdout)
+	uiStatus("step", "agent", fmt.Sprintf("#%d %s%s · %s:%s  %q", job.ID, name, modelStr, rel, lineRef(l1, l2), instruction), 0, os.Stdout)
 	go m.run(ctx, cancel, job, args, agentPrompt(rel, l1, l2, snippet, instruction))
 	return m.Job(job.ID), nil
 }
 
 func (m *agentManager) run(ctx context.Context, cancel context.CancelFunc, job *agentJob, template []string, prompt string) {
 	defer cancel()
+
+	if uiVerbose {
+		uiVerbosePrompt(job.ID, job.Harness, prompt, os.Stdout)
+	}
 
 	before := worktreeSnapshot(m.root)
 
@@ -744,7 +839,7 @@ func (m *agentManager) run(ctx context.Context, cancel context.CancelFunc, job *
 
 	durStr := fmtDuration(time.Duration(job.Ms) * time.Millisecond)
 	if err != nil {
-		uiStatus("err", "agent", fmt.Sprintf("%s failed in %s: %s", job.Harness, durStr, err.Error()), 0, os.Stdout)
+		uiStatus("err", "agent", fmt.Sprintf("#%d %s failed in %s: %s", job.ID, job.Harness, durStr, err.Error()), 0, os.Stdout)
 		if trimmedErr := strings.TrimSpace(stderrOutput); trimmedErr != "" {
 			uiKV("harness stderr", trimmedErr, 0, os.Stdout)
 		}
@@ -761,7 +856,7 @@ func (m *agentManager) run(ctx context.Context, cancel context.CancelFunc, job *
 		default:
 			summary = fmt.Sprintf("%d files changed: %s", len(changed), strings.Join(changed, ", "))
 		}
-		uiStatus("ok", "agent", fmt.Sprintf("%s · %s  (%s)", job.Harness, durStr, summary), 0, os.Stdout)
+		uiStatus("ok", "agent", fmt.Sprintf("#%d %s · %s  (%s)", job.ID, job.Harness, durStr, summary), 0, os.Stdout)
 		if len(changed) == 0 && job.Tracked {
 			if trimmedErr := strings.TrimSpace(stderrOutput); trimmedErr != "" {
 				uiKV("harness stderr", trimmedErr, 0, os.Stdout)

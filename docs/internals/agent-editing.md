@@ -115,6 +115,10 @@ Every supported harness starts an interactive session by default and blocks on a
 | `gemini` | `gemini-2.5-flash-lite` | `gemini --approval-mode auto_edit -m gemini-2.5-flash-lite -p {prompt}` |
 | `cursor-agent` | `gemini-3.6-flash-minimal` | `cursor-agent --force --model gemini-3.6-flash-minimal -p {prompt}` |
 | `agy` | `gemini-3.6-flash-low` | `agy --dangerously-skip-permissions --mode accept-edits --model gemini-3.6-flash-low -p {prompt}` |
+| `opencode` | `opencode/big-pickle` | `opencode run -m opencode/big-pickle {prompt}` |
+| `codex` | `gpt-5-codex` | `codex exec --ask-for-approval never -m gpt-5-codex {prompt}` |
+| `aider` | `claude-3-7-sonnet` | `aider --yes-always --no-auto-commits --model claude-3-7-sonnet --message {prompt}` |
+| `goose` | `gpt-4o` | `goose run --no-session --model gpt-4o -t {prompt}` |
 
 By default, px0 uses the least capable (fastest and cheapest) model from each harness's available model list, while letting users choose any available model from the harness menu or picker.
 

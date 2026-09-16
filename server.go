@@ -6,6 +6,7 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"mime"
@@ -309,6 +310,7 @@ func (s *Server) lspRespond(w http.ResponseWriter, rel string, hits []NavHit, er
 }
 
 func (s *Server) handleLSPDef(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	abs, rel, line, col, ok := s.lspPos(r)
 	if !ok {
 		fail(w, 400, "bad path")
@@ -317,10 +319,20 @@ func (s *Server) handleLSPDef(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := lspCtx(r)
 	defer cancel()
 	hits, err := s.lsp.Definition(ctx, abs, rel, line, col)
+	if uiVerbose {
+		dur := fmtDuration(time.Since(start))
+		if len(hits) == 1 {
+			dest := fmt.Sprintf("%s:%d", hits[0].Path, hits[0].Line)
+			uiStatus("info", "lsp def", fmt.Sprintf("%s:%d:%d -> %s  (%s)", rel, line, col, dest, dur), 0, os.Stdout)
+		} else {
+			uiStatus("info", "lsp def", fmt.Sprintf("%s:%d:%d · %d hits  (%s)", rel, line, col, len(hits), dur), 0, os.Stdout)
+		}
+	}
 	s.lspRespond(w, rel, hits, err)
 }
 
 func (s *Server) handleLSPRefs(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	abs, rel, line, col, ok := s.lspPos(r)
 	if !ok {
 		fail(w, 400, "bad path")
@@ -329,6 +341,14 @@ func (s *Server) handleLSPRefs(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := lspCtx(r)
 	defer cancel()
 	hits, err := s.lsp.References(ctx, abs, rel, line, col)
+	if uiVerbose {
+		dur := fmtDuration(time.Since(start))
+		files := make(map[string]bool)
+		for _, h := range hits {
+			files[h.Path] = true
+		}
+		uiStatus("info", "lsp refs", fmt.Sprintf("%s:%d:%d · %d refs in %d files  (%s)", rel, line, col, len(hits), len(files), dur), 0, os.Stdout)
+	}
 	s.lspRespond(w, rel, hits, err)
 }
 
@@ -337,6 +357,7 @@ func (s *Server) handleLSPRefs(w http.ResponseWriter, r *http.Request) {
 // it expands that node into callers, or callees when dir=out. path always names
 // the file the trail started in, which picks the language server.
 func (s *Server) handleLSPCalls(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	abs, rel, line, col, ok := s.lspPos(r)
 	if !ok {
 		fail(w, 400, "bad path")
@@ -359,6 +380,13 @@ func (s *Server) handleLSPCalls(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]any{"nodes": nodes, "state": string(state), "server": server}
 	if err != nil {
 		resp["error"] = err.Error()
+	}
+	if uiVerbose {
+		dir := "callers"
+		if q.Get("dir") == "out" {
+			dir = "callees"
+		}
+		uiStatus("info", "lsp calls", fmt.Sprintf("%s:%d:%d (%s) · %d nodes  (%s)", rel, line, col, dir, len(nodes), fmtDuration(time.Since(start))), 0, os.Stdout)
 	}
 	writeJSON(w, resp)
 }
@@ -457,6 +485,7 @@ func (s *Server) handleTree(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFind(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	q := r.URL.Query().Get("q")
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	if limit <= 0 || limit > 500 {
@@ -465,6 +494,10 @@ func (s *Server) handleFind(w http.ResponseWriter, r *http.Request) {
 	res := FuzzyFind(s.ix.Files(), q, limit)
 	if res == nil {
 		res = []FuzzyResult{}
+	}
+	if uiVerbose && q != "" {
+		dur := fmtDuration(time.Since(start))
+		uiStatus("info", "find", fmt.Sprintf("%q · %d files  (%s)", q, len(res), dur), 0, os.Stdout)
 	}
 	writeJSON(w, map[string]any{"results": res})
 }
@@ -487,6 +520,9 @@ func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if imageExt[strings.ToLower(filepath.Ext(rel))] {
+		if uiVerbose {
+			uiStatus("info", "view", fmt.Sprintf("%s · image (%s)", rel, formatBytes(st.Size())), 0, os.Stdout)
+		}
 		writeJSON(w, map[string]any{"path": rel, "image": true, "size": st.Size()})
 		return
 	}
@@ -506,6 +542,9 @@ func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
 	}
 	if start > d.Total {
 		start = d.Total
+	}
+	if uiVerbose && start == 0 {
+		uiStatus("info", "view", fmt.Sprintf("%s · %d lines (%s)", rel, d.Total, formatBytes(st.Size())), 0, os.Stdout)
 	}
 	lines, exact := d.Lines(start, start+count)
 	_, coming := d.Exact()
@@ -557,6 +596,14 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	diff := gitDiff(s.ix.Root(), rel)
+	if uiVerbose {
+		status := "clean"
+		if diff != "" {
+			lines := strings.Count(diff, "\n")
+			status = fmt.Sprintf("%d diff lines", lines)
+		}
+		uiStatus("info", "diff", fmt.Sprintf("%s · %s", rel, status), 0, os.Stdout)
+	}
 	writeJSON(w, map[string]any{"path": rel, "diff": diff, "available": diff != ""})
 }
 
@@ -586,6 +633,7 @@ func (s *Server) handleGutter(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	q := r.URL.Query()
 	opts := SearchOpts{
 		Query: q.Get("q"),
@@ -609,10 +657,27 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	if res == nil {
 		res = []FileMatches{} // an empty result is [], never null
 	}
+	if uiVerbose && opts.Query != "" {
+		dur := fmtDuration(time.Since(start))
+		matchStr := "matches"
+		if total == 1 {
+			matchStr = "match"
+		}
+		fileStr := "files"
+		if len(res) == 1 {
+			fileStr = "file"
+		}
+		truncStr := ""
+		if truncated {
+			truncStr = " (truncated)"
+		}
+		uiStatus("info", "search", fmt.Sprintf("%q · %d %s in %d %s%s  (%s)", opts.Query, total, matchStr, len(res), fileStr, truncStr, dur), 0, os.Stdout)
+	}
 	writeJSON(w, map[string]any{"results": res, "files": len(res), "total": total, "truncated": truncated})
 }
 
 func (s *Server) handleOutline(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	abs, rel, ok := s.resolvePath(r.URL.Query().Get("path"))
 	if !ok {
 		fail(w, 400, "bad path")
@@ -626,12 +691,16 @@ func (s *Server) handleOutline(w http.ResponseWriter, r *http.Request) {
 	if syms == nil {
 		syms = []Symbol{}
 	}
+	if uiVerbose {
+		uiStatus("info", "outline", fmt.Sprintf("%s · %d symbols  (%s)", rel, len(syms), fmtDuration(time.Since(start))), 0, os.Stdout)
+	}
 	writeJSON(w, map[string]any{"path": rel, "symbols": syms})
 }
 
 // handleDef approximates go-to-definition: a whole-word search across the
 // index, with lines that look like declarations floated to the top.
 func (s *Server) handleDef(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	sym := strings.TrimSpace(r.URL.Query().Get("sym"))
 	if sym == "" {
 		fail(w, 400, "no symbol")
@@ -680,6 +749,14 @@ func (s *Server) handleDef(w http.ResponseWriter, r *http.Request) {
 	state, server := s.lsp.State(r.URL.Query().Get("path"))
 	if defs == nil {
 		defs = []hit{}
+	}
+	if uiVerbose {
+		dur := fmtDuration(time.Since(start))
+		defStr := "definitions"
+		if len(defs) == 1 {
+			defStr = "definition"
+		}
+		uiStatus("info", "def", fmt.Sprintf("%q · %d %s, %d refs  (%s)", sym, len(defs), defStr, refs, dur), 0, os.Stdout)
 	}
 	writeJSON(w, map[string]any{
 		"symbol": sym, "defs": defs, "refCount": refs,

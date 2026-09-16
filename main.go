@@ -37,8 +37,9 @@ func main() {
 		doUpdate     = flag.Bool("update", false, "check for and install latest version of px0")
 		noColor      = flag.Bool("no-color", false, "disable colour output")
 		quiet        = flag.Bool("quiet", false, "suppress narration")
+		verbose      = flag.Bool("verbose", false, "log requests, searches, symbols, and agent prompts to terminal")
 		noTelemetry  = flag.Bool("no-telemetry", false, "disable anonymous usage telemetry")
-		agentCmd     = flag.String("agent", "", "pin the coding harness used for edits (claude, gemini, cursor-agent, agy, or a command template containing {prompt}); detected and chosen in the UI when omitted")
+		agentCmd     = flag.String("agent", "", "pin the coding harness used for edits (claude, gemini, cursor-agent, agy, opencode, codex, aider, goose, or a command template containing {prompt}); detected and chosen in the UI when omitted")
 		noAgent      = flag.Bool("no-agent", false, "do not offer editing through a coding harness")
 	)
 	flag.Usage = func() {
@@ -53,6 +54,9 @@ func main() {
 	}
 	if *quiet {
 		uiQuiet = true
+	}
+	if *verbose {
+		uiVerbose = true
 	}
 	if *noGit {
 		gitDisabled = true
@@ -137,7 +141,7 @@ func main() {
 					found = append(found, item)
 				}
 			}
-			if len(found) > 0 {
+			if uiVerbose && len(found) > 0 {
 				uiStatus("info", uiInfo("coding harnesses: "+strings.Join(found, ", "), os.Stdout), "", 0, os.Stdout)
 			}
 		}

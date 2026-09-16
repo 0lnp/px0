@@ -34,7 +34,32 @@ const (
 var (
 	uiForcedColor *bool
 	uiQuiet       = false
+	uiVerbose     = false
 )
+
+func formatBytes(b int64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
+func uiVerbosePrompt(jobID int64, harness string, prompt string, w io.Writer) {
+	if !uiVerbose || uiQuiet {
+		return
+	}
+	lines := strings.Split(prompt, "\n")
+	fmt.Fprintf(w, "  %s %s\n", uiDim("prompt:", w), uiFaint(fmt.Sprintf("(%d lines)", len(lines)), w))
+	for _, l := range lines {
+		fmt.Fprintf(w, "  %s %s\n", uiFaint("│", w), uiDim(l, w))
+	}
+}
 
 func colorEnabled(w io.Writer) bool {
 	if uiForcedColor != nil {

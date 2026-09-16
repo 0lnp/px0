@@ -378,18 +378,18 @@ func TestPresetArgvOrder(t *testing.T) {
 		if n < 2 {
 			t.Fatalf("preset %s args too short: %v", p.Name, p.Args)
 		}
-		if p.Args[n-2] != "-p" || p.Args[n-1] != "{prompt}" {
-			t.Fatalf("preset %s args %v: want -p {prompt} at the very end", p.Name, p.Args)
+		if p.Args[n-1] != "{prompt}" {
+			t.Fatalf("preset %s args %v: want {prompt} at the very end", p.Name, p.Args)
 		}
 
-		// When resolved with default model, model flag must be before -p, and -p must be right before {prompt}
+		// When resolved with default model, {prompt} must remain at the very end
 		_, resolved, _, err := resolveAgentSpec(p.Name, "")
 		if err != nil {
 			continue // tool may not be installed in test env
 		}
 		rn := len(resolved)
-		if rn < 2 || resolved[rn-2] != "-p" || resolved[rn-1] != "{prompt}" {
-			t.Fatalf("resolved %s args %v: want -p {prompt} at the very end", p.Name, resolved)
+		if rn < 2 || resolved[rn-1] != "{prompt}" {
+			t.Fatalf("resolved %s args %v: want {prompt} at the very end", p.Name, resolved)
 		}
 	}
 }
@@ -629,6 +629,44 @@ func TestShellQuoteAndCommand(t *testing.T) {
 		got := shellCommand(tc.in)
 		if got != tc.want {
 			t.Errorf("shellCommand(%v) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestAllPresetArgvFormatting(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	for _, p := range agentPresets {
+		binPath := filepath.Join(dir, p.Args[0])
+		if err := os.WriteFile(binPath, []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, p := range agentPresets {
+		name, resolved, model, err := resolveAgentSpec(p.Name, "")
+		if err != nil {
+			t.Fatalf("resolveAgentSpec(%q) error: %v", p.Name, err)
+		}
+		if name != p.Name {
+			t.Errorf("name = %q, want %q", name, p.Name)
+		}
+		if model != p.DefaultModel {
+			t.Errorf("model = %q, want %q", model, p.DefaultModel)
+		}
+		if resolved[len(resolved)-1] != "{prompt}" {
+			t.Errorf("%s final arg = %q, want {prompt}", p.Name, resolved[len(resolved)-1])
+		}
+		// Ensure model flag was inserted properly
+		hasModel := false
+		for i, a := range resolved {
+			if a == p.ModelFlag && i+1 < len(resolved) && resolved[i+1] == p.DefaultModel {
+				hasModel = true
+				break
+			}
+		}
+		if !hasModel {
+			t.Errorf("%s resolved args %v missing model flag %q %q", p.Name, resolved, p.ModelFlag, p.DefaultModel)
 		}
 	}
 }
