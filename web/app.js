@@ -1259,7 +1259,7 @@
     if (previewing(d)) {
       const n = findInPreview(q);
       S2.find = q ? { q, ci: false, hits: new Array(n).fill(null), byLine: new Set, active: n ? 0 : -1, preview: true } : null;
-      $("#find-count").textContent = q ? n ? "1 / " + n : "no results" : "0";
+      $("#find-count").textContent = !q ? "0" : n ? "1 / " + n : "no results";
       drawTicks(previewHitOffsets());
       if (n)
         jumpToHit(0);
@@ -2142,9 +2142,10 @@
         html += '<div class="lsp-opt"><code>' + esc(o.cmd) + '</code><span class="lsp-acts">';
         if (!o.auto)
           html += '<span class="lsp-need">run in a terminal</span>';
-        else if (o.hasTool)
-          html += '<button class="lsp-btn primary" data-install="' + esc(v.name) + '" data-option="' + i + '"' + (running ? " disabled" : "") + ">Install</button>"; else 
+        else if (!o.hasTool)
           html += '<span class="lsp-need">needs ' + esc(o.tool) + "</span>";
+        else
+          html += '<button class="lsp-btn primary" data-install="' + esc(v.name) + '" data-option="' + i + '"' + (running ? " disabled" : "") + ">Install</button>";
         html += '<button class="lsp-btn" data-copy="' + esc(o.cmd) + '">Copy</button></span></div>';
       });
       if (v.job)
@@ -3548,13 +3549,7 @@
       if (!range.intersectsNode(el))
         continue;
       const code = el.querySelector(".diff-code");
-      if (el.dataset.l === undefined) {
-        const n = +el.dataset.at;
-        if (n < at1)
-          at1 = n;
-        if (n > at2)
-          at2 = n;
-      } else {
+      if (el.dataset.l !== undefined) {
         const n = +el.dataset.l;
         if (n < l1)
           l1 = n;
@@ -3563,6 +3558,12 @@
         if (seen.has(n))
           continue;
         seen.add(n);
+      } else {
+        const n = +el.dataset.at;
+        if (n < at1)
+          at1 = n;
+        if (n > at2)
+          at2 = n;
       }
       parts.push(code ? code.textContent : "");
     }
@@ -4595,7 +4596,7 @@
   function openPalette(mode, seed) {
     pal = { mode, items: [], sel: 0, restoreTheme: mode === "theme" ? currentTheme() : null };
     overlay.hidden = false;
-    palInput.value = seed === undefined ? { symbol: "@", line: ":", command: ">" }[mode] || "" : seed;
+    palInput.value = seed !== undefined ? seed : { symbol: "@", line: ":", command: ">" }[mode] || "";
     $("#pal-mode").textContent = PAL_MODES[mode].tag;
     $("#pal-hint").textContent = PAL_MODES[mode].hint;
     palInput.focus();
@@ -5210,7 +5211,7 @@
     }
     if (!await reloadWorkspace(editTarget, "Edited"))
       return;
-    showToast("✓", changed.length ? changed.length === 1 ? "Updated " + changed[0] : "Updated " + changed.length + " files" : "Reloaded the workspace");
+    showToast("✓", !changed.length ? "Reloaded the workspace" : changed.length === 1 ? "Updated " + changed[0] : "Updated " + changed.length + " files");
   }
   var reloadChain = Promise.resolve();
   function reloadWorkspace(focus, what = "Changed") {
@@ -5268,12 +5269,12 @@
     try {
       initTheme();
       const wrapPref = localStorage.getItem("px0.wrap");
-      S2.wrap = wrapPref === null ? true : wrapPref === "true";
+      S2.wrap = wrapPref !== null ? wrapPref === "true" : true;
       document.body.classList.toggle("word-wrap", S2.wrap);
       S2.lineNumbers = true;
       document.body.classList.remove("hide-lines");
       const mdPref = localStorage.getItem("px0.mdPreview");
-      S2.mdPreview = mdPref === null ? true : mdPref === "true";
+      S2.mdPreview = mdPref !== null ? mdPref === "true" : true;
       updateEditorOptionControls();
     } catch {}
     applyKeyLabels();
