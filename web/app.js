@@ -477,7 +477,7 @@
   var MERMAID_VERSION = "11.17.2";
   var MERMAID_URL = "/static/lib/mermaid/" + MERMAID_VERSION + "/mermaid.esm.min.mjs";
   var MAX_BLOCKS = 50;
-  var MAX_CHARS = 2000;
+  var MAX_CHARS = 50000;
   var mermaidPromise = null;
   var mermaidModule = null;
   var renderQueue = Promise.resolve();
