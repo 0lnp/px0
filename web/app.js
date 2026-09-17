@@ -487,6 +487,16 @@
     }).observe(editor);
   }
 
+  // web/src/zoom-math.js
+  function anchoredScroll(sl, st, left, top, width, height, f, ax, ay) {
+    const x = (ax == null ? width / 2 : ax - left) + sl;
+    const y = (ay == null ? height / 2 : ay - top) + st;
+    return [
+      x * f - (ax == null ? width / 2 : ax - left),
+      y * f - (ay == null ? height / 2 : ay - top)
+    ];
+  }
+
   // web/src/mermaid.js
   var MERMAID_VERSION = "11.17.2";
   var MERMAID_URL = "/static/lib/mermaid/" + MERMAID_VERSION + "/mermaid.esm.min.mjs";
@@ -631,6 +641,8 @@
       target.append(tools(stage));
     else if (natural > 1) {
       new ResizeObserver(() => {
+        if (!target.isConnected)
+          return;
         if (!target.querySelector(".md-mermaid-tools") && natural > target.clientWidth + 1) {
           target.append(tools(stage));
         }
@@ -658,10 +670,9 @@
   var EXPAND = ["M6 2.5H2.5V6", "M10 2.5h3.5V6", "M6 13.5H2.5V10", "M10 13.5h3.5V10"];
   function anchorScroll(el, f, ax, ay) {
     const r = el.getBoundingClientRect();
-    const cx = (ax == null ? r.width / 2 : ax - r.left) + el.scrollLeft;
-    const cy = (ay == null ? r.height / 2 : ay - r.top) + el.scrollTop;
-    el.scrollLeft = cx * f - (ax == null ? r.width / 2 : ax - r.left);
-    el.scrollTop = cy * f - (ay == null ? r.height / 2 : ay - r.top);
+    const [x, y] = anchoredScroll(el.scrollLeft, el.scrollTop, r.left, r.top, r.width, r.height, f, ax, ay);
+    el.scrollLeft = x;
+    el.scrollTop = y;
   }
   function gestures(el, can, zoomAt) {
     const pts = new Map;
@@ -752,6 +763,7 @@
     scrim.className = "md-mermaid-box";
     scrim.setAttribute("role", "dialog");
     scrim.setAttribute("aria-modal", "true");
+    scrim.setAttribute("aria-label", "Diagram fullscreen view");
     const stage = document.createElement("div");
     stage.className = "md-mermaid-box-stage";
     const clone = svg.cloneNode(true);
@@ -845,6 +857,7 @@
     });
     themeWatcher.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   }
+  var lightboxOpen = () => !!document.querySelector(".md-mermaid-box");
   function renderMermaidBlocks(root) {
     if (!root || !root.querySelectorAll)
       return;
@@ -4263,6 +4276,8 @@
         showHelp();
     });
     addEventListener("keydown", (e) => {
+      if (lightboxOpen())
+        return;
       const mod = e[MOD];
       if (e.key === "Escape") {
         if (!overlay.hidden) {
