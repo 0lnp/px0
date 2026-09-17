@@ -1,6 +1,6 @@
 // web/src/shortcuts.js
-import { $, $$, esc, S, doc_, isMac, MOD, LH, keyCaps } from './state.js';
-import { vp, sizer } from './ui.js';
+import { $, $$, esc, frag, S, doc_, isMac, MOD, LH, keyCaps } from './state.js';
+import { vp, sizer, trapTab } from './ui.js';
 import { layout, render, paint, toggleWordWrap } from './renderer.js';
 import { updateStatus } from './status.js';
 import { closeTab, switchTab, reopenClosedTab } from './tabs.js';
@@ -47,10 +47,10 @@ export const SHORTCUTS = [
 export function showHelp() {
   const h = $('#helpsheet');
   const ver = S.meta?.version ? ` <span class="help-version">v${esc(S.meta.version)}</span>` : '';
-  h.innerHTML = '<div class="help-card"><div class="help-header"><h2>Keyboard Shortcuts</h2>' + ver + '</div><dl class="help-grid">' +
+  h.replaceChildren(frag('<div class="help-card"><div class="help-header"><h2>Keyboard Shortcuts</h2>' + ver + '</div><dl class="help-grid">' +
     SHORTCUTS.map(([combos, v]) =>
       '<dt>' + combos.map(keyCaps).filter(Boolean).join('<span class="key-or">/</span>') + '</dt>' +
-      '<dd>' + esc(v) + '</dd>').join('') + '</dl></div>';
+      '<dd>' + esc(v) + '</dd>').join('') + '</dl></div>'));
   h.hidden = false;
 }
 
@@ -92,6 +92,7 @@ export function initShortcuts() {
       if (inField(document.activeElement)) document.activeElement.blur();
       return;
     }
+    if (e.key === 'Tab' && !$('#helpsheet').hidden) { trapTab($('#helpsheet'), e); return; }
 
     // Universal Quick Open / Command Palette: Cmd+K / Ctrl+K
     if (mod && (e.key === 'k' || e.key === 'K')) {

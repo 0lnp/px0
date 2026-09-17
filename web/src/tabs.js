@@ -1,5 +1,5 @@
 // web/src/tabs.js
-import { $, esc, S, doc_, api, LH, CHUNK, withKeys } from './state.js';
+import { $, esc, frag, S, doc_, api, LH, CHUNK, withKeys } from './state.js';
 import { vp, sizer, rowsEl, editor } from './ui.js';
 import { render, layout, refineChunk } from './renderer.js';
 import { updateStatus, setStatusNote, refreshMetrics } from './status.js';
@@ -236,7 +236,7 @@ export function closeTab(i) {
     S.active = -1;
     syncPreview();
     syncDiffView();
-    rowsEl.innerHTML = ''; sizer.style.height = '0px';
+    rowsEl.replaceChildren(); sizer.style.height = '0px';
     $('#empty').hidden = false; drawCrumbs();
     drawTabs(); updateStatus();
     return;
@@ -263,9 +263,10 @@ export async function reopenClosedTab() {
 }
 
 export function drawTabs() {
-  $('#tabs').innerHTML = S.tabs.map((t, i) =>
+  const tabsHtml = S.tabs.map((t, i) =>
     '<div class="tab' + (i === S.active ? ' active' : '') + '" data-i="' + i + '" title="' + esc(t.path) + '">' +
     '<span class="tn">' + esc(t.name) + '</span><span class="x" data-close="' + i + '" title="' + withKeys('Close tab ({Alt+W})') + '"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 2l6 6M8 2l-6 6"/></svg></span></div>').join('');
+  $('#tabs').replaceChildren(frag(tabsHtml));
   const act = $('#tabs .tab.active');
   if (act) act.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
@@ -294,14 +295,17 @@ export function switchTab(i) {
 
 export function drawCrumbs() {
   const el = $('#crumbs');
-  if (el) el.innerHTML = '';
+  if (el) el.replaceChildren();
 }
 
 export function showImage(path) {
   hideImage();
   const box = document.createElement('div');
   box.id = 'imgview';
-  box.innerHTML = '<img src="/api/raw?path=' + encodeURIComponent(path) + '" alt="">';
+  const img = document.createElement('img');
+  img.src = '/api/raw?path=' + encodeURIComponent(path);
+  img.alt = '';
+  box.append(img);
   editor.appendChild(box);
   $('#empty').hidden = true;
 }
@@ -326,7 +330,7 @@ export function initTabs() {
   if (crumbsEl) {
     crumbsEl.addEventListener('click', e => {
       const c = e.target.closest('[data-dir]');
-      if (c) { showPanel('files'); revealDir(c.dataset.dir); }
+      if (c) { showPanel(); revealDir(c.dataset.dir); }
     });
   }
 }

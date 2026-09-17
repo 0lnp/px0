@@ -3,6 +3,11 @@
   var $ = (s, r = document) => r.querySelector(s);
   var $$ = (s, r = document) => [...r.querySelectorAll(s)];
   var esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  var frag = (html) => {
+    const f = document.createDocumentFragment();
+    f.append(...new DOMParser().parseFromString(html, "text/html").body.childNodes);
+    return f;
+  };
   var request = async (method, path, params, opts = {}) => {
     const u = new URL(path, location.origin);
     for (const [k, v] of Object.entries(params || {}))
@@ -44,7 +49,7 @@
     for (const el of $$("[data-keys]", root))
       el.textContent = keyLabel(el.dataset.keys);
     for (const el of $$("[data-caps]", root))
-      el.innerHTML = keyCaps(el.dataset.caps);
+      el.replaceChildren(frag(keyCaps(el.dataset.caps)));
     for (const el of $$('[title*="{"]', root))
       el.title = withKeys(el.title);
   }
@@ -81,6 +86,16 @@
   var rowsEl = $("#rows");
   var editor = $("#editor");
   var toastEl = $("#toast");
+  function trapTab(container, e) {
+    const f = [...container.querySelectorAll("button, input, select, textarea, a[href], [tabindex]")].filter((el) => !el.disabled && el.tabIndex >= 0 && (el.offsetWidth || el.offsetHeight));
+    if (!f.length) {
+      e.preventDefault();
+      return;
+    }
+    const i = f.indexOf(document.activeElement);
+    e.preventDefault();
+    f[e.shiftKey ? i <= 0 ? f.length - 1 : i - 1 : i === f.length - 1 || i < 0 ? 0 : i + 1].focus();
+  }
   var toastTimer = 0;
   var toastLeaveTimer = 0;
   function showToast(accentText, text, duration = 2200) {
@@ -99,7 +114,7 @@
         iconHtml = '<span class="toast-chip">' + esc(accentText) + "</span>";
       }
     }
-    toastEl.innerHTML = iconHtml + '<span class="toast-msg">' + esc(text) + "</span>";
+    toastEl.replaceChildren(frag(iconHtml + '<span class="toast-msg">' + esc(text) + "</span>"));
     toastEl.hidden = false;
     toastTimer = setTimeout(() => {
       toastEl.classList.add("toast-hide");
@@ -123,7 +138,7 @@
       try {
         document.execCommand("copy");
         showToast("✓", notify);
-      } catch (err) {
+      } catch {
         showToast("!", "Failed to copy to clipboard");
       }
       document.body.removeChild(ta);
@@ -207,9 +222,9 @@
     }
     const sel = saveSelection();
     rowsEl.style.transform = "translateY(" + first * LH + "px)";
-    rowsEl.innerHTML = html;
+    rowsEl.replaceChildren(frag(html));
     rowsEl.classList.toggle("all", S2.selAll === d);
-    decorate(first, last);
+    decorate();
     if (sel)
       restoreSelection(sel);
     placeCaret();
@@ -311,8 +326,7 @@
     }
     return [code, code.childNodes.length];
   }
-  function decorate(first, last) {
-    const d = doc_();
+  function decorate() {
     if (S2.occ) {
       for (const row of rowsEl.children)
         markNodes($(".c", row), S2.occ, true, "occ");
@@ -350,22 +364,22 @@
       let i = hay.indexOf(nd), at = 0;
       if (i < 0)
         continue;
-      const frag = document.createDocumentFragment();
+      const frag2 = document.createDocumentFragment();
       while (i >= 0) {
         if (i > at)
-          frag.appendChild(document.createTextNode(raw.slice(at, i)));
+          frag2.appendChild(document.createTextNode(raw.slice(at, i)));
         const mk = document.createElement(cls === "mark" ? "mark" : "span");
         if (cls !== "mark")
           mk.className = cls;
         mk.textContent = raw.slice(i, i + nd.length);
-        frag.appendChild(mk);
+        frag2.appendChild(mk);
         out.push(mk);
         at = i + nd.length;
         i = hay.indexOf(nd, at);
       }
       if (at < raw.length)
-        frag.appendChild(document.createTextNode(raw.slice(at)));
-      node.parentNode.replaceChild(frag, node);
+        frag2.appendChild(document.createTextNode(raw.slice(at)));
+      node.parentNode.replaceChild(frag2, node);
     }
     return out;
   }
@@ -385,13 +399,13 @@
         const span = document.createElement("span");
         span.className = cls;
         span.textContent = node.nodeValue.slice(a, b);
-        const frag = document.createDocumentFragment();
+        const frag2 = document.createDocumentFragment();
         if (a > 0)
-          frag.appendChild(document.createTextNode(node.nodeValue.slice(0, a)));
-        frag.appendChild(span);
+          frag2.appendChild(document.createTextNode(node.nodeValue.slice(0, a)));
+        frag2.appendChild(span);
         if (b < len)
-          frag.appendChild(document.createTextNode(node.nodeValue.slice(b)));
-        node.parentNode.replaceChild(frag, node);
+          frag2.appendChild(document.createTextNode(node.nodeValue.slice(b)));
+        node.parentNode.replaceChild(frag2, node);
         out = out || span;
       }
       at += len;
@@ -554,18 +568,9 @@
     }
     return "invalid diagram syntax";
   }
-  function sourceBlock(src) {
-    const pre = document.createElement("pre");
-    pre.className = "md-code";
-    pre.dataset.lang = "mermaid";
-    const code = document.createElement("code");
-    code.textContent = src;
-    pre.appendChild(code);
-    return pre;
-  }
-  function fail(target, src, err) {
+  function fail(target, err) {
     rendered.delete(target);
-    const original = snapshots.get(target) || sourceBlock(src);
+    const original = snapshots.get(target);
     target.replaceWith(original);
     const at = original.dataset.line ? " (line " + original.dataset.line + ")" : "";
     note(original, "Mermaid" + at + ": " + (err && err.message ? String(err.message).split(`
@@ -581,7 +586,7 @@
     try {
       mermaid = await loadMermaid();
     } catch (err) {
-      fail(target, src, err);
+      fail(target, err);
       return;
     }
     let svg;
@@ -593,31 +598,227 @@
       if (!svg)
         throw new Error("render produced no SVG");
     } catch (err) {
-      fail(target, src, err);
+      fail(target, err);
       return;
     }
     const doc = new DOMParser().parseFromString(svg, "text/html");
     const root = doc.querySelector("svg");
-    if (root) {
-      for (const el of [...doc.querySelectorAll("*")]) {
-        if (el.localName === "script" || el.namespaceURI === "http://www.w3.org/2000/xhtml" && el.localName === "iframe") {
-          el.remove();
-          continue;
-        }
-        for (const a of [...el.attributes]) {
-          if (/^on/i.test(a.name) || /^javascript:/i.test(a.value.replace(/[\t\n\r ]/g, "")))
-            el.removeAttribute(a.name);
-        }
-      }
-      const holder = document.createElement("div");
-      holder.className = "md-mermaid-svg";
-      holder.appendChild(document.adoptNode(root));
-      target.replaceWith(holder);
-    } else {
-      fail(target, src, new Error("render produced no SVG"));
+    if (!root) {
+      fail(target, new Error("render produced no SVG"));
       return;
     }
+    for (const el of [...doc.querySelectorAll("*")]) {
+      if (el.localName === "script" || el.namespaceURI === "http://www.w3.org/2000/xhtml" && el.localName === "iframe") {
+        el.remove();
+        continue;
+      }
+      for (const a of [...el.attributes]) {
+        if (/^on/i.test(a.name) || /^javascript:/i.test(a.value.replace(/[\t\n\r ]/g, "")))
+          el.removeAttribute(a.name);
+      }
+    }
+    target.replaceChildren();
+    buildZoom(target, document.adoptNode(root));
     rendered.add(target);
+  }
+  function buildZoom(target, svg) {
+    const stage = document.createElement("div");
+    stage.className = "md-mermaid-svg";
+    stage.appendChild(svg);
+    target.append(stage);
+    const natural = svg.viewBox.baseVal.width;
+    if (natural > target.clientWidth + 1)
+      target.append(tools(stage));
+    else if (natural > 1) {
+      new ResizeObserver(() => {
+        if (!target.querySelector(".md-mermaid-tools") && natural > target.clientWidth + 1) {
+          target.append(tools(stage));
+        }
+      }).observe(target);
+    }
+  }
+  var ZOOM_MAX = 8;
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  function icon(paths) {
+    const s = document.createElementNS(SVG_NS, "svg");
+    s.setAttribute("viewBox", "0 0 16 16");
+    s.setAttribute("width", "12");
+    s.setAttribute("height", "12");
+    s.setAttribute("fill", "none");
+    s.setAttribute("stroke", "currentColor");
+    s.setAttribute("stroke-width", "1.4");
+    s.setAttribute("stroke-linejoin", "round");
+    for (const d of paths) {
+      const p = document.createElementNS(SVG_NS, "path");
+      p.setAttribute("d", d);
+      s.appendChild(p);
+    }
+    return s;
+  }
+  var EXPAND = ["M6 2.5H2.5V6", "M10 2.5h3.5V6", "M6 13.5H2.5V10", "M10 13.5h3.5V10"];
+  function anchorScroll(el, f, ax, ay) {
+    const r = el.getBoundingClientRect();
+    const cx = (ax == null ? r.width / 2 : ax - r.left) + el.scrollLeft;
+    const cy = (ay == null ? r.height / 2 : ay - r.top) + el.scrollTop;
+    el.scrollLeft = cx * f - (ax == null ? r.width / 2 : ax - r.left);
+    el.scrollTop = cy * f - (ay == null ? r.height / 2 : ay - r.top);
+  }
+  function gestures(el, can, zoomAt) {
+    const pts = new Map;
+    let d0 = 0;
+    el.addEventListener("pointerdown", (e) => {
+      if (!can() || e.button !== 0)
+        return;
+      pts.set(e.pointerId, [e.clientX, e.clientY]);
+      if (pts.size === 2) {
+        const [a, b] = [...pts.values()];
+        d0 = Math.hypot(a[0] - b[0], a[1] - b[1]);
+      }
+      el.setPointerCapture(e.pointerId);
+    });
+    el.addEventListener("pointermove", (e) => {
+      const prev = pts.get(e.pointerId);
+      if (!prev)
+        return;
+      pts.set(e.pointerId, [e.clientX, e.clientY]);
+      if (pts.size === 2) {
+        const [a, b] = [...pts.values()];
+        const d1 = Math.hypot(a[0] - b[0], a[1] - b[1]);
+        if (d0 > 0 && d1 > 0)
+          zoomAt(d1 / d0, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+        d0 = d1;
+        return;
+      }
+      el.scrollLeft -= e.clientX - prev[0];
+      el.scrollTop -= e.clientY - prev[1];
+    });
+    const drop = (e) => {
+      pts.delete(e.pointerId);
+      d0 = 0;
+    };
+    el.addEventListener("pointerup", drop);
+    el.addEventListener("pointercancel", drop);
+  }
+  function tools(stage) {
+    const svg = stage.querySelector("svg");
+    let z = 1;
+    const setZoom = (nz, ax, ay) => {
+      const prev = z;
+      z = Math.min(ZOOM_MAX, Math.max(1, nz));
+      if (z === 1) {
+        svg.style.width = "";
+        svg.style.maxWidth = "";
+        stage.classList.remove("md-mermaid-zoomed");
+        stage.scrollLeft = stage.scrollTop = 0;
+        return;
+      }
+      svg.style.maxWidth = "none";
+      svg.style.width = stage.clientWidth * z + "px";
+      stage.classList.add("md-mermaid-zoomed");
+      anchorScroll(stage, z / prev, ax, ay);
+    };
+    const bar = document.createElement("div");
+    bar.className = "md-mermaid-tools";
+    for (const [content, title, fn] of [
+      ["+", "Zoom in", () => setZoom(z * 1.25)],
+      ["−", "Zoom out", () => setZoom(z / 1.25)],
+      ["1:1", "Reset zoom", () => setZoom(1)],
+      [icon(EXPAND), "Fullscreen", () => lightbox(svg, bar.lastElementChild)]
+    ]) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "md-mermaid-tb";
+      if (typeof content === "string")
+        b.textContent = content;
+      else
+        b.append(content);
+      b.title = title;
+      b.setAttribute("aria-label", title);
+      b.addEventListener("click", fn);
+      bar.append(b);
+    }
+    stage.addEventListener("wheel", (e) => {
+      if (z === 1)
+        return;
+      e.preventDefault();
+      setZoom(z * (e.deltaY < 0 ? 1.25 : 0.8), e.clientX, e.clientY);
+    }, { passive: false });
+    gestures(stage, () => z > 1, (r, x, y) => setZoom(z * r, x, y));
+    return bar;
+  }
+  function lightbox(svg, opener) {
+    const vb = svg.viewBox.baseVal;
+    const scrim = document.createElement("div");
+    scrim.className = "md-mermaid-box";
+    scrim.setAttribute("role", "dialog");
+    scrim.setAttribute("aria-modal", "true");
+    const stage = document.createElement("div");
+    stage.className = "md-mermaid-box-stage";
+    const clone = svg.cloneNode(true);
+    clone.removeAttribute("style");
+    stage.appendChild(clone);
+    const hint = document.createElement("div");
+    hint.className = "md-mermaid-box-hint";
+    hint.textContent = "Scroll to zoom · drag to pan · 0 resets · Esc closes";
+    const x = document.createElement("button");
+    x.type = "button";
+    x.className = "md-mermaid-tb md-mermaid-box-x";
+    x.textContent = "×";
+    x.title = "Close";
+    x.setAttribute("aria-label", "Close");
+    scrim.append(stage, hint, x);
+    scrim.addEventListener("click", (e) => {
+      if (e.target === scrim || e.target === stage)
+        close();
+    });
+    document.body.append(scrim);
+    let z = 1;
+    const setZoom = (nz, ax, ay) => {
+      if (!vb.width)
+        return;
+      const prev = z;
+      z = Math.min(ZOOM_MAX, Math.max(1, nz));
+      clone.style.width = vb.width * z + "px";
+      clone.style.height = vb.height * z + "px";
+      anchorScroll(stage, z / prev, ax, ay);
+    };
+    const key = (e) => {
+      if (e.key === "Escape")
+        return close();
+      if (e.key === "Tab")
+        return trapTab(scrim, e);
+      if (e.key === "+" || e.key === "=")
+        return setZoom(z * 1.25);
+      if (e.key === "-")
+        return setZoom(z / 1.25);
+      if (e.key === "0")
+        return setZoom(1);
+      if (e.key === "ArrowLeft")
+        stage.scrollLeft -= 60;
+      else if (e.key === "ArrowRight")
+        stage.scrollLeft += 60;
+      else if (e.key === "ArrowUp")
+        stage.scrollTop -= 60;
+      else if (e.key === "ArrowDown")
+        stage.scrollTop += 60;
+      else
+        return;
+      e.preventDefault();
+    };
+    addEventListener("keydown", key);
+    const close = () => {
+      removeEventListener("keydown", key);
+      scrim.remove();
+      if (opener && opener.isConnected)
+        opener.focus();
+    };
+    stage.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      setZoom(z * (e.deltaY < 0 ? 1.25 : 0.8), e.clientX, e.clientY);
+    }, { passive: false });
+    gestures(stage, () => true, (r, ax, ay) => setZoom(z * r, ax, ay));
+    x.addEventListener("click", close);
+    x.focus();
   }
   function watchTheme() {
     if (themeWatcher)
@@ -639,6 +840,9 @@
   function renderMermaidBlocks(root) {
     if (!root || !root.querySelectorAll)
       return;
+    for (const node of rendered)
+      if (!node.isConnected)
+        rendered.delete(node);
     const codes = root.querySelectorAll('pre[data-lang="mermaid"] > code');
     if (!codes.length)
       return;
@@ -691,7 +895,7 @@
     const el = $("#outline");
     if (!d) {
       if (el)
-        el.innerHTML = '<div class="hint">No file open.</div>';
+        el.replaceChildren(frag('<div class="hint">No file open.</div>'));
       return;
     }
     if (!d.outline) {
@@ -731,9 +935,9 @@
     const rel = $("#right-symbols-list");
     if (!d || !d.outline) {
       if (el)
-        el.innerHTML = '<div class="hint">No symbols found.</div>';
+        el.replaceChildren(frag('<div class="hint">No symbols found.</div>'));
       if (rel)
-        rel.innerHTML = '<div class="hint">No symbols found.</div>';
+        rel.replaceChildren(frag('<div class="hint">No symbols found.</div>'));
       return;
     }
     const f = ($("#outline-filter")?.value || "").toLowerCase();
@@ -747,9 +951,9 @@
       return (d.outlineSource ? '<div class="hint"><span class="src">' + esc(d.outlineSource) + "</span> · " + items.length + " symbols</div>" : "") + items.map((s) => '<div class="sym" data-n="' + s.line + '" style="padding-left:' + (10 + Math.min(s.indent - base, 16) * 5) + 'px" title="Jump to ' + esc(s.name) + " at line " + s.line + '">' + '<span class="kd" data-k="' + esc(s.kind) + '">' + esc(kindLabel(s.kind)) + "</span>" + '<span class="sn">' + esc(s.name) + '</span><span class="sl">' + s.line + "</span></div>").join("");
     };
     if (el)
-      el.innerHTML = renderSymHtml(syms);
+      el.replaceChildren(frag(renderSymHtml(syms)));
     if (rel)
-      rel.innerHTML = renderSymHtml(rsyms);
+      rel.replaceChildren(frag(renderSymHtml(rsyms)));
   }
   var KIND_LABEL = {
     func: "fn",
@@ -825,7 +1029,7 @@
     } catch {
       return;
     }
-    container.innerHTML = j.children.map((c) => {
+    const html = j.children.map((c) => {
       const pad = 8 + depth * 12;
       const ig = c.ignored ? " ignored" : "";
       const note2 = c.ignored ? " (ignored by .gitignore, not searched)" : "";
@@ -838,6 +1042,7 @@
       const badge = g ? '<span class="gs" title="git: ' + g[1] + '">' + esc(c.status) + "</span>" : "";
       return '<div class="tr file' + ig + gc + '" data-file="' + esc(c.path) + '" style="padding-left:' + (pad + 12) + 'px" title="Open ' + esc(c.path) + note2 + '">' + '<span class="ic" data-t="' + fileKind(c.name) + '"></span><span class="nm">' + esc(c.name) + "</span>" + badge + "</div>";
     }).join("");
+    container.replaceChildren(frag(html));
   }
   var FILE_KIND = {
     go: "code",
@@ -962,7 +1167,7 @@
   }
 
   // web/src/panels.js
-  function showPanel(name) {
+  function showPanel() {
     document.body.classList.remove("side-hidden");
     layout();
     render();
@@ -972,7 +1177,7 @@
       const j = await api("/api/reindex");
       S2.meta.files = j.files;
       S2.meta.indexMs = j.indexMs;
-      treeEl.innerHTML = "";
+      treeEl.replaceChildren();
       openDirs.clear();
       await drawTree("", treeEl, 0);
       await reloadOpenTabs();
@@ -1034,7 +1239,7 @@
     findbar.hidden = true;
     S2.find = null;
     $("#find-count").textContent = "0";
-    $("#minimap-hits").innerHTML = "";
+    $("#minimap-hits").replaceChildren();
     clearPreviewMarks();
     paint();
   }
@@ -1047,7 +1252,7 @@
       const n = findInPreview(q);
       S2.find = q ? { q, ci: false, hits: new Array(n).fill(null), byLine: new Set, active: n ? 0 : -1, preview: true } : null;
       $("#find-count").textContent = !q ? "0" : n ? "1 / " + n : "no results";
-      $("#minimap-hits").innerHTML = previewHitOffsets().map((p) => '<i style="top:' + p + '%"></i>').join("");
+      drawTicks(previewHitOffsets());
       if (n)
         jumpToHit(0);
       return;
@@ -1055,7 +1260,7 @@
     if (!q) {
       S2.find = null;
       $("#find-count").textContent = "0";
-      $("#minimap-hits").innerHTML = "";
+      $("#minimap-hits").replaceChildren();
       paint();
       return;
     }
@@ -1083,14 +1288,16 @@
     else
       paint();
   }, 140);
+  function drawTicks(percents) {
+    $("#minimap-hits").replaceChildren(...percents.map((p) => {
+      const i = document.createElement("i");
+      i.style.top = p + "%";
+      return i;
+    }));
+  }
   function drawMinimap(hits, total) {
-    const mm = $("#minimap-hits");
-    if (!hits.length) {
-      mm.innerHTML = "";
-      return;
-    }
     const seen = new Set;
-    mm.innerHTML = hits.filter((h) => !seen.has(h.line) && seen.add(h.line)).map((h) => '<i style="top:' + ((h.line - 1) / total * 100).toFixed(3) + '%"></i>').join("");
+    drawTicks(hits.filter((h) => !seen.has(h.line) && seen.add(h.line)).map((h) => ((h.line - 1) / total * 100).toFixed(3)));
   }
   function jumpToHit(i) {
     const d = doc_();
@@ -1143,7 +1350,6 @@
 
   // web/src/search.js
   var resultsEl = $("#results");
-  var lastResults = null;
   var searchAbort = null;
   function cancelSearch() {
     if (searchAbort) {
@@ -1158,13 +1364,13 @@
     const q = qEl.value;
     if (!q.trim()) {
       cancelSearch();
-      resultsEl.innerHTML = "";
+      resultsEl.replaceChildren();
       return;
     }
     cancelSearch();
     const controller = new AbortController;
     searchAbort = controller;
-    resultsEl.innerHTML = '<div class="hint">searching…</div>';
+    resultsEl.replaceChildren(frag('<div class="hint">searching…</div>'));
     const params = {
       q,
       glob: $("#glob")?.value || "",
@@ -1183,16 +1389,15 @@
         return;
       if (searchAbort === controller) {
         searchAbort = null;
-        resultsEl.innerHTML = '<div class="hint">' + esc(e.message) + "</div>";
+        resultsEl.replaceChildren(frag('<div class="hint">' + esc(e.message) + "</div>"));
       }
     }
   }, 160);
   function renderResults(j) {
-    lastResults = j;
     if (!resultsEl)
       return;
     if (!j.results || !j.results.length) {
-      resultsEl.innerHTML = '<div class="hint">No results.</div>';
+      resultsEl.replaceChildren(frag('<div class="hint">No results.</div>'));
       return;
     }
     const head = j.header || j.total.toLocaleString() + " result" + (j.total === 1 ? "" : "s") + " in " + j.files.toLocaleString() + " file" + (j.files === 1 ? "" : "s") + (j.truncated ? " (truncated)" : "");
@@ -1204,7 +1409,7 @@
       }
       html += "</div>";
     }
-    resultsEl.innerHTML = html;
+    resultsEl.replaceChildren(frag(html));
   }
   function displayPath(p) {
     if (p.length <= 48)
@@ -1221,7 +1426,7 @@
         const g = resultsEl.querySelector('[data-group="' + CSS.escape(t.dataset.toggle) + '"]');
         const hidden = g.style.display === "none";
         g.style.display = hidden ? "" : "none";
-        $(".ar", t).innerHTML = hidden ? "&#9660;" : "&#9654;";
+        $(".ar", t).textContent = hidden ? "▼" : "▶";
         return;
       }
       const r = e.target.closest(".rline");
@@ -1278,7 +1483,7 @@
     if (tab === "search")
       $("#q")?.focus();
   }
-  function renderRightResults(word, hits, server, isExact) {
+  function renderRightResults(word, hits, server) {
     const targetEl = $("#right-ref-target");
     const badgeEl = $("#right-ref-badge");
     const listEl = $("#right-refs-list");
@@ -1287,7 +1492,7 @@
     targetEl.textContent = word;
     badgeEl.textContent = hits.length;
     if (!hits.length) {
-      listEl.innerHTML = '<div class="hint">No references found for "<b>' + esc(word) + '</b>".</div>';
+      listEl.replaceChildren(frag('<div class="hint">No references found for "<b>' + esc(word) + '</b>".</div>'));
       return;
     }
     const grouped = groupHits(hits);
@@ -1300,7 +1505,7 @@
       }
       html += "</div>";
     }
-    listEl.innerHTML = html;
+    listEl.replaceChildren(frag(html));
   }
   async function inspectReferences(arg) {
     const d = doc_();
@@ -1316,7 +1521,7 @@
     if (badgeEl)
       badgeEl.textContent = "…";
     if (listEl)
-      listEl.innerHTML = '<div class="hint">Finding references for "' + esc(at.word) + '"…</div>';
+      listEl.replaceChildren(frag('<div class="hint">Finding references for "' + esc(at.word) + '"…</div>'));
     if (canAskServer(at)) {
       setStatusNote("references to " + at.word + "…", 8000);
       try {
@@ -1349,7 +1554,7 @@
       updateStatus();
       setStatusNote("");
       if (listEl)
-        listEl.innerHTML = '<div class="hint">Search error: ' + esc(err.message) + "</div>";
+        listEl.replaceChildren(frag('<div class="hint">Search error: ' + esc(err.message) + "</div>"));
     }
   }
   function initInspector() {
@@ -1407,7 +1612,7 @@
           return;
         const hidden = g.style.display === "none";
         g.style.display = hidden ? "" : "none";
-        $(".ar", t).innerHTML = hidden ? "&#9660;" : "&#9654;";
+        $(".ar", t).textContent = hidden ? "▼" : "▶";
         return;
       }
       const r = e.target.closest(".rline");
@@ -1853,7 +2058,7 @@
       s = await api("/api/lsp/setup", { path: d.path });
     } catch (e) {
       if (my === setupSeq)
-        el.innerHTML = hintHtml("Could not check language servers: " + esc(e.message));
+        el.replaceChildren(frag(hintHtml("Could not check language servers: " + esc(e.message))));
       return;
     }
     if (my !== setupSeq || doc_() !== d)
@@ -1865,7 +2070,7 @@
       }, ms);
     };
     if (s.state === "starting" && !s.server) {
-      el.innerHTML = hintHtml("Looking for language servers…");
+      el.replaceChildren(frag(hintHtml("Looking for language servers…")));
       again(700);
       return;
     }
@@ -1873,19 +2078,19 @@
       start(el, d, onReady);
       return;
     }
-    el.innerHTML = drawSetup(s, d);
+    el.replaceChildren(frag(drawSetup(s, d)));
     wire(el, d, onReady);
     if (s.servers.some((v) => v.job && v.job.running))
       again(1000);
   }
   async function start(el, d, onReady) {
     cancelLspSetup();
-    el.innerHTML = hintHtml("Starting the language server…");
+    el.replaceChildren(frag(hintHtml("Starting the language server…")));
     let j;
     try {
       j = await apiPost("/api/lsp/start", { path: d.path });
     } catch (e) {
-      el.innerHTML = hintHtml("Could not start the language server: " + esc(e.message));
+      el.replaceChildren(frag(hintHtml("Could not start the language server: " + esc(e.message))));
       return;
     }
     if (doc_() !== d)
@@ -1983,7 +2188,7 @@
   var hint = (html) => {
     const el = listEl();
     if (el)
-      el.innerHTML = '<div class="hint">' + html + "</div>";
+      el.replaceChildren(frag('<div class="hint">' + html + "</div>"));
   };
   var base = (p) => p.split("/").pop();
   var explain = (msg) => /connection lost|exited|EOF/i.test(msg) ? msg + " (the language server crashed answering this; px0 restarts it on the next request)" : msg;
@@ -2112,7 +2317,7 @@
     };
     for (const r of T.roots)
       walk(r, 0);
-    el.innerHTML = html;
+    el.replaceChildren(frag(html));
   }
   function openLspSetup() {
     showRightInspector("calls");
@@ -2225,7 +2430,7 @@
     S2.hover = at;
     S2.hoverAnchor = { x, y };
     const refPath = d.path + ":" + at.line;
-    hovercard.innerHTML = (j.signature ? '<div class="sig">' + j.signature + "</div>" : "") + (j.doc ? '<div class="doc">' + esc(j.doc) + "</div>" : "") + '<div class="actions">' + '<button id="hc-copy-ref" title="Copy file and line reference">Copy Ref</button>' + '<button id="hc-copy-ai" title="Copy snippet with file path and line numbers">Copy with Context</button>' + '<button id="hc-find-refs" title="Find all usages across codebase">Usages</button>' + '<button id="hc-calls" title="' + withKeys("Trace callers and callees ({Alt+Shift+H})") + '">Calls</button>' + "</div>" + '<div class="foot"><b>' + esc(j.server || "lsp") + "</b>" + "<span>" + withKeys("{Mod+Click} definition") + "</span>" + "<span>" + withKeys("{Shift+F12} references") + "</span></div>";
+    hovercard.replaceChildren(frag((j.signature ? '<div class="sig">' + j.signature + "</div>" : "") + (j.doc ? '<div class="doc">' + esc(j.doc) + "</div>" : "") + '<div class="actions">' + '<button id="hc-copy-ref" title="Copy file and line reference">Copy Ref</button>' + '<button id="hc-copy-ai" title="Copy snippet with file path and line numbers">Copy with Context</button>' + '<button id="hc-find-refs" title="Find all usages across codebase">Usages</button>' + '<button id="hc-calls" title="' + withKeys("Trace callers and callees ({Alt+Shift+H})") + '">Calls</button>' + "</div>" + '<div class="foot"><b>' + esc(j.server || "lsp") + "</b>" + "<span>" + withKeys("{Mod+Click} definition") + "</span>" + "<span>" + withKeys("{Shift+F12} references") + "</span></div>"));
     const btnRef = hovercard.querySelector("#hc-copy-ref");
     const btnAi = hovercard.querySelector("#hc-copy-ai");
     const btnRefs = hovercard.querySelector("#hc-find-refs");
@@ -2281,7 +2486,7 @@
     S2.hoverAnchor = null;
     if (!hovercard.hidden) {
       hovercard.hidden = true;
-      hovercard.innerHTML = "";
+      hovercard.replaceChildren();
     }
   }
   function clearLink() {
@@ -2469,10 +2674,10 @@
       if (tag === "a" && attrs.href)
         mdSetLink(el, mdURL(attrs.href), base2);
     }
-    const frag = document.createDocumentFragment();
+    const frag2 = document.createDocumentFragment();
     while (body.firstChild)
-      frag.appendChild(document.adoptNode(body.firstChild));
-    return frag;
+      frag2.appendChild(document.adoptNode(body.firstChild));
+    return frag2;
   }
   function mdLocal(ref, base2) {
     let u;
@@ -2579,7 +2784,7 @@
       copy.className = "md-copy";
       copy.title = "Copy code";
       copy.setAttribute("aria-label", "Copy code");
-      copy.innerHTML = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5V3a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"/></svg>';
+      copy.append(frag('<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5V3a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 4 9.5h.5"/></svg>'));
       wrap2.append(pre, copy);
     }
   }
@@ -2680,7 +2885,7 @@
       pushHistory(d.path, previewing(d) && mdDrawn === d ? previewTopLine() : d.cur);
     try {
       await api("/api/tree", { dir: path });
-      showPanel("files");
+      showPanel();
       revealDir(path);
       return;
     } catch {}
@@ -2901,12 +3106,12 @@
       diffContent.append(p);
       return;
     }
-    const frag = document.createDocumentFragment();
+    const frag2 = document.createDocumentFragment();
     for (const hunk of d.diffHunks) {
-      frag.append(hunkHeader(hunk));
-      frag.append(d.diffMode === "unified" ? unifiedTable(hunk) : splitTable(hunk));
+      frag2.append(hunkHeader(hunk));
+      frag2.append(d.diffMode === "unified" ? unifiedTable(hunk) : splitTable(hunk));
     }
-    diffContent.append(frag);
+    diffContent.append(frag2);
     syncDiffAgentTargets();
   }
   function syncDiffAgentTargets() {
@@ -2989,7 +3194,7 @@
         i++;
         continue;
       }
-      let dels = [], adds = [];
+      const dels = [], adds = [];
       while (i < rows.length && rows[i].type === "del")
         dels.push(rows[i++]);
       while (i < rows.length && rows[i].type === "add")
@@ -3034,7 +3239,7 @@
   function codeCell(text) {
     const el = document.createElement("div");
     el.className = "diff-code";
-    el.innerHTML = esc(text || "") || "&nbsp;";
+    el.replaceChildren(frag(esc(text || "") || "&nbsp;"));
     return el;
   }
   function initDiff() {
@@ -3168,7 +3373,7 @@
   function renderMetricsMenu(m) {
     if (!metricsMenuEl || !m)
       return;
-    metricsMenuEl.innerHTML = `
+    metricsMenuEl.replaceChildren(frag(`
     <div class="metrics-title">
       <span>Process Metrics</span>
       <span class="toast-chip">px0</span>
@@ -3187,7 +3392,7 @@
         <span class="metrics-val">${m.goroutines || 0}</span>
       </div>
     </div>
-  `;
+  `));
   }
   function closeMetricsMenu() {
     if (metricsMenuEl)
@@ -3257,6 +3462,8 @@
     addEventListener("keydown", (e) => {
       if (e.key === "Escape")
         closeMetricsMenu();
+      else if (e.key === "Tab" && metricsMenuEl && !metricsMenuEl.hidden)
+        trapTab(metricsMenuEl, e);
     });
     refreshMetrics();
     setInterval(refreshMetrics, 2500);
@@ -3541,6 +3748,8 @@
     addEventListener("keydown", (e) => {
       if (e.key === "Escape")
         closeSelMenu();
+      else if (e.key === "Tab" && !menu.hidden)
+        trapTab(menu, e);
     });
     addEventListener("resize", closeSelMenu);
     addEventListener("blur", closeSelMenu);
@@ -3775,7 +3984,7 @@
       S2.active = -1;
       syncPreview();
       syncDiffView();
-      rowsEl.innerHTML = "";
+      rowsEl.replaceChildren();
       sizer.style.height = "0px";
       $("#empty").hidden = false;
       drawCrumbs();
@@ -3809,7 +4018,8 @@
     }
   }
   function drawTabs() {
-    $("#tabs").innerHTML = S2.tabs.map((t, i) => '<div class="tab' + (i === S2.active ? " active" : "") + '" data-i="' + i + '" title="' + esc(t.path) + '">' + '<span class="tn">' + esc(t.name) + '</span><span class="x" data-close="' + i + '" title="' + withKeys("Close tab ({Alt+W})") + '"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 2l6 6M8 2l-6 6"/></svg></span></div>').join("");
+    const tabsHtml = S2.tabs.map((t, i) => '<div class="tab' + (i === S2.active ? " active" : "") + '" data-i="' + i + '" title="' + esc(t.path) + '">' + '<span class="tn">' + esc(t.name) + '</span><span class="x" data-close="' + i + '" title="' + withKeys("Close tab ({Alt+W})") + '"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 2l6 6M8 2l-6 6"/></svg></span></div>').join("");
+    $("#tabs").replaceChildren(frag(tabsHtml));
     const act = $("#tabs .tab.active");
     if (act)
       act.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -3844,13 +4054,16 @@
   function drawCrumbs() {
     const el = $("#crumbs");
     if (el)
-      el.innerHTML = "";
+      el.replaceChildren();
   }
   function showImage(path) {
     hideImage();
     const box = document.createElement("div");
     box.id = "imgview";
-    box.innerHTML = '<img src="/api/raw?path=' + encodeURIComponent(path) + '" alt="">';
+    const img = document.createElement("img");
+    img.src = "/api/raw?path=" + encodeURIComponent(path);
+    img.alt = "";
+    box.append(img);
     editor.appendChild(box);
     $("#empty").hidden = true;
   }
@@ -3882,7 +4095,7 @@
       crumbsEl.addEventListener("click", (e) => {
         const c = e.target.closest("[data-dir]");
         if (c) {
-          showPanel("files");
+          showPanel();
           revealDir(c.dataset.dir);
         }
       });
@@ -4005,7 +4218,7 @@
   function showHelp() {
     const h = $("#helpsheet");
     const ver = S2.meta?.version ? ` <span class="help-version">v${esc(S2.meta.version)}</span>` : "";
-    h.innerHTML = '<div class="help-card"><div class="help-header"><h2>Keyboard Shortcuts</h2>' + ver + '</div><dl class="help-grid">' + SHORTCUTS.map(([combos, v]) => "<dt>" + combos.map(keyCaps).filter(Boolean).join('<span class="key-or">/</span>') + "</dt>" + "<dd>" + esc(v) + "</dd>").join("") + "</dl></div>";
+    h.replaceChildren(frag('<div class="help-card"><div class="help-header"><h2>Keyboard Shortcuts</h2>' + ver + '</div><dl class="help-grid">' + SHORTCUTS.map(([combos, v]) => "<dt>" + combos.map(keyCaps).filter(Boolean).join('<span class="key-or">/</span>') + "</dt>" + "<dd>" + esc(v) + "</dd>").join("") + "</dl></div>"));
     h.hidden = false;
   }
   var inField = (el) => el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
@@ -4075,6 +4288,10 @@
         }
         if (inField(document.activeElement))
           document.activeElement.blur();
+        return;
+      }
+      if (e.key === "Tab" && !$("#helpsheet").hidden) {
+        trapTab($("#helpsheet"), e);
         return;
       }
       if (mod && (e.key === "k" || e.key === "K")) {
@@ -4340,7 +4557,7 @@
     { name: "Reveal Active File in Explorer", run: () => {
       const d = doc_();
       if (d) {
-        showPanel("files");
+        showPanel();
         revealFile(d.path);
       }
     } },
@@ -4468,10 +4685,11 @@
     if (!pal)
       return;
     if (!pal.items.length) {
-      palList.innerHTML = '<div class="pi"><span class="pp">No matches</span></div>';
+      palList.replaceChildren(frag('<div class="pi"><span class="pp">No matches</span></div>'));
       return;
     }
-    palList.innerHTML = pal.items.map((it, i) => '<div class="pi' + (i === pal.sel ? " sel" : "") + '" data-i="' + i + '">' + '<span class="pn">' + (it.raw ? it.label : esc(it.label)) + "</span>" + '<span class="pp">' + (it.raw ? it.sub : esc(it.sub || "")) + "</span>" + (it.right ? '<span class="pr">' + esc(it.right) + "</span>" : "") + "</div>").join("");
+    const html = pal.items.map((it, i) => '<div class="pi' + (i === pal.sel ? " sel" : "") + '" data-i="' + i + '">' + '<span class="pn">' + (it.raw ? it.label : esc(it.label)) + "</span>" + '<span class="pp">' + (it.raw ? it.sub : esc(it.sub || "")) + "</span>" + (it.right ? '<span class="pr">' + esc(it.right) + "</span>" : "") + "</div>").join("");
+    palList.replaceChildren(frag(html));
     const s = palList.children[pal.sel];
     if (s)
       s.scrollIntoView({ block: "nearest" });
@@ -4561,14 +4779,14 @@
     const ready = (S2.meta?.agents || []).filter((h) => h.installed);
     const currentHarness = chosen();
     const currentModel = chosenModel();
-    session.harnessSelect.innerHTML = "";
+    session.harnessSelect.replaceChildren();
     if (!ready.length) {
       const opt = document.createElement("option");
       opt.value = "";
       opt.textContent = "no harness";
       session.harnessSelect.appendChild(opt);
       session.harnessSelect.disabled = true;
-      session.modelSelect.innerHTML = "";
+      session.modelSelect.replaceChildren();
       session.modelSelect.hidden = true;
       return;
     }
@@ -4584,7 +4802,7 @@
     session.harnessSelect.disabled = isBusy || !!(S2.meta && S2.meta.agentPinned);
     session.harnessSelect.title = S2.meta && S2.meta.agentPinned ? "Fixed for this run by -agent" : "Change the coding harness";
     const activeH = ready.find((h) => h.name === (session.harnessSelect.value || currentHarness)) || ready[0];
-    session.modelSelect.innerHTML = "";
+    session.modelSelect.replaceChildren();
     const models = activeH?.models || [];
     if (models.length > 0) {
       for (const m of models) {
@@ -4814,7 +5032,7 @@
     if (session.metaEl)
       session.metaEl.hidden = true;
     session.pickEl.hidden = false;
-    session.pickEl.innerHTML = '<div class="hint">Looking for coding harnesses…</div>';
+    session.pickEl.replaceChildren(frag('<div class="hint">Looking for coding harnesses…</div>'));
     let list = S2.meta?.agents || [];
     let settingsPath = "";
     try {
@@ -4826,16 +5044,16 @@
       S2.meta.agentModel = j.model || "";
       S2.meta.agentPinned = !!j.pinned;
     } catch (e) {
-      session.pickEl.innerHTML = '<div class="hint">Could not look for harnesses: ' + esc(e.message) + "</div>";
+      session.pickEl.replaceChildren(frag('<div class="hint">Could not look for harnesses: ' + esc(e.message) + "</div>"));
       return;
     }
     const ready = list.filter((h) => h.installed);
     if (!ready.length) {
       showToast("!", "Could not find any coding harness like Claude Code, OpenCode, Codex, Antigravity, Aider, etc. Install one and restart px0.", 6000);
-      session.pickEl.innerHTML = '<div class="hint" style="line-height: 1.5; padding: 4px 2px;">' + "Could not find any coding harness like <b>Claude Code</b>, <b>OpenCode</b>, <b>Codex</b>, <b>Antigravity</b> (<code>agy</code>), <b>Aider</b>, <b>Goose</b>, <b>Gemini CLI</b>, or <b>Cursor Agent</b>.<br><br>" + "Please install a coding harness, make sure it is on your <code>PATH</code>, and restart px0 after that.</div>";
+      session.pickEl.replaceChildren(frag('<div class="hint" style="line-height: 1.5; padding: 4px 2px;">' + "Could not find any coding harness like <b>Claude Code</b>, <b>OpenCode</b>, <b>Codex</b>, <b>Antigravity</b> (<code>agy</code>), <b>Aider</b>, <b>Goose</b>, <b>Gemini CLI</b>, or <b>Cursor Agent</b>.<br><br>" + "Please install a coding harness, make sure it is on your <code>PATH</code>, and restart px0 after that.</div>"));
       return;
     }
-    session.pickEl.innerHTML = '<div class="hint">This harness will edit files in this workspace.</div>' + optionsHtml(ready, settingsPath);
+    session.pickEl.replaceChildren(frag('<div class="hint">This harness will edit files in this workspace.</div>' + optionsHtml(ready, settingsPath)));
     session.pickEl.querySelectorAll("[data-pick]").forEach((b) => {
       b.addEventListener("click", () => pick(session, b.dataset.pick));
     });

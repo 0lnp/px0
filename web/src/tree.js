@@ -1,5 +1,5 @@
 // web/src/tree.js
-import { $, $$, esc, api } from './state.js';
+import { $, $$, esc, frag, api } from './state.js';
 import { openFile } from './tabs.js';
 
 export const treeEl = $('#tree');
@@ -15,7 +15,7 @@ const GIT_STATUS = {
 export async function drawTree(dir, container, depth) {
   let j;
   try { j = await api('/api/tree', { dir }); } catch { return; }
-  container.innerHTML = j.children.map(c => {
+  const html = j.children.map(c => {
     const pad = 8 + depth * 12;
     // Ignored by .gitignore: still browsable, dimmed, and absent from search.
     const ig = c.ignored ? ' ignored' : '';
@@ -32,6 +32,7 @@ export async function drawTree(dir, container, depth) {
     return '<div class="tr file' + ig + gc + '" data-file="' + esc(c.path) + '" style="padding-left:' + (pad + 12) + 'px" title="Open ' + esc(c.path) + note + '">' +
       '<span class="ic" data-t="' + fileKind(c.name) + '"></span><span class="nm">' + esc(c.name) + '</span>' + badge + '</div>';
   }).join('');
+  container.replaceChildren(frag(html));
 }
 
 /* A colour family per file kind, drawn in CSS. Emoji or icon fonts would be at
