@@ -36,7 +36,7 @@ Whenever modifying, adding, or refactoring code in this repository, you must aud
 
 - Verification: Ran `go test ./...` and confirmed all unit/regression tests pass (`ok px0`).
 - Build Integrity: Verified successful build with `go build -o px0 .`.
-- Web Bundling: If modifying `web/src/`, verified bundle update with `./scripts/build-web.js`.
+- Web Bundling: If modifying `web/src/`, verified bundle update with `./scripts/build-web.js`. The release workflow fails when the committed `web/app.js` differs from a fresh build (the Bun and Node-fallback builders are byte-identical, so the check is deterministic).
 - Architecture Sync: Any new optimization, algorithmic adjustment, or structural change is documented in the corresponding [`docs/internals/`](../internals/README.md) write-up.
 - Flag & Shortcut Sync: Any new keyboard shortcut, UI behavior, or CLI flag is reflected in [`README.md`](../../README.md).
 - Benchmark Alignment: If search, highlight, or index performance characteristics change, verify whether [`BENCHMARKS.md`](../../BENCHMARKS.md) requires updated notes or numbers.

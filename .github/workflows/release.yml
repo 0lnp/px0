@@ -40,6 +40,11 @@ jobs:
         run: |
           node ./scripts/build-web.js
 
+      - name: Verify committed bundle matches sources
+        run: |
+          git diff --exit-code -- web/app.js \
+            || (echo "::error::web/app.js is stale: run scripts/build-web.js and commit the result" && exit 1)
+
       - name: Determine Version
         id: get_version
         run: |
